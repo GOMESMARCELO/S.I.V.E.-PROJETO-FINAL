@@ -1,0 +1,4 @@
+{
+  "porta": 3000,
+  "banco": { "host": "localhost", "port": 3306, "user": "root", "password": "", "database": "sive", "charset": "utf8mb4" }
+}

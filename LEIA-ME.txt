@@ -1,0 +1,34 @@
+S.I.V.E. — HTML, CSS, JavaScript, JSON, Node.js e MySQL
+
+PASSO A PASSO
+1. Crie o banco: abra o MySQL (Workbench ou terminal) e execute o arquivo database/sive.sql
+2. Ajuste config.json com o seu usuário e senha do MySQL
+3. No terminal, dentro desta pasta:
+     npm install
+     npm start
+4. Abra no navegador: http://localhost:3000
+
+ESTRUTURA
+index.html          estrutura da página
+css/style.css       estilos
+js/app.js           telas e interações (conversa com o servidor)
+server.js           servidor Node.js (rotas /api/... que consultam o MySQL)
+config.json         porta do servidor e dados de conexão do banco
+database/sive.sql   criação das tabelas e dados de exemplo
+API.md               lista de rotas da API, para consultar ou testar com curl/Postman
+assets/             fotos dos responsáveis (troque pelas originais)
+
+
+GIT (CONTROLE DE VERSÃO)
+Este projeto já está preparado para o Git (arquivo .gitignore incluso).
+Para colocar em um repositório:
+  git init
+  git add .
+  git commit -m "Primeira versão do S.I.V.E."
+  git branch -M main
+  git remote add origin <link_do_seu_repositorio_no_github>
+  git push -u origin main
+
+O .gitignore já impede que a pasta node_modules e o config.json com senha
+sejam enviados ao repositório. Se quiser subir um config.json de exemplo,
+copie-o para config.example.json antes de editar suas senhas reais.
