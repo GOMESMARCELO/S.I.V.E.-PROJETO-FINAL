@@ -7,19 +7,40 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <aside id="menu">
-    <div class="logo"><span class="logo-icon">🛡️</span><div><b>S.I.V.E.</b><small>Vigilância Escolar</small></div></div>
-    <nav id="nav"></nav>
-    <div class="user"><span class="avatar">MS</span><div><b>Mariana Santos</b><small>Administradora</small></div></div>
-  </aside>
-  <div id="overlay"></div>
-  <div class="conteudo">
-    <header>
-      <button id="btn-menu" aria-label="Abrir menu">☰</button>
-      <div><h1 id="titulo"></h1><small>Segunda-feira, 28 de setembro</small></div>
-      <span class="pill success">● Sistema operacional</span>
-    </header>
-    <main id="tela"></main>
+  <div id="tela-login">
+    <form id="form-login" class="card login-caixa">
+      <div class="logo" style="justify-content:center;margin-bottom:24px">
+        <span class="logo-icon">🛡️</span><div><b>S.I.V.E.</b><small>Vigilância Escolar</small></div>
+      </div>
+      <small>Usuário</small>
+      <input id="login-usuario" placeholder="mariana ou anapaula" autocomplete="username" required>
+      <small style="margin-top:12px">Senha</small>
+      <input id="login-senha" type="password" placeholder="••••••" autocomplete="current-password" required>
+      <p id="login-erro" class="pill danger oculto" style="margin-top:12px"></p>
+      <button class="btn" type="submit">Entrar</button>
+      <small style="margin-top:16px;text-align:center">Administração: <b>mariana</b> / 123456 &nbsp;•&nbsp; Responsável: <b>anapaula</b> / 123456</small>
+    </form>
+  </div>
+
+  <div id="app" class="oculto">
+    <aside id="menu">
+      <div class="logo"><span class="logo-icon">🛡️</span><div><b>S.I.V.E.</b><small>Vigilância Escolar</small></div></div>
+      <nav id="nav"></nav>
+      <div class="user">
+        <span class="avatar" id="user-iniciais"></span>
+        <div><b id="user-nome"></b><small id="user-papel"></small></div>
+        <button id="btn-sair" title="Sair" aria-label="Sair" style="margin-left:auto;font-size:18px">🚪</button>
+      </div>
+    </aside>
+    <div id="overlay"></div>
+    <div class="conteudo">
+      <header>
+        <button id="btn-menu" aria-label="Abrir menu">☰</button>
+        <div><h1 id="titulo"></h1><small>Segunda-feira, 28 de setembro</small></div>
+        <span class="pill success">● Sistema operacional</span>
+      </header>
+      <main id="tela"></main>
+    </div>
   </div>
   <script src="js/app.js"></script>
 </body>

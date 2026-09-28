@@ -15,5 +15,9 @@ Resumo:
 4. `npm start`
 5. Abra `http://localhost:3000`
 
+## Login
+Administração (vê tudo): `mariana` / `123456`
+Responsável (vê só o próprio filho): `anapaula` / `123456`
+
 ## Rotas da API
 Veja `API.md`.

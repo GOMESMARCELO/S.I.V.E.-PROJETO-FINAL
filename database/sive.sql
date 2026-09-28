@@ -46,6 +46,16 @@ CREATE TABLE presencas (
   FOREIGN KEY (aluno_id) REFERENCES alunos(id)
 );
 
+CREATE TABLE usuarios (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  usuario VARCHAR(50) UNIQUE NOT NULL,
+  senha VARCHAR(100) NOT NULL,
+  papel ENUM('admin','pai') NOT NULL,
+  nome VARCHAR(100) NOT NULL,
+  aluno_id INT NULL,
+  FOREIGN KEY (aluno_id) REFERENCES alunos(id)
+);
+
 INSERT INTO alunos (nome, sala, matricula, comunicados, autorizacao, pendencia) VALUES
 ('Ana Clara Souza','3º Ano A','2026-0101','2 lidos','Em dia','Nenhuma'),
 ('João Pedro Silva','2º Ano B','2026-0184','1 novo','1 pendente','Autorização'),
@@ -67,6 +77,11 @@ INSERT INTO acessos (aluno_id, sala, data_hora) VALUES
 INSERT INTO autorizacoes (aluno_id, titulo, validade, detalhe, aprovada) VALUES
 (2,'Passeio ao Museu Catavento','12 de outubro','Transporte e lanche inclusos',FALSE),
 (2,'Uso de imagem — Feira Cultural','Válida até dezembro','Fotos do evento no portal escolar',TRUE);
+
+-- Login de teste: administradora vê tudo; a mãe do João só vê o filho dela (aluno_id 2)
+INSERT INTO usuarios (usuario, senha, papel, nome, aluno_id) VALUES
+('mariana', '123456', 'admin', 'Mariana Santos', NULL),
+('anapaula', '123456', 'pai', 'Ana Paula Silva', 2);
 
 INSERT INTO presencas (aluno_id, data, status, observacao) VALUES
 (2,'2026-09-28','Presente','Entrada 07:15'),

@@ -8,6 +8,12 @@ PASSO A PASSO
      npm start
 4. Abra no navegador: http://localhost:3000
 
+LOGIN
+O sistema agora pede login. Dois tipos de usuário, já cadastrados no banco:
+  Administração -> usuário: mariana   senha: 123456   (vê tudo: Secretaria e Segurança)
+  Responsável   -> usuário: anapaula  senha: 123456   (vê só os dados do filho dela)
+Para cadastrar mais usuários, insira linhas na tabela `usuarios` do banco.
+
 ESTRUTURA
 index.html          estrutura da página
 css/style.css       estilos

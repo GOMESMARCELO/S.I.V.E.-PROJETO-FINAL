@@ -1,28 +1,81 @@
 // S.I.V.E. — versão em HTML, CSS e JavaScript puro
 let dados = {};
-let tela = "secretaria";
+let tela = "";
 let liberada = false;
 let logs = [];
 let timerAcesso = null;
 let simulado = false;
+let usuarioLogado = null; // { token, papel, nome, aluno_id }
 
-// Chama a API do servidor Node e devolve o JSON
+// Chama a API do servidor Node e devolve o JSON, já enviando o login (token)
 async function api(url, opcoes = {}) {
-  const resposta = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opcoes });
-  if (!resposta.ok) throw new Error("Falha na API");
+  const resposta = await fetch(url, {
+    headers: { "Content-Type": "application/json", ...(usuarioLogado ? { Authorization: "Bearer " + usuarioLogado.token } : {}) },
+    ...opcoes,
+  });
+  if (resposta.status === 401 || resposta.status === 403) { sair(); throw new Error("Sessão expirada"); }
+  if (!resposta.ok) throw new Error((await resposta.json().catch(() => ({}))).erro || "Falha na API");
   return resposta.json();
 }
 
-const menus = [
-  { id: "secretaria", nome: "Central do Dia", dica: "Secretaria", icone: "🏠" },
-  { id: "seguranca", nome: "Monitoramento", dica: "Segurança", icone: "🛡️" },
-  { id: "pais", nome: "Portal dos Pais", dica: "Famílias", icone: "👪" },
-];
+const menusPorPapel = {
+  admin: [
+    { id: "secretaria", nome: "Central do Dia", dica: "Secretaria", icone: "🏠" },
+    { id: "seguranca", nome: "Monitoramento", dica: "Segurança", icone: "🛡️" },
+  ],
+  pai: [
+    { id: "pais", nome: "Portal dos Pais", dica: "Meu filho", icone: "👪" },
+  ],
+};
 const titulos = { secretaria: "Central do Dia", seguranca: "Painel de Segurança", pais: "Portal dos Pais" };
 
 const pill = (texto, tom) => `<span class="pill ${tom}">${texto}</span>`;
 const iniciais = (nome) => nome.split(" ").slice(0, 2).map((n) => n[0]).join("");
 
+// ---------- Login ----------
+document.getElementById("form-login").onsubmit = async (e) => {
+  e.preventDefault();
+  const erroBox = document.getElementById("login-erro");
+  erroBox.classList.add("oculto");
+  try {
+    const usuario = document.getElementById("login-usuario").value.trim();
+    const senha = document.getElementById("login-senha").value;
+    const r = await fetch("/api/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usuario, senha }),
+    });
+    const dadosLogin = await r.json();
+    if (!r.ok) throw new Error(dadosLogin.erro || "Não foi possível entrar");
+    usuarioLogado = dadosLogin;
+    localStorage.setItem("sive-usuario", JSON.stringify(usuarioLogado));
+    entrarNoApp();
+  } catch (erro) {
+    erroBox.textContent = erro.message;
+    erroBox.classList.remove("oculto");
+  }
+};
+function sair() {
+  usuarioLogado = null;
+  localStorage.removeItem("sive-usuario");
+  document.getElementById("app").classList.add("oculto");
+  document.getElementById("tela-login").classList.remove("oculto");
+  document.getElementById("form-login").reset();
+}
+document.getElementById("btn-sair").onclick = sair;
+
+function entrarNoApp() {
+  document.getElementById("tela-login").classList.add("oculto");
+  document.getElementById("app").classList.remove("oculto");
+  document.getElementById("user-nome").textContent = usuarioLogado.nome;
+  document.getElementById("user-papel").textContent = usuarioLogado.papel === "admin" ? "Administradora" : "Responsável";
+  document.getElementById("user-iniciais").textContent = iniciais(usuarioLogado.nome);
+  mostrar(usuarioLogado.papel === "admin" ? "secretaria" : "pais");
+}
+// Mantém o login se a página for recarregada
+const salvo = localStorage.getItem("sive-usuario");
+if (salvo) { usuarioLogado = JSON.parse(salvo); entrarNoApp(); }
+
+// ---------- Tela da Secretaria ----------
 function metrica(icone, rotulo, valor, nota, tom, tag) {
   return `<article class="card metrica"><div class="linha"><div class="icone ${tom}">${icone}</div><small>${tag}</small></div>
     <small>${rotulo}</small><div class="num">${valor}</div><small>${nota}</small></article>`;
@@ -30,9 +83,8 @@ function metrica(icone, rotulo, valor, nota, tom, tag) {
 function alerta(icone, n, titulo, texto, tom) {
   return `<button class="card alerta"><div class="icone ${tom}">${icone}</div><div><b>${titulo}</b><small>${texto}</small></div><span class="num">${n}</span></button>`;
 }
-
 function telaSecretaria() {
-  return `<div class="topo"><p class="destaque">Visão geral</p><h2>Bom dia, Mariana</h2><small>Acompanhe os indicadores e prioridades da escola.</small></div>
+  return `<div class="topo"><p class="destaque">Visão geral</p><h2>Bom dia, ${usuarioLogado.nome.split(" ")[0]}</h2><small>Acompanhe os indicadores e prioridades da escola.</small></div>
   <div class="grade g3">
     ${metrica("👥", "Total de Alunos", "842", "12 novas matrículas", "info", "Este ano")}
     ${metrica("✅", "Presentes Hoje", "786", "93,3% de presença", "success", "+1,8%")}
@@ -58,6 +110,7 @@ function desenharAlunos(filtro = "") {
     <td>${pill(a.pendencia, a.tom === "ok" ? "neutral" : a.tom)}</td><td>⋯</td></tr>`).join("");
 }
 
+// ---------- Tela de Segurança ----------
 function telaSeguranca() {
   return `<div class="grade g3">
     <div class="card"><small>Acessos confirmados</small><div class="linha"><b style="font-size:30px">786</b>${pill("Tempo real", "success")}</div></div>
@@ -91,11 +144,12 @@ async function desenharSaida() {
   };
 }
 
+// ---------- Portal dos Pais ----------
 function telaPais() {
-  return `<div class="topo"><small>Olá, Ana Paula</small><h2>Acompanhe o João</h2></div>
+  return `<div class="topo"><small>Olá, ${usuarioLogado.nome.split(" ")[0]}</small><h2>Acompanhe ${dados.filho ? "o(a) " + dados.filho.nome.split(" ")[0] : "seu filho"}</h2></div>
   <div class="grade pais" style="align-items:start"><div>
     <section class="status"><div class="linha"><div><small style="color:#dbe6ff">Status agora</small><h3>Na Escola</h3></div><span class="pill" style="background:rgba(255,255,255,.2)">● Seguro</span></div>
-      <hr style="margin:20px 0;opacity:.3"><small style="color:#dbe6ff">Último registro</small><b>Entrada na Sala 2 às 07:15</b></section>
+      <hr style="margin:20px 0;opacity:.3"><small style="color:#dbe6ff">Turma</small><b>${dados.filho ? dados.filho.sala : "—"}</b></section>
     <div class="topo" style="margin-top:24px"><h2>Autorizações digitais</h2><small>Revise e aprove com um toque.</small></div><div id="autorizacoes"></div></div>
     <aside class="card"><h2>Histórico de presença</h2><small>Setembro de 2026</small>
       ${dados.historico.map((h) => `<div class="hist ${h.status === "Ausente" ? "ausente" : ""}"><span class="ponto"></span><div><b style="font-size:14px">${h.data}</b><small>${h.detalhe}</small></div>${pill(h.status, h.status === "Presente" ? "success" : "warning")}</div>`).join("")}
@@ -109,11 +163,12 @@ function desenharAutorizacoes() {
   }).join("");
   document.querySelectorAll("#autorizacoes button").forEach((b) => b.onclick = async () => {
     await api(`/api/autorizacoes/${b.dataset.id}/alternar`, { method: "PUT" });
-    dados.autorizacoes = await api("/api/autorizacoes/2");
+    dados.autorizacoes = await api(`/api/autorizacoes/${usuarioLogado.aluno_id}`);
     desenharAutorizacoes();
   });
 }
 
+// ---------- Navegação ----------
 async function mostrar(id) {
   tela = id;
   clearTimeout(timerAcesso);
@@ -121,12 +176,13 @@ async function mostrar(id) {
   desenharMenu();
   fecharMenu();
   try {
-    // Busca no banco (via servidor) só o que a tela precisa
     if (id === "secretaria") dados.alunos = await api("/api/alunos");
     if (id === "seguranca") logs = await api("/api/acessos");
     if (id === "pais") {
-      dados.autorizacoes = await api("/api/autorizacoes/2"); // 2 = João Pedro Silva
-      const presencas = await api("/api/presencas/2");
+      const alunoId = usuarioLogado.aluno_id;
+      dados.filho = await api(`/api/alunos/${alunoId}`);
+      dados.autorizacoes = await api(`/api/autorizacoes/${alunoId}`);
+      const presencas = await api(`/api/presencas/${alunoId}`);
       dados.historico = presencas.map((p) => ({
         data: new Date(p.data + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" }),
         detalhe: p.observacao, status: p.status,
@@ -146,15 +202,14 @@ async function mostrar(id) {
     }
     if (id === "pais") desenharAutorizacoes();
   } catch (erro) {
-    document.getElementById("tela").innerHTML = `<div class="card"><b>Não foi possível carregar os dados.</b><small>Confira se o servidor está rodando (npm start) e se o MySQL está ligado.</small></div>`;
+    if (usuarioLogado) document.getElementById("tela").innerHTML = `<div class="card"><b>Não foi possível carregar os dados.</b><small>${erro.message === "Sessão expirada" ? "Faça login novamente." : "Confira se o servidor está rodando (npm start) e se o MySQL está ligado."}</small></div>`;
   }
 }
 function desenharMenu() {
+  const menus = menusPorPapel[usuarioLogado.papel];
   document.getElementById("nav").innerHTML = menus.map((m) => `<button class="${m.id === tela ? "ativo" : ""}" data-id="${m.id}"><span>${m.icone}</span><span><b>${m.nome}</b><small>${m.dica}</small></span></button>`).join("");
   document.querySelectorAll("#nav button").forEach((b) => b.onclick = () => mostrar(b.dataset.id));
 }
 const fecharMenu = () => { menu.classList.remove("aberto"); overlay.classList.remove("aberto"); };
 document.getElementById("btn-menu").onclick = () => { menu.classList.add("aberto"); overlay.classList.add("aberto"); };
 document.getElementById("overlay").onclick = fecharMenu;
-
-mostrar("secretaria");

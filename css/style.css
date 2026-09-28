@@ -65,5 +65,9 @@ td{padding:12px;border-top:1px solid var(--border)}
 .hist.ausente .ponto{background:var(--warning)}
 .hist div:nth-child(2){flex:1}
 .oculto{display:none}
+#tela-login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.login-caixa{width:100%;max-width:360px;display:flex;flex-direction:column}
+.login-caixa .logo{gap:12px}
+#login-erro{text-align:center}
 @media(min-width:640px){.g3{grid-template-columns:repeat(3,1fr)}main{padding:28px}}
 @media(min-width:1024px){#menu{transform:none}#btn-menu{display:none}.conteudo{padding-left:270px}main{padding:40px}.dois{grid-template-columns:1fr 1fr}.pais{grid-template-columns:1.1fr .9fr}.resp-2{grid-template-columns:1fr 1fr}}
