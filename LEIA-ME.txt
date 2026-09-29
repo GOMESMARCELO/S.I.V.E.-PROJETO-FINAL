@@ -1,8 +1,11 @@
 S.I.V.E. — HTML, CSS, JavaScript, JSON, Node.js e MySQL
 
 PASSO A PASSO
-1. Crie o banco: abra o MySQL (Workbench ou terminal) e execute o arquivo database/sive.sql
-2. Ajuste config.json com o seu usuário e senha do MySQL
+1. Abra o MySQL Workbench conectado ao seu servidor local e execute, nessa ordem:
+     a) database/criar-usuario.sql   (cria um usuário chamado "sive", senha "sive123", só para este projeto)
+     b) database/sive.sql            (cria o banco "sive" com as tabelas e os dados)
+2. O config.json já vem pronto com usuário "sive" e senha "sive123" — não precisa mexer,
+   a menos que você prefira usar outro usuário do seu MySQL (ex.: root).
 3. No terminal, dentro desta pasta:
      npm install
      npm start
