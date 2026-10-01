@@ -12,6 +12,7 @@ cabeçalho `Authorization: Bearer <token>`, obtido em `/api/login`.
 Usuários de teste (cadastrados em `database/sive.sql`):
 - **Administração:** `mariana` / `123456`
 - **Responsável (mãe do João Pedro):** `anapaula` / `123456`
+- **Professora (turma 2º Ano B):** `patricia` / `123456`
 
 ## Só a administração pode acessar
 
@@ -22,6 +23,28 @@ Usuários de teste (cadastrados em `database/sive.sql`):
 | POST   | /api/acessos                       | Registra um novo acesso `{ aluno_id, sala }`  |
 | GET    | /api/saida?nome=texto              | Busca aluno + responsáveis para retirada      |
 | POST   | /api/saidas                        | Confirma a liberação `{ aluno_id }`           |
+
+## Só administração (gestão de usuários e cadastro)
+
+| Método | Rota                              | O que faz                                       |
+|--------|-------------------------------------|---------------------------------------------------|
+| POST   | /api/alunos                        | Cadastra um aluno novo, com responsáveis           |
+| GET    | /api/usuarios                      | Lista os usuários do sistema                       |
+| POST   | /api/usuarios                      | Cria um usuário (gera senha provisória automática) |
+| PUT    | /api/usuarios/:id/ativo            | Ativa ou desativa um usuário                       |
+| GET    | /api/logs                          | Lista as últimas 50 ações registradas              |
+
+## Só professores
+
+| Método | Rota                | O que faz                                           |
+|--------|----------------------|--------------------------------------------------------|
+| GET    | /api/minha-turma     | Lista os alunos da turma do professor logado            |
+
+## Qualquer usuário autenticado
+
+| Método | Rota             | O que faz                                     |
+|--------|-------------------|--------------------------------------------------|
+| PUT    | /api/minha-senha | Troca a própria senha `{ senha_atual, senha_nova }` |
 
 ## Administração vê de todos; responsável só vê o próprio filho
 

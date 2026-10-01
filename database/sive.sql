@@ -46,14 +46,35 @@ CREATE TABLE presencas (
   FOREIGN KEY (aluno_id) REFERENCES alunos(id)
 );
 
+-- papel: 'admin' (gestão), 'pai' (responsável) ou 'professor'
+-- sala: só é usada por professores, indica a turma que ele leciona
+-- senha_temporaria: true quando a senha foi gerada pelo administrador e ainda não foi trocada
+-- ultimo_acesso: usado pelo sistema de reativação (60 dias sem acessar)
 CREATE TABLE usuarios (
   id INT AUTO_INCREMENT PRIMARY KEY,
   usuario VARCHAR(50) UNIQUE NOT NULL,
   senha VARCHAR(100) NOT NULL,
-  papel ENUM('admin','pai') NOT NULL,
+  papel ENUM('admin','pai','professor') NOT NULL,
   nome VARCHAR(100) NOT NULL,
   aluno_id INT NULL,
+  sala VARCHAR(20) NULL,
+  senha_temporaria BOOLEAN NOT NULL DEFAULT FALSE,
+  ativo BOOLEAN NOT NULL DEFAULT TRUE,
+  ultimo_acesso DATETIME NULL,
+  criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (aluno_id) REFERENCES alunos(id)
+);
+
+-- Registro de quem fez o quê no sistema (logs de atividade)
+CREATE TABLE logs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  usuario_id INT NULL,
+  nome_usuario VARCHAR(100) NOT NULL,
+  papel VARCHAR(20) NOT NULL,
+  acao VARCHAR(60) NOT NULL,
+  detalhe VARCHAR(255),
+  data_hora DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
 
 INSERT INTO alunos (nome, sala, matricula, comunicados, autorizacao, pendencia) VALUES
@@ -78,10 +99,12 @@ INSERT INTO autorizacoes (aluno_id, titulo, validade, detalhe, aprovada) VALUES
 (2,'Passeio ao Museu Catavento','12 de outubro','Transporte e lanche inclusos',FALSE),
 (2,'Uso de imagem — Feira Cultural','Válida até dezembro','Fotos do evento no portal escolar',TRUE);
 
--- Login de teste: administradora vê tudo; a mãe do João só vê o filho dela (aluno_id 2)
-INSERT INTO usuarios (usuario, senha, papel, nome, aluno_id) VALUES
-('mariana', '123456', 'admin', 'Mariana Santos', NULL),
-('anapaula', '123456', 'pai', 'Ana Paula Silva', 2);
+-- Login de teste: administradora vê tudo; a mãe do João só vê o filho dela;
+-- a professora só vê a turma "2º Ano B", que é a turma do João Pedro
+INSERT INTO usuarios (usuario, senha, papel, nome, aluno_id, sala, senha_temporaria) VALUES
+('mariana', '123456', 'admin', 'Mariana Santos', NULL, NULL, FALSE),
+('anapaula', '123456', 'pai', 'Ana Paula Silva', 2, NULL, FALSE),
+('patricia', '123456', 'professor', 'Patrícia Gomes', NULL, '2º Ano B', FALSE);
 
 INSERT INTO presencas (aluno_id, data, status, observacao) VALUES
 (2,'2026-09-28','Presente','Entrada 07:15'),

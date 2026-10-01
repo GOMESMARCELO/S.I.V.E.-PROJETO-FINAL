@@ -16,8 +16,9 @@ Resumo:
 5. Abra `http://localhost:3000`
 
 ## Login
-Administração (vê tudo): `mariana` / `123456`
+Administração (vê tudo, cadastra alunos e usuários): `mariana` / `123456`
 Responsável (vê só o próprio filho): `anapaula` / `123456`
+Professor(a) (vê só a própria turma): `patricia` / `123456`
 
 ## Rotas da API
 Veja `API.md`.

@@ -13,12 +13,29 @@
         <span class="logo-icon">🛡️</span><div><b>S.I.V.E.</b><small>Vigilância Escolar</small></div>
       </div>
       <small>Usuário</small>
-      <input id="login-usuario" placeholder="mariana ou anapaula" autocomplete="username" required>
+      <input id="login-usuario" placeholder="mariana, anapaula ou patricia" autocomplete="username" required>
       <small style="margin-top:12px">Senha</small>
       <input id="login-senha" type="password" placeholder="••••••" autocomplete="current-password" required>
       <p id="login-erro" class="pill danger oculto" style="margin-top:12px"></p>
       <button class="btn" type="submit">Entrar</button>
-      <small style="margin-top:16px;text-align:center">Administração: <b>mariana</b> / 123456 &nbsp;•&nbsp; Responsável: <b>anapaula</b> / 123456</small>
+      <small style="margin-top:16px;text-align:center">Administração: <b>mariana</b> / 123456 &nbsp;•&nbsp; Responsável: <b>anapaula</b> / 123456 &nbsp;•&nbsp; Professora: <b>patricia</b> / 123456</small>
+    </form>
+  </div>
+
+  <div id="tela-senha" class="oculto">
+    <form id="form-senha" class="card login-caixa">
+      <div class="logo" style="justify-content:center;margin-bottom:24px">
+        <span class="logo-icon">🔑</span><div><b>Trocar senha</b><small id="senha-subtitulo"></small></div>
+      </div>
+      <small>Senha atual</small>
+      <input id="senha-atual" type="password" required>
+      <small style="margin-top:12px">Nova senha</small>
+      <input id="senha-nova" type="password" required minlength="4">
+      <small style="margin-top:12px">Confirmar nova senha</small>
+      <input id="senha-confirmar" type="password" required minlength="4">
+      <p id="senha-erro" class="pill danger oculto" style="margin-top:12px"></p>
+      <button class="btn" type="submit">Salvar nova senha</button>
+      <button class="btn outline oculto" id="senha-cancelar" type="button" style="margin-top:8px">Cancelar</button>
     </form>
   </div>
 
@@ -29,7 +46,8 @@
       <div class="user">
         <span class="avatar" id="user-iniciais"></span>
         <div><b id="user-nome"></b><small id="user-papel"></small></div>
-        <button id="btn-sair" title="Sair" aria-label="Sair" style="margin-left:auto;font-size:18px">🚪</button>
+        <button id="btn-trocar-senha" title="Trocar senha" aria-label="Trocar senha" style="margin-left:auto;font-size:16px">🔑</button>
+        <button id="btn-sair" title="Sair" aria-label="Sair" style="font-size:18px">🚪</button>
       </div>
     </aside>
     <div id="overlay"></div>

@@ -12,10 +12,20 @@ PASSO A PASSO
 4. Abra no navegador: http://localhost:3000
 
 LOGIN
-O sistema agora pede login. Dois tipos de usuário, já cadastrados no banco:
-  Administração -> usuário: mariana   senha: 123456   (vê tudo: Secretaria e Segurança)
-  Responsável   -> usuário: anapaula  senha: 123456   (vê só os dados do filho dela)
-Para cadastrar mais usuários, insira linhas na tabela `usuarios` do banco.
+O sistema agora pede login. Três tipos de usuário, já cadastrados no banco:
+  Administração -> usuário: mariana   senha: 123456   (vê tudo)
+  Responsável   -> usuário: anapaula  senha: 123456   (vê só os dados do próprio filho)
+  Professor(a)  -> usuário: patricia  senha: 123456   (vê só a própria turma)
+
+A administração cadastra novos usuários pela própria tela do sistema
+(menu "Usuários"). A senha é gerada automaticamente (6 dígitos) e marcada
+como provisória — no primeiro login, a pessoa é obrigada a trocar a senha
+antes de continuar. Qualquer usuário também pode trocar a senha quando
+quiser, pelo botão 🔑 ao lado do nome, no menu.
+
+Toda ação importante (login, cadastro de aluno, cadastro de usuário, troca
+de senha, aprovações etc.) fica registrada no menu "Logs", visível só para
+a administração.
 
 ESTRUTURA
 index.html          estrutura da página

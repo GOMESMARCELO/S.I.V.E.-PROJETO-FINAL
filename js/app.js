@@ -5,7 +5,8 @@ let liberada = false;
 let logs = [];
 let timerAcesso = null;
 let simulado = false;
-let usuarioLogado = null; // { token, papel, nome, aluno_id }
+let usuarioLogado = null; // { token, papel, nome, aluno_id, sala, senha_temporaria }
+let forcarTrocaSenha = false;
 
 // Chama a API do servidor Node e devolve o JSON, já enviando o login (token)
 async function api(url, opcoes = {}) {
@@ -13,7 +14,11 @@ async function api(url, opcoes = {}) {
     headers: { "Content-Type": "application/json", ...(usuarioLogado ? { Authorization: "Bearer " + usuarioLogado.token } : {}) },
     ...opcoes,
   });
-  if (resposta.status === 401 || resposta.status === 403) { sair(); throw new Error("Sessão expirada"); }
+  if (resposta.status === 401 || resposta.status === 403) {
+    const corpo = await resposta.json().catch(() => ({}));
+    if (resposta.status === 401) { sair(); throw new Error("Sessão expirada"); }
+    throw new Error(corpo.erro || "Acesso negado");
+  }
   if (!resposta.ok) throw new Error((await resposta.json().catch(() => ({}))).erro || "Falha na API");
   return resposta.json();
 }
@@ -22,12 +27,27 @@ const menusPorPapel = {
   admin: [
     { id: "secretaria", nome: "Central do Dia", dica: "Secretaria", icone: "🏠" },
     { id: "seguranca", nome: "Monitoramento", dica: "Segurança", icone: "🛡️" },
+    { id: "cadastro", nome: "Cadastrar Aluno", dica: "Novo aluno", icone: "➕" },
+    { id: "usuarios", nome: "Usuários", dica: "Acessos ao sistema", icone: "🔐" },
+    { id: "logs", nome: "Logs", dica: "Atividade do sistema", icone: "📜" },
   ],
   pai: [
     { id: "pais", nome: "Portal dos Pais", dica: "Meu filho", icone: "👪" },
   ],
+  professor: [
+    { id: "turma", nome: "Minha Turma", dica: "Alunos e contatos", icone: "📚" },
+  ],
 };
-const titulos = { secretaria: "Central do Dia", seguranca: "Painel de Segurança", pais: "Portal dos Pais" };
+const titulos = {
+  secretaria: "Central do Dia", seguranca: "Painel de Segurança", pais: "Portal dos Pais",
+  cadastro: "Cadastrar Aluno", usuarios: "Usuários do Sistema", logs: "Logs de Atividade", turma: "Minha Turma",
+};
+const papelLabel = (p) => ({ admin: "Gestão", pai: "Responsável", professor: "Professor(a)" }[p] || p);
+const acaoLabel = (a) => ({
+  login_sucesso: "Login", login_falha: "Tentativa de login falhou", cadastro_aluno: "Cadastrou aluno",
+  cadastro_usuario: "Cadastrou usuário", troca_senha: "Trocou a senha", autorizacao_alternada: "Alterou autorização",
+  liberacao_saida: "Liberou saída", reativar_usuario: "Reativou usuário", desativar_usuario: "Desativou usuário",
+}[a] || a);
 
 const pill = (texto, tom) => `<span class="pill ${tom}">${texto}</span>`;
 const iniciais = (nome) => nome.split(" ").slice(0, 2).map((n) => n[0]).join("");
@@ -48,7 +68,7 @@ document.getElementById("form-login").onsubmit = async (e) => {
     if (!r.ok) throw new Error(dadosLogin.erro || "Não foi possível entrar");
     usuarioLogado = dadosLogin;
     localStorage.setItem("sive-usuario", JSON.stringify(usuarioLogado));
-    entrarNoApp();
+    if (usuarioLogado.senha_temporaria) mostrarTelaSenha(true); else entrarNoApp();
   } catch (erro) {
     erroBox.textContent = erro.message;
     erroBox.classList.remove("oculto");
@@ -58,6 +78,7 @@ function sair() {
   usuarioLogado = null;
   localStorage.removeItem("sive-usuario");
   document.getElementById("app").classList.add("oculto");
+  document.getElementById("tela-senha").classList.add("oculto");
   document.getElementById("tela-login").classList.remove("oculto");
   document.getElementById("form-login").reset();
 }
@@ -65,15 +86,59 @@ document.getElementById("btn-sair").onclick = sair;
 
 function entrarNoApp() {
   document.getElementById("tela-login").classList.add("oculto");
+  document.getElementById("tela-senha").classList.add("oculto");
   document.getElementById("app").classList.remove("oculto");
   document.getElementById("user-nome").textContent = usuarioLogado.nome;
-  document.getElementById("user-papel").textContent = usuarioLogado.papel === "admin" ? "Administradora" : "Responsável";
+  document.getElementById("user-papel").textContent = papelLabel(usuarioLogado.papel);
   document.getElementById("user-iniciais").textContent = iniciais(usuarioLogado.nome);
-  mostrar(usuarioLogado.papel === "admin" ? "secretaria" : "pais");
+  const telaInicial = { admin: "secretaria", pai: "pais", professor: "turma" }[usuarioLogado.papel];
+  mostrar(telaInicial);
 }
 // Mantém o login se a página for recarregada
 const salvo = localStorage.getItem("sive-usuario");
-if (salvo) { usuarioLogado = JSON.parse(salvo); entrarNoApp(); }
+if (salvo) {
+  usuarioLogado = JSON.parse(salvo);
+  if (usuarioLogado.senha_temporaria) mostrarTelaSenha(true); else entrarNoApp();
+}
+
+// ---------- Troca de senha (forçada no primeiro acesso, ou voluntária pelo botão 🔑) ----------
+function mostrarTelaSenha(forcado) {
+  forcarTrocaSenha = forcado;
+  document.getElementById("tela-login").classList.add("oculto");
+  document.getElementById("app").classList.add("oculto");
+  document.getElementById("tela-senha").classList.remove("oculto");
+  document.getElementById("senha-subtitulo").textContent = forcado
+    ? "Sua senha é provisória — crie uma nova para continuar."
+    : "Atualize sua senha quando quiser.";
+  document.getElementById("senha-cancelar").classList.toggle("oculto", forcado);
+  document.getElementById("senha-erro").classList.add("oculto");
+}
+document.getElementById("btn-trocar-senha").onclick = () => mostrarTelaSenha(false);
+document.getElementById("senha-cancelar").onclick = () => {
+  document.getElementById("tela-senha").classList.add("oculto");
+  document.getElementById("app").classList.remove("oculto");
+};
+document.getElementById("form-senha").onsubmit = async (e) => {
+  e.preventDefault();
+  const erroBox = document.getElementById("senha-erro");
+  erroBox.classList.add("oculto");
+  const nova = document.getElementById("senha-nova").value;
+  const confirmar = document.getElementById("senha-confirmar").value;
+  if (nova !== confirmar) { erroBox.textContent = "As senhas não coincidem"; erroBox.classList.remove("oculto"); return; }
+  try {
+    await api("/api/minha-senha", { method: "PUT", body: JSON.stringify({
+      senha_atual: document.getElementById("senha-atual").value, senha_nova: nova,
+    }) });
+    usuarioLogado.senha_temporaria = false;
+    localStorage.setItem("sive-usuario", JSON.stringify(usuarioLogado));
+    document.getElementById("form-senha").reset();
+    document.getElementById("tela-senha").classList.add("oculto");
+    if (forcarTrocaSenha) entrarNoApp(); else document.getElementById("app").classList.remove("oculto");
+  } catch (erro) {
+    erroBox.textContent = erro.message;
+    erroBox.classList.remove("oculto");
+  }
+};
 
 // ---------- Tela da Secretaria ----------
 function metrica(icone, rotulo, valor, nota, tom, tag) {
@@ -123,7 +188,7 @@ function telaSeguranca() {
       <input id="buscaSaida" placeholder="Digite João Pedro Silva..." style="margin-top:16px"><div id="resultado"></div></section>
   </div>`;
 }
-function desenharLogs(novo) {
+function desenharLogsAoVivo(novo) {
   document.getElementById("logs").innerHTML = logs.map((l, i) => `<div class="log ${novo && i === 0 ? "novo" : ""}">
     <div class="icone success">✔</div><div><b>Entrada confirmada: ${l.nome}</b><small>${l.sala} • Câmera validada</small></div><small>${l.hora}</small></div>`).join("");
 }
@@ -142,6 +207,158 @@ async function desenharSaida() {
     await api("/api/saidas", { method: "POST", body: JSON.stringify({ aluno_id: r.aluno.id }) });
     liberada = true; desenharSaida();
   };
+}
+
+// ---------- Cadastro de aluno ----------
+function telaCadastroAluno() {
+  return `<div class="topo"><h2>Cadastrar aluno</h2><small>Preencha os dados da criança e dos responsáveis.</small></div>
+  <form id="form-aluno" class="card" style="max-width:680px">
+    <small>Nome da criança</small><input id="ca-nome" required>
+    <div class="grade dois" style="margin-top:12px">
+      <div><small>Turma / sala</small><input id="ca-sala" placeholder="Ex.: 2º Ano B" required></div>
+      <div><small>Matrícula</small><input id="ca-matricula" placeholder="Opcional"></div>
+    </div>
+    <div class="linha" style="margin-top:22px"><b>Responsáveis (pais, etc.)</b>
+      <button type="button" class="btn outline" id="ca-add-resp" style="width:auto;padding:6px 14px;margin-top:0">+ Adicionar</button></div>
+    <div id="ca-responsaveis"></div>
+    <p id="ca-erro" class="pill danger oculto" style="margin-top:14px"></p>
+    <p id="ca-sucesso" class="pill success oculto" style="margin-top:14px"></p>
+    <button class="btn" type="submit" style="margin-top:18px;max-width:220px">Cadastrar aluno</button>
+  </form>`;
+}
+function linhaResponsavel() {
+  return `<div class="card" style="margin-top:10px;padding:14px;background:var(--muted)" data-linha-resp>
+    <div class="grade dois">
+      <div><small>Nome</small><input class="r-nome"></div>
+      <div><small>Parentesco</small><select class="r-parentesco"><option>Mãe</option><option>Pai</option><option>Responsável</option></select></div>
+    </div>
+    <div style="margin-top:10px"><small>Telefone</small><input class="r-telefone" placeholder="(11) 90000-0000"></div>
+    <button type="button" class="btn outline r-remover" style="margin-top:10px;width:auto;padding:6px 14px">Remover</button>
+  </div>`;
+}
+function wireRemoverResponsavel() {
+  document.querySelectorAll(".r-remover").forEach((b) => b.onclick = () => b.closest("[data-linha-resp]").remove());
+}
+function desenharCadastroAluno() {
+  const lista = document.getElementById("ca-responsaveis");
+  lista.innerHTML = linhaResponsavel();
+  wireRemoverResponsavel();
+  document.getElementById("ca-add-resp").onclick = () => { lista.insertAdjacentHTML("beforeend", linhaResponsavel()); wireRemoverResponsavel(); };
+  document.getElementById("form-aluno").onsubmit = async (e) => {
+    e.preventDefault();
+    const erroBox = document.getElementById("ca-erro"), sucessoBox = document.getElementById("ca-sucesso");
+    erroBox.classList.add("oculto"); sucessoBox.classList.add("oculto");
+    const responsaveis = [...document.querySelectorAll("[data-linha-resp]")].map((linha) => ({
+      nome: linha.querySelector(".r-nome").value.trim(),
+      parentesco: linha.querySelector(".r-parentesco").value,
+      telefone: linha.querySelector(".r-telefone").value.trim(),
+    })).filter((r) => r.nome);
+    try {
+      await api("/api/alunos", { method: "POST", body: JSON.stringify({
+        nome: document.getElementById("ca-nome").value.trim(),
+        sala: document.getElementById("ca-sala").value.trim(),
+        matricula: document.getElementById("ca-matricula").value.trim(),
+        responsaveis,
+      }) });
+      document.getElementById("form-aluno").reset();
+      lista.innerHTML = linhaResponsavel(); wireRemoverResponsavel();
+      sucessoBox.textContent = "Aluno cadastrado com sucesso!";
+      sucessoBox.classList.remove("oculto");
+    } catch (erro) {
+      erroBox.textContent = erro.message;
+      erroBox.classList.remove("oculto");
+    }
+  };
+}
+
+// ---------- Usuários do sistema ----------
+function telaUsuarios() {
+  return `<section class="card">
+    <h2>Novo usuário</h2><small>A senha é gerada automaticamente; repasse ao usuário e peça para trocar no primeiro acesso.</small>
+    <form id="form-usuario" style="margin-top:14px">
+      <div class="grade dois">
+        <div><small>Nome completo</small><input id="nu-nome" required></div>
+        <div><small>Usuário (login)</small><input id="nu-usuario" required></div>
+      </div>
+      <div style="margin-top:12px"><small>Papel</small>
+        <select id="nu-papel">
+          <option value="admin">Gestão (administração)</option>
+          <option value="pai">Pai / responsável</option>
+          <option value="professor">Professor(a)</option>
+        </select>
+      </div>
+      <div id="nu-campo-aluno" style="margin-top:12px"><small>Aluno (filho)</small><select id="nu-aluno"></select></div>
+      <div id="nu-campo-sala" class="oculto" style="margin-top:12px"><small>Turma que leciona</small><input id="nu-sala" placeholder="Ex.: 2º Ano B"></div>
+      <p id="nu-erro" class="pill danger oculto" style="margin-top:12px"></p>
+      <div id="nu-sucesso" class="oculto pill success" style="margin-top:12px;display:block"></div>
+      <button class="btn" type="submit" style="margin-top:16px;max-width:220px">Criar usuário</button>
+    </form>
+  </section>
+  <section class="card" style="margin-top:20px">
+    <h2>Usuários cadastrados</h2>
+    <div class="tabela"><table><thead><tr><th>Nome</th><th>Login</th><th>Papel</th><th>Vínculo</th><th>Status</th><th>Ações</th></tr></thead>
+    <tbody id="lista-usuarios"></tbody></table></div>
+  </section>`;
+}
+function desenharUsuarios() {
+  const selectAluno = document.getElementById("nu-aluno");
+  selectAluno.innerHTML = dados.alunos.map((a) => `<option value="${a.id}">${a.nome} — ${a.sala}</option>`).join("");
+  const papelSel = document.getElementById("nu-papel");
+  papelSel.onchange = () => {
+    document.getElementById("nu-campo-aluno").classList.toggle("oculto", papelSel.value !== "pai");
+    document.getElementById("nu-campo-sala").classList.toggle("oculto", papelSel.value !== "professor");
+  };
+  papelSel.onchange();
+  document.getElementById("form-usuario").onsubmit = async (e) => {
+    e.preventDefault();
+    const erroBox = document.getElementById("nu-erro"), sucessoBox = document.getElementById("nu-sucesso");
+    erroBox.classList.add("oculto"); sucessoBox.classList.add("oculto");
+    try {
+      const r = await api("/api/usuarios", { method: "POST", body: JSON.stringify({
+        usuario: document.getElementById("nu-usuario").value.trim(),
+        nome: document.getElementById("nu-nome").value.trim(),
+        papel: papelSel.value,
+        aluno_id: papelSel.value === "pai" ? Number(selectAluno.value) : undefined,
+        sala: papelSel.value === "professor" ? document.getElementById("nu-sala").value.trim() : undefined,
+      }) });
+      sucessoBox.textContent = `Usuário criado! Senha provisória: ${r.senha_genercada} — repasse ao usuário.`;
+      sucessoBox.classList.remove("oculto");
+      document.getElementById("form-usuario").reset(); papelSel.onchange();
+      dados.usuarios = await api("/api/usuarios");
+      desenharListaUsuarios();
+    } catch (erro) {
+      erroBox.textContent = erro.message;
+      erroBox.classList.remove("oculto");
+    }
+  };
+  desenharListaUsuarios();
+}
+function desenharListaUsuarios() {
+  document.getElementById("lista-usuarios").innerHTML = dados.usuarios.map((u) => `<tr>
+    <td>${u.nome}</td><td>${u.usuario}</td><td>${papelLabel(u.papel)}</td>
+    <td>${u.aluno_nome || u.sala || "—"}</td>
+    <td>${pill(u.ativo ? "Ativo" : "Inativo", u.ativo ? "success" : "neutral")} ${u.senha_temporaria ? pill("Senha provisória", "warning") : ""}</td>
+    <td><button class="btn outline" data-id="${u.id}" data-ativo="${u.ativo ? 0 : 1}" style="width:auto;padding:4px 12px">${u.ativo ? "Desativar" : "Ativar"}</button></td>
+  </tr>`).join("");
+  document.querySelectorAll("#lista-usuarios button").forEach((b) => b.onclick = async () => {
+    await api(`/api/usuarios/${b.dataset.id}/ativo`, { method: "PUT", body: JSON.stringify({ ativo: b.dataset.ativo === "1" }) });
+    dados.usuarios = await api("/api/usuarios"); desenharListaUsuarios();
+  });
+}
+
+// ---------- Logs de atividade ----------
+function telaLogs() {
+  return `<div class="topo"><h2>Logs de atividade</h2><small>Últimas ações registradas no sistema, com quem fez o quê.</small></div>
+  <section class="card"><div class="tabela"><table><thead><tr><th>Quando</th><th>Usuário</th><th>Papel</th><th>Ação</th><th>Detalhe</th></tr></thead>
+  <tbody>${dados.logs.map((l) => `<tr><td>${l.quando}</td><td>${l.nome_usuario}</td><td>${papelLabel(l.papel)}</td><td>${acaoLabel(l.acao)}</td><td>${l.detalhe || "—"}</td></tr>`).join("")}</tbody></table></div></section>`;
+}
+
+// ---------- Minha Turma (professor) ----------
+function telaTurma() {
+  return `<div class="topo"><h2>Minha turma — ${usuarioLogado.sala}</h2><small>Alunos da turma e contato dos responsáveis.</small></div>
+  <section class="card"><div class="tabela"><table><thead><tr><th>Aluno</th><th>Pendência</th><th>Responsáveis</th></tr></thead>
+  <tbody>${dados.turma.map((a) => `<tr><td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><b>${a.nome}</b></div></td>
+    <td>${pill(a.pendencia, a.pendencia === "Nenhuma" ? "neutral" : "warning")}</td><td>${a.responsaveis || "—"}</td></tr>`).join("")}</tbody></table></div></section>`;
 }
 
 // ---------- Portal dos Pais ----------
@@ -178,6 +395,9 @@ async function mostrar(id) {
   try {
     if (id === "secretaria") dados.alunos = await api("/api/alunos");
     if (id === "seguranca") logs = await api("/api/acessos");
+    if (id === "usuarios") { dados.alunos = await api("/api/alunos"); dados.usuarios = await api("/api/usuarios"); }
+    if (id === "logs") dados.logs = await api("/api/logs");
+    if (id === "turma") dados.turma = await api("/api/minha-turma");
     if (id === "pais") {
       const alunoId = usuarioLogado.aluno_id;
       dados.filho = await api(`/api/alunos/${alunoId}`);
@@ -188,21 +408,26 @@ async function mostrar(id) {
         detalhe: p.observacao, status: p.status,
       }));
     }
-    document.getElementById("tela").innerHTML = { secretaria: telaSecretaria, seguranca: telaSeguranca, pais: telaPais }[id]();
+    document.getElementById("tela").innerHTML = {
+      secretaria: telaSecretaria, seguranca: telaSeguranca, pais: telaPais,
+      cadastro: telaCadastroAluno, usuarios: telaUsuarios, logs: telaLogs, turma: telaTurma,
+    }[id]();
     if (id === "secretaria") { desenharAlunos(); document.getElementById("busca").oninput = (e) => desenharAlunos(e.target.value); }
     if (id === "seguranca") {
-      desenharLogs(false); desenharSaida();
+      desenharLogsAoVivo(false); desenharSaida();
       document.getElementById("buscaSaida").oninput = () => { liberada = false; desenharSaida(); };
       if (!simulado) timerAcesso = setTimeout(async () => { // simula a Beatriz entrando (uma vez)
         simulado = true;
         await api("/api/acessos", { method: "POST", body: JSON.stringify({ aluno_id: 5, sala: "Sala 4" }) });
         logs = await api("/api/acessos");
-        if (tela === "seguranca") desenharLogs(true);
+        if (tela === "seguranca") desenharLogsAoVivo(true);
       }, 3500);
     }
+    if (id === "cadastro") desenharCadastroAluno();
+    if (id === "usuarios") desenharUsuarios();
     if (id === "pais") desenharAutorizacoes();
   } catch (erro) {
-    if (usuarioLogado) document.getElementById("tela").innerHTML = `<div class="card"><b>Não foi possível carregar os dados.</b><small>${erro.message === "Sessão expirada" ? "Faça login novamente." : "Confira se o servidor está rodando (npm start) e se o MySQL está ligado."}</small></div>`;
+    if (usuarioLogado) document.getElementById("tela").innerHTML = `<div class="card"><b>Não foi possível carregar os dados.</b><small>${erro.message === "Sessão expirada" ? "Faça login novamente." : erro.message}</small></div>`;
   }
 }
 function desenharMenu() {
