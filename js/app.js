@@ -98,6 +98,9 @@ function entrarNoApp() {
 const salvo = localStorage.getItem("sive-usuario");
 if (salvo) {
   usuarioLogado = JSON.parse(salvo);
+  if (usuarioLogado.senha_temporaria === undefined) { localStorage.removeItem("sive-usuario"); usuarioLogado = null; }
+}
+if (usuarioLogado) {
   if (usuarioLogado.senha_temporaria) mostrarTelaSenha(true); else entrarNoApp();
 }
 
@@ -435,6 +438,6 @@ function desenharMenu() {
   document.getElementById("nav").innerHTML = menus.map((m) => `<button class="${m.id === tela ? "ativo" : ""}" data-id="${m.id}"><span>${m.icone}</span><span><b>${m.nome}</b><small>${m.dica}</small></span></button>`).join("");
   document.querySelectorAll("#nav button").forEach((b) => b.onclick = () => mostrar(b.dataset.id));
 }
-const fecharMenu = () => { menu.classList.remove("aberto"); overlay.classList.remove("aberto"); };
+function fecharMenu() { menu.classList.remove("aberto"); overlay.classList.remove("aberto"); }
 document.getElementById("btn-menu").onclick = () => { menu.classList.add("aberto"); overlay.classList.add("aberto"); };
 document.getElementById("overlay").onclick = fecharMenu;

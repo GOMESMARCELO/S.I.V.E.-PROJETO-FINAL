@@ -203,4 +203,16 @@ app.get("/api/alunos/:alunoId", autenticar, proprioAlunoOuAdmin, rota(async (req
   res.json(aluno || null);
 }));
 
-app.listen(config.porta, () => console.log(`S.I.V.E. rodando em http://localhost:${config.porta}`));
+app.listen(config.porta, async () => {
+  console.log(`S.I.V.E. rodando em http://localhost:${config.porta}`);
+  // Confere se o banco está na versão atual (evita o erro "Unknown column" no login)
+  try {
+    const [colunas] = await db.query("SHOW COLUMNS FROM usuarios LIKE 'ativo'");
+    const [tabelas] = await db.query("SHOW TABLES LIKE 'logs'");
+    if (!colunas.length || !tabelas.length) {
+      console.log("\n⚠️  BANCO DESATUALIZADO: rode o arquivo database/sive.sql no MySQL de novo e reinicie o servidor.\n");
+    }
+  } catch (erro) {
+    console.log("\n⚠️  Não foi possível ler o banco: " + erro.message + "\n   Confira o config.json e se o MySQL está ligado.\n");
+  }
+});
