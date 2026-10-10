@@ -441,3 +441,13 @@ function desenharMenu() {
 function fecharMenu() { menu.classList.remove("aberto"); overlay.classList.remove("aberto"); }
 document.getElementById("btn-menu").onclick = () => { menu.classList.add("aberto"); overlay.classList.add("aberto"); };
 document.getElementById("overlay").onclick = fecharMenu;
+
+// ---------- Data e hora no cabeçalho (atualiza sozinha a cada segundo) ----------
+function atualizarRelogio() {
+  const agora = new Date();
+  const data = agora.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const hora = agora.toLocaleTimeString("pt-BR");
+  document.getElementById("data-hora").textContent = data.charAt(0).toUpperCase() + data.slice(1) + " • " + hora;
+}
+atualizarRelogio();
+setInterval(atualizarRelogio, 1000);

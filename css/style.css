@@ -67,8 +67,8 @@ td{padding:12px;border-top:1px solid var(--border)}
 .hist .ponto{width:8px;height:8px;border-radius:50%;background:var(--success)}
 .hist.ausente .ponto{background:var(--warning)}
 .hist div:nth-child(2){flex:1}
-.oculto{display:none}
-#tela-login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.oculto{display:none !important}
+#tela-login,#tela-senha{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
 .login-caixa{width:100%;max-width:360px;display:flex;flex-direction:column}
 .login-caixa .logo{gap:12px}
 #login-erro{text-align:center}
