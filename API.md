@@ -34,11 +34,23 @@ Usuários de teste (cadastrados em `database/sive.sql`):
 | PUT    | /api/usuarios/:id/ativo            | Ativa ou desativa um usuário                       |
 | GET    | /api/logs                          | Lista as últimas 50 ações registradas              |
 
+## Frequência, Busca Ativa e relatório (só administração)
+
+| Método | Rota                                       | O que faz                                                   |
+|--------|----------------------------------------------|----------------------------------------------------------------|
+| GET    | /api/resumo                                | Quadros da Central do Dia (total, presentes, ausentes...)       |
+| GET    | /api/frequencia?data=AAAA-MM-DD            | Situação de todos os alunos em um dia (sem `data`: último dia)  |
+| GET    | /api/busca-ativa                           | Casos de Busca Ativa (abre os novos automaticamente)           |
+| POST   | /api/busca-ativa/:id/acompanhamento        | Anota um acompanhamento `{ texto }`                             |
+| PUT    | /api/busca-ativa/:id/encerrar              | Encerra o caso `{ texto }` (opcional)                           |
+| GET    | /api/relatorio-mensal?mes=AAAA-MM          | Relatório do mês (sem `mes`: mês atual)                         |
+
 ## Só professores
 
 | Método | Rota                | O que faz                                           |
 |--------|----------------------|--------------------------------------------------------|
-| GET    | /api/minha-turma     | Lista os alunos da turma do professor logado            |
+| GET    | /api/minha-turma     | Alunos da turma do professor, com a situação de hoje e as faltas |
+| POST   | /api/chamada         | Grava a chamada de hoje `{ registros: [{ aluno_id, status }] }`  |
 
 ## Qualquer usuário autenticado
 
@@ -53,7 +65,7 @@ Usuários de teste (cadastrados em `database/sive.sql`):
 | GET    | /api/alunos/:alunoId               | Nome e sala de um aluno                       |
 | GET    | /api/autorizacoes/:alunoId         | Autorizações de um aluno                      |
 | PUT    | /api/autorizacoes/:id/alternar     | Aprova/desfaz uma autorização                 |
-| GET    | /api/presencas/:alunoId            | Últimas 5 presenças/faltas de um aluno        |
+| GET    | /api/presencas/:alunoId?dias=30    | Histórico de presença (padrão 30 dias, máx. 120) com totais e a situação de hoje |
 
 Se um responsável tentar acessar o `:alunoId` de outra família, o
 servidor responde `403 Forbidden`. Sem token válido, responde `401`.

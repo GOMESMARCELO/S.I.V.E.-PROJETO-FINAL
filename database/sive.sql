@@ -40,10 +40,33 @@ CREATE TABLE autorizacoes (
   aluno_id INT, titulo VARCHAR(100), validade VARCHAR(50), detalhe VARCHAR(150), aprovada BOOLEAN DEFAULT FALSE,
   FOREIGN KEY (aluno_id) REFERENCES alunos(id)
 );
+-- Uma linha por aluno por dia (a chamada do professor grava aqui)
 CREATE TABLE presencas (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  aluno_id INT, data DATE, status ENUM('Presente','Ausente'), observacao VARCHAR(100),
+  aluno_id INT NOT NULL, data DATE NOT NULL, status ENUM('Presente','Ausente') NOT NULL, observacao VARCHAR(100),
+  UNIQUE KEY uq_presenca_aluno_dia (aluno_id, data),
   FOREIGN KEY (aluno_id) REFERENCES alunos(id)
+);
+
+-- Busca Ativa: casos abertos automaticamente quando o aluno acumula muitas faltas
+CREATE TABLE busca_ativa (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  aluno_id INT NOT NULL,
+  faltas_ao_abrir INT NOT NULL,
+  status ENUM('Em acompanhamento','Resolvido') NOT NULL DEFAULT 'Em acompanhamento',
+  aberta_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+  encerrada_em DATETIME NULL,
+  FOREIGN KEY (aluno_id) REFERENCES alunos(id)
+);
+-- Anotações de acompanhamento de cada caso (quem anotou, quando e o quê)
+CREATE TABLE busca_ativa_registros (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  busca_id INT NOT NULL,
+  usuario_id INT NULL,
+  nome_usuario VARCHAR(100) NOT NULL,
+  texto VARCHAR(500) NOT NULL,
+  data_hora DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (busca_id) REFERENCES busca_ativa(id)
 );
 
 -- papel: 'admin' (gestão), 'pai' (responsável) ou 'professor'
@@ -106,9 +129,22 @@ INSERT INTO usuarios (usuario, senha, papel, nome, aluno_id, sala, senha_tempora
 ('anapaula', '123456', 'pai', 'Ana Paula Silva', 2, NULL, FALSE),
 ('patricia', '123456', 'professor', 'Patrícia Gomes', NULL, '2º Ano B', FALSE);
 
-INSERT INTO presencas (aluno_id, data, status, observacao) VALUES
-(2,'2026-09-28','Presente','Entrada 07:15'),
-(2,'2026-09-25','Presente','Entrada 07:19'),
-(2,'2026-09-24','Presente','Entrada 07:08'),
-(2,'2026-09-23','Ausente','Justificada pela família'),
-(2,'2026-09-22','Presente','Entrada 07:22');
+-- Presença de exemplo dos últimos 35 dias (só dias úteis), sempre contando a partir de hoje.
+-- Marina (id 3): faltas seguidas | Lucas (id 4): faltas intercaladas | os dois entram na Busca Ativa.
+INSERT INTO presencas (aluno_id, data, status, observacao)
+SELECT a.id, DATE_SUB(CURDATE(), INTERVAL d.n DAY),
+  CASE
+    WHEN a.id = 3 AND d.n BETWEEN 0 AND 12 THEN 'Ausente'
+    WHEN a.id = 4 AND d.n % 3 = 1 THEN 'Ausente'
+    WHEN a.id = 2 AND d.n = 8 THEN 'Ausente'
+    WHEN a.id = 1 AND d.n IN (6, 20) THEN 'Ausente'
+    ELSE 'Presente'
+  END,
+  CASE
+    WHEN a.id = 2 AND d.n = 8 THEN 'Justificada pela família'
+    WHEN (a.id = 3 AND d.n BETWEEN 0 AND 12) OR (a.id = 4 AND d.n % 3 = 1) OR (a.id = 1 AND d.n IN (6, 20)) THEN 'Falta sem justificativa'
+    ELSE CONCAT('Entrada 07:', LPAD(10 + (a.id * 7 + d.n * 3) % 25, 2, '0'))
+  END
+FROM alunos a
+JOIN (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11 UNION ALL SELECT 12 UNION ALL SELECT 13 UNION ALL SELECT 14 UNION ALL SELECT 15 UNION ALL SELECT 16 UNION ALL SELECT 17 UNION ALL SELECT 18 UNION ALL SELECT 19 UNION ALL SELECT 20 UNION ALL SELECT 21 UNION ALL SELECT 22 UNION ALL SELECT 23 UNION ALL SELECT 24 UNION ALL SELECT 25 UNION ALL SELECT 26 UNION ALL SELECT 27 UNION ALL SELECT 28 UNION ALL SELECT 29 UNION ALL SELECT 30 UNION ALL SELECT 31 UNION ALL SELECT 32 UNION ALL SELECT 33 UNION ALL SELECT 34) d
+WHERE DAYOFWEEK(DATE_SUB(CURDATE(), INTERVAL d.n DAY)) NOT IN (1, 7);

@@ -51,3 +51,20 @@ Para colocar em um repositório:
 O .gitignore já impede que a pasta node_modules e o config.json com senha
 sejam enviados ao repositório. Se quiser subir um config.json de exemplo,
 copie-o para config.example.json antes de editar suas senhas reais.
+
+
+FREQUÊNCIA E BUSCA ATIVA (Fase 2)
+- Professor(a): em "Minha Turma" faz a chamada de hoje (Presente/Ausente) e clica em
+  "Salvar chamada de hoje". Só enxerga os alunos da própria turma.
+- Gestão: "Frequência" mostra a presença de qualquer dia (escolha a data) e o histórico
+  de cada aluno; os quadros da Central do Dia (Total, Presentes, Ausentes) vêm do banco.
+  Se hoje for fim de semana, o quadro mostra o último dia com chamada registrada.
+- Busca Ativa: o sistema conta as faltas sozinho e abre o caso quando o aluno chega a
+  5 faltas nos últimos 30 dias. A gestão anota o acompanhamento e encerra o caso.
+  Para mudar a regra, edite BUSCA_ATIVA no começo do server.js (faltas e dias).
+- Relatório Mensal: escolha o mês; dá para imprimir / salvar em PDF e baixar em CSV (Excel).
+- Responsável: vê a frequência dos últimos 30 dias e se o filho está presente ou ausente hoje.
+
+IMPORTANTE AO ATUALIZAR DA FASE 1 PARA A FASE 2: rode o database/sive.sql de novo
+(ele cria as tabelas de Busca Ativa e gera presenças de exemplo dos últimos 35 dias úteis,
+sempre contando a partir da data de hoje). Isso apaga os dados antigos do banco "sive".

@@ -74,3 +74,25 @@ td{padding:12px;border-top:1px solid var(--border)}
 #login-erro{text-align:center}
 @media(min-width:640px){.g3{grid-template-columns:repeat(3,1fr)}main{padding:28px}}
 @media(min-width:1024px){#menu{transform:none}#btn-menu{display:none}.conteudo{padding-left:270px}main{padding:40px}.dois{grid-template-columns:1fr 1fr}.pais{grid-template-columns:1.1fr .9fr}.resp-2{grid-template-columns:1fr 1fr}}
+
+/* ---- Fase 2: frequência, chamada, Busca Ativa e relatório ---- */
+#menu{overflow-y:auto}
+.g4{grid-template-columns:repeat(2,1fr)}
+@media(min-width:900px){.g4{grid-template-columns:repeat(4,1fr)}}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.seg button{padding:6px 14px;font-size:13px;color:var(--muted-fg)}
+.seg button.on-p{background:var(--success-soft);color:var(--success);font-weight:700}
+.seg button.on-a{background:var(--danger-soft);color:var(--danger);font-weight:700}
+.nota{border-left:3px solid var(--border);padding:4px 0 4px 12px;margin:10px 0}
+.nota.sistema{border-left-color:var(--primary)}
+.rolagem{max-height:340px;overflow-y:auto}
+.btn.pequeno{width:auto;padding:6px 14px;margin-top:0;display:inline-block}
+.acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+select,textarea{font:inherit;padding:10px 12px;border:1px solid var(--border);border-radius:8px;width:100%;background:#fff}
+@media print{
+  #menu,#overlay,header,.no-print{display:none !important}
+  .conteudo{padding-left:0 !important}
+  main{padding:0 !important;max-width:none !important}
+  body{background:#fff}
+  .card{box-shadow:none}
+}

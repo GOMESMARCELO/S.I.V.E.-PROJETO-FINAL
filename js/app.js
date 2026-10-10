@@ -22,11 +22,18 @@ async function api(url, opcoes = {}) {
   if (!resposta.ok) throw new Error((await resposta.json().catch(() => ({}))).erro || "Falha na API");
   return resposta.json();
 }
+// Usado nos botões: se a API der erro, avisa na tela em vez de falhar em silêncio
+const seguro = (fn) => async (...args) => {
+  try { await fn(...args); } catch (e) { if (e.message !== "Sessão expirada") alert(e.message); }
+};
 
 const menusPorPapel = {
   admin: [
     { id: "secretaria", nome: "Central do Dia", dica: "Secretaria", icone: "🏠" },
     { id: "seguranca", nome: "Monitoramento", dica: "Segurança", icone: "🛡️" },
+    { id: "frequencia", nome: "Frequência", dica: "Presença e faltas", icone: "📅" },
+    { id: "busca", nome: "Busca Ativa", dica: "Faltas e acompanhamento", icone: "🔎" },
+    { id: "relatorio", nome: "Relatório Mensal", dica: "Frequência e casos", icone: "📊" },
     { id: "cadastro", nome: "Cadastrar Aluno", dica: "Novo aluno", icone: "➕" },
     { id: "usuarios", nome: "Usuários", dica: "Acessos ao sistema", icone: "🔐" },
     { id: "logs", nome: "Logs", dica: "Atividade do sistema", icone: "📜" },
@@ -35,22 +42,31 @@ const menusPorPapel = {
     { id: "pais", nome: "Portal dos Pais", dica: "Meu filho", icone: "👪" },
   ],
   professor: [
-    { id: "turma", nome: "Minha Turma", dica: "Alunos e contatos", icone: "📚" },
+    { id: "turma", nome: "Minha Turma", dica: "Chamada e contatos", icone: "📚" },
   ],
 };
 const titulos = {
   secretaria: "Central do Dia", seguranca: "Painel de Segurança", pais: "Portal dos Pais",
+  frequencia: "Controle de Frequência", busca: "Busca Ativa", relatorio: "Relatório Mensal",
   cadastro: "Cadastrar Aluno", usuarios: "Usuários do Sistema", logs: "Logs de Atividade", turma: "Minha Turma",
 };
-const papelLabel = (p) => ({ admin: "Gestão", pai: "Responsável", professor: "Professor(a)" }[p] || p);
+const papelLabel = (p) => ({ admin: "Gestão", pai: "Responsável", professor: "Professor(a)", sistema: "Sistema" }[p] || p);
 const acaoLabel = (a) => ({
   login_sucesso: "Login", login_falha: "Tentativa de login falhou", cadastro_aluno: "Cadastrou aluno",
   cadastro_usuario: "Cadastrou usuário", troca_senha: "Trocou a senha", autorizacao_alternada: "Alterou autorização",
   liberacao_saida: "Liberou saída", reativar_usuario: "Reativou usuário", desativar_usuario: "Desativou usuário",
+  chamada_registrada: "Registrou a chamada", busca_ativa_aberta: "Abriu caso de Busca Ativa (automático)",
+  busca_ativa_acompanhamento: "Anotou acompanhamento (Busca Ativa)", busca_ativa_encerrada: "Encerrou caso de Busca Ativa",
+  relatorio_mensal: "Gerou relatório mensal",
 }[a] || a);
 
 const pill = (texto, tom) => `<span class="pill ${tom}">${texto}</span>`;
 const iniciais = (nome) => nome.split(" ").slice(0, 2).map((n) => n[0]).join("");
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const dataCurta = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" });
+const pct = (v) => (v == null ? "—" : String(v).replace(".", ",") + "%");
+const calcPct = (p, a) => ((p + a) ? Math.round(p * 1000 / (p + a)) / 10 : null);
+const saudacao = () => { const h = new Date().getHours(); return h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite"; };
 
 // ---------- Login ----------
 document.getElementById("form-login").onsubmit = async (e) => {
@@ -143,26 +159,38 @@ document.getElementById("form-senha").onsubmit = async (e) => {
   }
 };
 
+// ---------- Histórico de presença (usado pelo Portal dos Pais e pela Frequência) ----------
+function blocoHistorico(h) {
+  const estat = (rotulo, valor) => `<div class="card" style="padding:12px;text-align:center"><small>${rotulo}</small><b style="font-size:22px;display:block">${valor}</b></div>`;
+  const lista = h.registros.length
+    ? h.registros.map((r) => `<div class="hist ${r.status === "Ausente" ? "ausente" : ""}"><span class="ponto"></span><div><b style="font-size:14px">${dataCurta(r.data)}</b><small>${esc(r.observacao)}</small></div>${pill(r.status, r.status === "Presente" ? "success" : "warning")}</div>`).join("")
+    : `<div class="vazio"><small>Nenhum registro nos últimos ${h.dias} dias.</small></div>`;
+  return `<div class="grade g3" style="margin:12px 0">${estat("Frequência", pct(h.percentual))}${estat("Presenças", h.presencas)}${estat("Faltas", h.faltas)}</div><div class="rolagem">${lista}</div>`;
+}
+
 // ---------- Tela da Secretaria ----------
 function metrica(icone, rotulo, valor, nota, tom, tag) {
   return `<article class="card metrica"><div class="linha"><div class="icone ${tom}">${icone}</div><small>${tag}</small></div>
     <small>${rotulo}</small><div class="num">${valor}</div><small>${nota}</small></article>`;
 }
-function alerta(icone, n, titulo, texto, tom) {
-  return `<button class="card alerta"><div class="icone ${tom}">${icone}</div><div><b>${titulo}</b><small>${texto}</small></div><span class="num">${n}</span></button>`;
+function alerta(icone, n, titulo, texto, tom, ir) {
+  return `<button class="card alerta" ${ir ? `data-ir="${ir}"` : ""}><div class="icone ${tom}">${icone}</div><div><b>${titulo}</b><small>${texto}</small></div><span class="num">${n}</span></button>`;
 }
 function telaSecretaria() {
-  return `<div class="topo"><p class="destaque">Visão geral</p><h2>Bom dia, ${usuarioLogado.nome.split(" ")[0]}</h2><small>Acompanhe os indicadores e prioridades da escola.</small></div>
+  const r = dados.resumo;
+  const tag = r.eh_hoje ? "Hoje" : dataCurta(r.data);
+  const aviso = r.eh_hoje ? "" : ` Mostrando o último dia com chamada registrada (${dataCurta(r.data)}).`;
+  return `<div class="topo"><p class="destaque">Visão geral</p><h2>${saudacao()}, ${esc(usuarioLogado.nome.split(" ")[0])}</h2><small>Acompanhe os indicadores e prioridades da escola.${aviso}</small></div>
   <div class="grade g3">
-    ${metrica("👥", "Total de Alunos", "842", "12 novas matrículas", "info", "Este ano")}
-    ${metrica("✅", "Presentes Hoje", "786", "93,3% de presença", "success", "+1,8%")}
-    ${metrica("⚠️", "Ausentes", "56", "7 faltas recorrentes", "warning", "+4 hoje")}
+    ${metrica("👥", "Total de Alunos", r.total_alunos, "alunos cadastrados", "info", "Escola")}
+    ${metrica("✅", "Presentes", r.presentes, r.percentual == null ? "Sem chamada registrada" : `${pct(r.percentual)} de presença`, "success", tag)}
+    ${metrica("⚠️", "Ausentes", r.ausentes, `${r.busca_ativa} em Busca Ativa`, "warning", tag)}
   </div>
   <div class="topo"><h2>Atenção necessária</h2><small>Pendências que precisam de acompanhamento.</small></div>
   <div class="grade g3">
-    ${alerta("⚠️", "7", "Crianças em busca ativa", "Por faltas consecutivas", "danger")}
-    ${alerta("📄", "18", "Documentos aguardando", "Entrega pelas famílias", "warning")}
-    ${alerta("📋", "23", "Autorizações pendentes", "Aguardando assinatura", "info")}
+    ${alerta("⚠️", r.busca_ativa, "Crianças em busca ativa", "Por excesso de faltas", "danger", "busca")}
+    ${alerta("📄", "—", "Documentos aguardando", "Disponível em breve", "warning")}
+    ${alerta("📋", r.autorizacoes_pendentes, "Autorizações pendentes", "Aguardando assinatura", "info")}
   </div>
   <section class="card"><div class="linha" style="flex-wrap:wrap"><div><h2>Gestão de alunos</h2><small>Informações e pendências recentes.</small></div>
     <input id="busca" placeholder="🔍 Buscar aluno..." style="max-width:280px"></div>
@@ -172,10 +200,151 @@ function telaSecretaria() {
 function desenharAlunos(filtro = "") {
   const lista = dados.alunos.filter((a) => a.nome.toLowerCase().includes(filtro.toLowerCase()));
   document.getElementById("linhas").innerHTML = lista.map((a) => `<tr>
-    <td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><div><b>${a.nome}</b><small>${a.sala}</small></div></div></td>
+    <td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><div><b>${esc(a.nome)}</b><small>${esc(a.sala)}</small></div></div></td>
     <td>${a.comunicados}</td>
     <td>${pill(a.autorizacao, a.autorizacao.includes("pendente") ? "warning" : "success")}</td>
     <td>${pill(a.pendencia, a.tom === "ok" ? "neutral" : a.tom)}</td><td>⋯</td></tr>`).join("");
+}
+
+// ---------- Controle de frequência (administração) ----------
+function telaFrequencia() {
+  return `<div class="topo"><h2>Controle de frequência</h2><small>Presença e faltas por dia. Clique em "Histórico" para ver o detalhe de cada aluno.</small></div>
+  <div class="grade g4" id="freq-cards"></div>
+  <section class="card">
+    <div class="linha" style="flex-wrap:wrap;align-items:flex-end;gap:12px">
+      <div><small>Data</small><input type="date" id="freq-data" style="max-width:200px"></div>
+      <input id="freq-busca" placeholder="🔍 Buscar aluno..." style="max-width:280px">
+    </div>
+    <div class="tabela"><table><thead><tr><th>Aluno</th><th>Situação</th><th>Observação</th><th>Faltas (30 dias)</th><th></th></tr></thead>
+    <tbody id="freq-linhas"></tbody></table></div>
+  </section>
+  <section class="card oculto" id="freq-hist" style="margin-top:20px"></section>`;
+}
+function desenharFrequencia() {
+  const f = dados.freq;
+  document.getElementById("freq-data").value = f.data;
+  const tag = f.eh_hoje ? "Hoje" : dataCurta(f.data);
+  document.getElementById("freq-cards").innerHTML =
+    metrica("👥", "Total de Alunos", f.total, "alunos cadastrados", "info", tag) +
+    metrica("✅", "Presentes", f.presentes, f.presentes + f.ausentes ? `${pct(calcPct(f.presentes, f.ausentes))} de presença` : "Sem chamada neste dia", "success", tag) +
+    metrica("🚫", "Ausentes", f.ausentes, "faltas no dia", "danger", tag) +
+    metrica("❔", "Sem registro", f.sem_registro, "chamada não feita", "neutral", tag);
+  const filtro = document.getElementById("freq-busca").value.toLowerCase();
+  document.getElementById("freq-linhas").innerHTML = f.alunos.filter((a) => a.nome.toLowerCase().includes(filtro)).map((a) => `<tr>
+    <td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><div><b>${esc(a.nome)}</b><small>${esc(a.sala)}</small></div></div></td>
+    <td>${pill(a.status || "Sem registro", a.status === "Presente" ? "success" : a.status === "Ausente" ? "danger" : "neutral")}</td>
+    <td>${esc(a.observacao || "—")}</td>
+    <td>${pill(a.faltas, a.faltas >= f.limite_faltas ? "danger" : a.faltas > 0 ? "warning" : "neutral")}</td>
+    <td><button class="btn outline pequeno" data-hist="${a.id}" data-nome="${esc(a.nome)}">Histórico</button></td></tr>`).join("");
+  document.querySelectorAll("[data-hist]").forEach((b) => b.onclick = seguro(async () => {
+    const h = await api(`/api/presencas/${b.dataset.hist}?dias=60`);
+    const box = document.getElementById("freq-hist");
+    box.innerHTML = `<div class="linha"><h2>Histórico — ${esc(b.dataset.nome)}</h2><button class="btn outline pequeno" id="freq-fechar">Fechar</button></div><small>Últimos 60 dias</small>${blocoHistorico(h)}`;
+    box.classList.remove("oculto");
+    box.scrollIntoView({ behavior: "smooth" });
+    document.getElementById("freq-fechar").onclick = () => box.classList.add("oculto");
+  }));
+}
+function ligarFrequencia() {
+  document.getElementById("freq-data").onchange = seguro(async (e) => {
+    if (!e.target.value) return;
+    dados.freq = await api("/api/frequencia?data=" + e.target.value);
+    document.getElementById("freq-hist").classList.add("oculto");
+    desenharFrequencia();
+  });
+  document.getElementById("freq-busca").oninput = desenharFrequencia;
+  desenharFrequencia();
+}
+
+// ---------- Busca Ativa (administração) ----------
+function telaBusca() {
+  const c = dados.busca.criterio;
+  return `<div class="topo"><h2>Busca Ativa</h2><small>O sistema conta as faltas e abre o caso sozinho quando o aluno chega a ${c.faltas} faltas nos últimos ${c.dias} dias.</small></div><div id="busca-lista"></div>`;
+}
+function cartaoCaso(c) {
+  const aberto = c.status === "Em acompanhamento";
+  return `<article class="card" style="margin-bottom:16px">
+    <div class="linha" style="flex-wrap:wrap;gap:8px">
+      <div class="aluno"><span class="avatar">${iniciais(c.nome)}</span><div><b>${esc(c.nome)}</b><small>${esc(c.sala)} • aberto em ${c.aberta_em}${c.encerrada_em ? " • encerrado em " + c.encerrada_em : ""}</small></div></div>
+      <div>${pill(aberto ? "Em acompanhamento" : "Resolvido", aberto ? "danger" : "success")} ${pill(`${c.faltas_atuais} faltas em ${dados.busca.criterio.dias} dias`, "warning")}</div>
+    </div>
+    <div style="margin-top:8px">${c.registros.map((r) => `<div class="nota ${r.nome_usuario === "Sistema" ? "sistema" : ""}"><small><b>${esc(r.nome_usuario)}</b> • ${r.quando}</small>${esc(r.texto)}</div>`).join("")}</div>
+    ${aberto ? `<textarea rows="2" maxlength="450" data-nota="${c.id}" placeholder="Anote o acompanhamento (ligação, visita, conversa com a família...)" style="margin-top:8px"></textarea>
+      <div class="acoes"><button class="btn pequeno" data-anotar="${c.id}">Registrar acompanhamento</button><button class="btn outline pequeno" data-encerrar="${c.id}">Encerrar caso</button></div>` : ""}
+  </article>`;
+}
+function desenharBusca() {
+  const abertos = dados.busca.casos.filter((c) => c.status === "Em acompanhamento");
+  const encerrados = dados.busca.casos.filter((c) => c.status !== "Em acompanhamento");
+  document.getElementById("busca-lista").innerHTML =
+    `<div class="topo"><h2>Em acompanhamento (${abertos.length})</h2></div>` +
+    (abertos.length ? abertos.map(cartaoCaso).join("") : `<div class="vazio"><b>Nenhum aluno com faltas significativas</b><small>Quando algum aluno atingir o limite, o caso aparece aqui automaticamente.</small></div>`) +
+    (encerrados.length ? `<div class="topo" style="margin-top:28px"><h2>Encerrados (${encerrados.length})</h2></div>` + encerrados.map(cartaoCaso).join("") : "");
+  const recarregar = async () => { dados.busca = await api("/api/busca-ativa"); desenharBusca(); };
+  document.querySelectorAll("[data-anotar]").forEach((b) => b.onclick = seguro(async () => {
+    const texto = document.querySelector(`[data-nota="${b.dataset.anotar}"]`).value;
+    await api(`/api/busca-ativa/${b.dataset.anotar}/acompanhamento`, { method: "POST", body: JSON.stringify({ texto }) });
+    await recarregar();
+  }));
+  document.querySelectorAll("[data-encerrar]").forEach((b) => b.onclick = seguro(async () => {
+    if (!confirm("Encerrar este caso de Busca Ativa?")) return;
+    const texto = document.querySelector(`[data-nota="${b.dataset.encerrar}"]`).value;
+    await api(`/api/busca-ativa/${b.dataset.encerrar}/encerrar`, { method: "PUT", body: JSON.stringify({ texto }) });
+    await recarregar();
+  }));
+}
+
+// ---------- Relatório mensal (administração) ----------
+function telaRelatorio() {
+  return `<div class="linha no-print" style="flex-wrap:wrap;align-items:flex-end;justify-content:flex-start;gap:12px;margin-bottom:16px">
+    <div><small>Mês</small><input type="month" id="rel-mes" style="max-width:200px"></div>
+    <button class="btn outline pequeno" id="rel-imprimir">🖨️ Imprimir / salvar em PDF</button>
+    <button class="btn outline pequeno" id="rel-csv">⬇️ Baixar planilha (CSV)</button>
+  </div><div id="rel-conteudo"></div>`;
+}
+function desenharRelatorio() {
+  const r = dados.relatorio, c = r.criterio, s = r.resumo, b = r.busca_ativa;
+  const nomeMes = new Date(r.mes + "-01T12:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  document.getElementById("rel-mes").value = r.mes;
+  document.getElementById("rel-conteudo").innerHTML = `
+    <div class="topo"><h2>Relatório mensal — ${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)}</h2>
+      <small>Gerado em ${new Date().toLocaleString("pt-BR")} por ${esc(usuarioLogado.nome)}. Critério da Busca Ativa: ${c.faltas} faltas em ${c.dias} dias.</small></div>
+    <div class="grade g4">
+      ${metrica("👥", "Alunos", s.total_alunos, "cadastrados", "info", "Mês")}
+      ${metrica("📅", "Dias com chamada", s.dias_com_registro, "dias com registro", "neutral", "Mês")}
+      ${metrica("✅", "Frequência média", pct(s.percentual), `${s.presencas} presenças`, "success", "Mês")}
+      ${metrica("🚫", "Total de faltas", s.faltas, "no mês", "danger", "Mês")}
+    </div>
+    <section class="card"><h2>Frequência por aluno</h2>
+      <div class="tabela"><table><thead><tr><th>Aluno</th><th>Turma</th><th>Presenças</th><th>Faltas</th><th>Frequência</th></tr></thead>
+      <tbody>${r.alunos.map((a) => `<tr><td><b>${esc(a.nome)}</b></td><td>${esc(a.sala)}</td><td>${a.presencas}</td><td>${a.faltas}</td>
+        <td>${pill(pct(a.percentual), a.percentual == null ? "neutral" : a.percentual < 75 ? "danger" : a.percentual < 90 ? "warning" : "success")}</td></tr>`).join("")}</tbody></table></div></section>
+    <section class="card" style="margin-top:20px"><h2>Busca Ativa no mês</h2>
+      <small>${b.abertos_no_mes} caso(s) aberto(s) • ${b.encerrados_no_mes} encerrado(s) • ${b.em_acompanhamento} ainda em acompanhamento</small>
+      ${b.casos.length ? b.casos.map((k) => `<div style="margin-top:16px"><b>${esc(k.nome)}</b> <small style="display:inline">(${esc(k.sala)})</small> ${pill(k.status, k.status === "Resolvido" ? "success" : "danger")}
+        <small>Aberto em ${k.aberta_em}${k.encerrada_em ? " • encerrado em " + k.encerrada_em : ""}</small>
+        ${k.registros.map((n) => `<div class="nota ${n.nome_usuario === "Sistema" ? "sistema" : ""}"><small><b>${esc(n.nome_usuario)}</b> • ${n.quando}</small>${esc(n.texto)}</div>`).join("")}</div>`).join("")
+        : `<div class="vazio"><small>Nenhum caso de Busca Ativa neste mês.</small></div>`}
+    </section>`;
+}
+function ligarRelatorio() {
+  document.getElementById("rel-mes").onchange = seguro(async (e) => {
+    if (!e.target.value) return;
+    dados.relatorio = await api("/api/relatorio-mensal?mes=" + e.target.value);
+    desenharRelatorio();
+  });
+  document.getElementById("rel-imprimir").onclick = () => window.print();
+  document.getElementById("rel-csv").onclick = () => {
+    const r = dados.relatorio;
+    const linhas = [["Aluno", "Turma", "Presenças", "Faltas", "Frequência (%)"],
+      ...r.alunos.map((a) => [a.nome, a.sala, a.presencas, a.faltas, a.percentual == null ? "" : String(a.percentual).replace(".", ",")])];
+    const csv = "\uFEFF" + linhas.map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url; link.download = `relatorio-frequencia-${r.mes}.csv`; link.click();
+    URL.revokeObjectURL(url);
+  };
+  desenharRelatorio();
 }
 
 // ---------- Tela de Segurança ----------
@@ -193,7 +362,7 @@ function telaSeguranca() {
 }
 function desenharLogsAoVivo(novo) {
   document.getElementById("logs").innerHTML = logs.map((l, i) => `<div class="log ${novo && i === 0 ? "novo" : ""}">
-    <div class="icone success">✔</div><div><b>Entrada confirmada: ${l.nome}</b><small>${l.sala} • Câmera validada</small></div><small>${l.hora}</small></div>`).join("");
+    <div class="icone success">✔</div><div><b>Entrada confirmada: ${esc(l.nome)}</b><small>${esc(l.sala)} • Câmera validada</small></div><small>${l.hora}</small></div>`).join("");
 }
 async function desenharSaida() {
   const texto = document.getElementById("buscaSaida").value.trim();
@@ -202,9 +371,9 @@ async function desenharSaida() {
   if (texto.length < 3) { box.innerHTML = vazio; return; }
   const r = await api("/api/saida?nome=" + encodeURIComponent(texto));
   if (!r) { box.innerHTML = vazio; return; }
-  box.innerHTML = `<div class="linha info" style="padding:12px;border-radius:8px;margin-top:20px"><div><b>${r.aluno.nome}</b><small>${r.aluno.sala} • Matrícula ${r.aluno.matricula}</small></div>${pill("Na escola", "success")}</div>
+  box.innerHTML = `<div class="linha info" style="padding:12px;border-radius:8px;margin-top:20px"><div><b>${esc(r.aluno.nome)}</b><small>${esc(r.aluno.sala)} • Matrícula ${esc(r.aluno.matricula)}</small></div>${pill("Na escola", "success")}</div>
     <small style="margin-top:16px;font-weight:700;text-transform:uppercase">Responsáveis autorizados para retirada</small>
-    <div class="responsaveis resp-2">${r.responsaveis.map((x) => `<article class="resp"><div class="aluno"><img src="${x.foto}" alt="${x.nome}"><div><b>${x.nome}</b><small>${x.parentesco}</small></div></div><small style="margin-top:10px">📞 ${x.telefone}</small></article>`).join("")}</div>
+    <div class="responsaveis resp-2">${r.responsaveis.map((x) => `<article class="resp"><div class="aluno"><img src="${x.foto || ""}" alt="${esc(x.nome)}"><div><b>${esc(x.nome)}</b><small>${esc(x.parentesco)}</small></div></div><small style="margin-top:10px">📞 ${esc(x.telefone)}</small></article>`).join("")}</div>
     <button class="btn" id="liberar" ${liberada ? "disabled" : ""}>${liberada ? "✅ Saída liberada" : "🛡️ Confirmar liberação"}</button>`;
   document.getElementById("liberar").onclick = async () => {
     await api("/api/saidas", { method: "POST", body: JSON.stringify({ aluno_id: r.aluno.id }) });
@@ -305,7 +474,7 @@ function telaUsuarios() {
 }
 function desenharUsuarios() {
   const selectAluno = document.getElementById("nu-aluno");
-  selectAluno.innerHTML = dados.alunos.map((a) => `<option value="${a.id}">${a.nome} — ${a.sala}</option>`).join("");
+  selectAluno.innerHTML = dados.alunos.map((a) => `<option value="${a.id}">${esc(a.nome)} — ${esc(a.sala)}</option>`).join("");
   const papelSel = document.getElementById("nu-papel");
   papelSel.onchange = () => {
     document.getElementById("nu-campo-aluno").classList.toggle("oculto", papelSel.value !== "pai");
@@ -338,8 +507,8 @@ function desenharUsuarios() {
 }
 function desenharListaUsuarios() {
   document.getElementById("lista-usuarios").innerHTML = dados.usuarios.map((u) => `<tr>
-    <td>${u.nome}</td><td>${u.usuario}</td><td>${papelLabel(u.papel)}</td>
-    <td>${u.aluno_nome || u.sala || "—"}</td>
+    <td>${esc(u.nome)}</td><td>${esc(u.usuario)}</td><td>${papelLabel(u.papel)}</td>
+    <td>${esc(u.aluno_nome || u.sala || "—")}</td>
     <td>${pill(u.ativo ? "Ativo" : "Inativo", u.ativo ? "success" : "neutral")} ${u.senha_temporaria ? pill("Senha provisória", "warning") : ""}</td>
     <td><button class="btn outline" data-id="${u.id}" data-ativo="${u.ativo ? 0 : 1}" style="width:auto;padding:4px 12px">${u.ativo ? "Desativar" : "Ativar"}</button></td>
   </tr>`).join("");
@@ -353,32 +522,63 @@ function desenharListaUsuarios() {
 function telaLogs() {
   return `<div class="topo"><h2>Logs de atividade</h2><small>Últimas ações registradas no sistema, com quem fez o quê.</small></div>
   <section class="card"><div class="tabela"><table><thead><tr><th>Quando</th><th>Usuário</th><th>Papel</th><th>Ação</th><th>Detalhe</th></tr></thead>
-  <tbody>${dados.logs.map((l) => `<tr><td>${l.quando}</td><td>${l.nome_usuario}</td><td>${papelLabel(l.papel)}</td><td>${acaoLabel(l.acao)}</td><td>${l.detalhe || "—"}</td></tr>`).join("")}</tbody></table></div></section>`;
+  <tbody>${dados.logs.map((l) => `<tr><td>${l.quando}</td><td>${esc(l.nome_usuario)}</td><td>${papelLabel(l.papel)}</td><td>${acaoLabel(l.acao)}</td><td>${esc(l.detalhe || "—")}</td></tr>`).join("")}</tbody></table></div></section>`;
 }
 
-// ---------- Minha Turma (professor) ----------
+// ---------- Minha Turma e chamada (professor) ----------
 function telaTurma() {
-  return `<div class="topo"><h2>Minha turma — ${usuarioLogado.sala}</h2><small>Alunos da turma e contato dos responsáveis.</small></div>
-  <section class="card"><div class="tabela"><table><thead><tr><th>Aluno</th><th>Pendência</th><th>Responsáveis</th></tr></thead>
-  <tbody>${dados.turma.map((a) => `<tr><td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><b>${a.nome}</b></div></td>
-    <td>${pill(a.pendencia, a.pendencia === "Nenhuma" ? "neutral" : "warning")}</td><td>${a.responsaveis || "—"}</td></tr>`).join("")}</tbody></table></div></section>`;
+  const hoje = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+  const alunos = dados.turma.alunos;
+  const registrada = alunos.length > 0 && alunos.every((a) => a.status_hoje);
+  const salva = dados.chamadaSalva; dados.chamadaSalva = false;
+  return `<div class="topo"><h2>Minha turma — ${esc(usuarioLogado.sala)}</h2><small>Chamada de hoje (${hoje}) e contato dos responsáveis.</small></div>
+  <section class="card"><div class="linha" style="flex-wrap:wrap;gap:8px"><h2>Chamada de hoje</h2>${registrada ? pill("Chamada registrada hoje", "success") : pill("Ainda não registrada", "warning")}</div>
+    ${alunos.length ? `<div class="tabela"><table><thead><tr><th>Aluno</th><th>Hoje</th><th>Faltas (${dados.turma.dias_faltas} dias)</th><th>Pendência</th><th>Responsáveis</th></tr></thead>
+      <tbody id="chamada-linhas"></tbody></table></div>
+      <p class="pill success ${salva ? "" : "oculto"}" style="margin-top:12px">Chamada salva com sucesso!</p>
+      <button class="btn" id="chamada-salvar" style="max-width:260px">Salvar chamada de hoje</button>`
+      : `<div class="vazio"><b>Nenhum aluno cadastrado nesta turma</b><small>Peça à administração para cadastrar os alunos da sala ${esc(usuarioLogado.sala)}.</small></div>`}
+  </section>`;
+}
+function desenharChamada() {
+  const corpo = document.getElementById("chamada-linhas");
+  if (!corpo) return;
+  corpo.innerHTML = dados.turma.alunos.map((a) => {
+    const s = dados.chamada[a.id];
+    return `<tr><td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><b>${esc(a.nome)}</b></div></td>
+      <td><div class="seg"><button class="${s === "Presente" ? "on-p" : ""}" data-aluno="${a.id}" data-status="Presente">Presente</button><button class="${s === "Ausente" ? "on-a" : ""}" data-aluno="${a.id}" data-status="Ausente">Ausente</button></div></td>
+      <td>${pill(a.faltas, a.faltas >= 5 ? "danger" : a.faltas > 0 ? "warning" : "neutral")}</td>
+      <td>${pill(esc(a.pendencia), a.pendencia === "Nenhuma" ? "neutral" : "warning")}</td><td>${esc(a.responsaveis || "—")}</td></tr>`;
+  }).join("");
+  corpo.querySelectorAll("[data-aluno]").forEach((b) => b.onclick = () => { dados.chamada[b.dataset.aluno] = b.dataset.status; desenharChamada(); });
+  document.getElementById("chamada-salvar").onclick = seguro(async () => {
+    await api("/api/chamada", { method: "POST", body: JSON.stringify({
+      registros: Object.entries(dados.chamada).map(([id, status]) => ({ aluno_id: Number(id), status })),
+    }) });
+    dados.chamadaSalva = true;
+    await mostrar("turma");
+  });
 }
 
 // ---------- Portal dos Pais ----------
 function telaPais() {
-  return `<div class="topo"><small>Olá, ${usuarioLogado.nome.split(" ")[0]}</small><h2>Acompanhe ${dados.filho ? "o(a) " + dados.filho.nome.split(" ")[0] : "seu filho"}</h2></div>
+  const h = dados.historico, hoje = h.hoje;
+  const status = hoje ? (hoje.status === "Presente" ? "Na Escola" : "Ausente hoje") : "Sem registro hoje";
+  const selo = hoje ? (hoje.status === "Presente" ? "● Seguro" : "● Ausente") : "● Sem registro";
+  return `<div class="topo"><small>Olá, ${esc(usuarioLogado.nome.split(" ")[0])}</small><h2>Acompanhe ${dados.filho ? "o(a) " + esc(dados.filho.nome.split(" ")[0]) : "seu filho"}</h2></div>
   <div class="grade pais" style="align-items:start"><div>
-    <section class="status"><div class="linha"><div><small style="color:#dbe6ff">Status agora</small><h3>Na Escola</h3></div><span class="pill" style="background:rgba(255,255,255,.2)">● Seguro</span></div>
-      <hr style="margin:20px 0;opacity:.3"><small style="color:#dbe6ff">Turma</small><b>${dados.filho ? dados.filho.sala : "—"}</b></section>
+    <section class="status"><div class="linha"><div><small style="color:#dbe6ff">Status agora</small><h3>${status}</h3></div><span class="pill" style="background:rgba(255,255,255,.2)">${selo}</span></div>
+      <hr style="margin:20px 0;opacity:.3"><small style="color:#dbe6ff">Registro de hoje</small><b>${hoje ? esc(hoje.observacao) : "Chamada ainda não registrada"}</b>
+      <small style="color:#dbe6ff;margin-top:10px">Turma</small><b>${dados.filho ? esc(dados.filho.sala) : "—"}</b></section>
     <div class="topo" style="margin-top:24px"><h2>Autorizações digitais</h2><small>Revise e aprove com um toque.</small></div><div id="autorizacoes"></div></div>
-    <aside class="card"><h2>Histórico de presença</h2><small>Setembro de 2026</small>
-      ${dados.historico.map((h) => `<div class="hist ${h.status === "Ausente" ? "ausente" : ""}"><span class="ponto"></span><div><b style="font-size:14px">${h.data}</b><small>${h.detalhe}</small></div>${pill(h.status, h.status === "Presente" ? "success" : "warning")}</div>`).join("")}
+    <aside class="card"><h2>Histórico de presença</h2><small>Últimos ${h.dias} dias</small>
+      ${blocoHistorico(h)}
       <button class="btn outline">✉️ Solicitar relatório</button></aside></div>`;
 }
 function desenharAutorizacoes() {
   document.getElementById("autorizacoes").innerHTML = dados.autorizacoes.map((a) => {
     const ok = !!a.aprovada;
-    return `<article class="card" style="margin-bottom:12px"><div class="linha"><div><b>${a.titulo}</b><small>📅 ${a.data}</small><small style="margin-top:6px">${a.detalhe}</small></div>${ok ? '<span class="icone success">✔</span>' : ""}</div>
+    return `<article class="card" style="margin-bottom:12px"><div class="linha"><div><b>${esc(a.titulo)}</b><small>📅 ${esc(a.data)}</small><small style="margin-top:6px">${esc(a.detalhe)}</small></div>${ok ? '<span class="icone success">✔</span>' : ""}</div>
       <button class="btn ${ok ? "outline" : ""}" data-id="${a.id}">${ok ? "Autorização aprovada" : "Revisar e aprovar"}</button></article>`;
   }).join("");
   document.querySelectorAll("#autorizacoes button").forEach((b) => b.onclick = async () => {
@@ -396,26 +596,31 @@ async function mostrar(id) {
   desenharMenu();
   fecharMenu();
   try {
-    if (id === "secretaria") dados.alunos = await api("/api/alunos");
+    if (id === "secretaria") { dados.resumo = await api("/api/resumo"); dados.alunos = await api("/api/alunos"); }
     if (id === "seguranca") logs = await api("/api/acessos");
+    if (id === "frequencia") dados.freq = await api("/api/frequencia");
+    if (id === "busca") dados.busca = await api("/api/busca-ativa");
+    if (id === "relatorio") dados.relatorio = await api("/api/relatorio-mensal");
     if (id === "usuarios") { dados.alunos = await api("/api/alunos"); dados.usuarios = await api("/api/usuarios"); }
     if (id === "logs") dados.logs = await api("/api/logs");
-    if (id === "turma") dados.turma = await api("/api/minha-turma");
+    if (id === "turma") {
+      dados.turma = await api("/api/minha-turma");
+      dados.chamada = Object.fromEntries(dados.turma.alunos.map((a) => [a.id, a.status_hoje || "Presente"]));
+    }
     if (id === "pais") {
       const alunoId = usuarioLogado.aluno_id;
       dados.filho = await api(`/api/alunos/${alunoId}`);
       dados.autorizacoes = await api(`/api/autorizacoes/${alunoId}`);
-      const presencas = await api(`/api/presencas/${alunoId}`);
-      dados.historico = presencas.map((p) => ({
-        data: new Date(p.data + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" }),
-        detalhe: p.observacao, status: p.status,
-      }));
+      dados.historico = await api(`/api/presencas/${alunoId}?dias=30`);
     }
     document.getElementById("tela").innerHTML = {
-      secretaria: telaSecretaria, seguranca: telaSeguranca, pais: telaPais,
-      cadastro: telaCadastroAluno, usuarios: telaUsuarios, logs: telaLogs, turma: telaTurma,
+      secretaria: telaSecretaria, seguranca: telaSeguranca, pais: telaPais, frequencia: telaFrequencia, busca: telaBusca,
+      relatorio: telaRelatorio, cadastro: telaCadastroAluno, usuarios: telaUsuarios, logs: telaLogs, turma: telaTurma,
     }[id]();
-    if (id === "secretaria") { desenharAlunos(); document.getElementById("busca").oninput = (e) => desenharAlunos(e.target.value); }
+    if (id === "secretaria") {
+      desenharAlunos(); document.getElementById("busca").oninput = (e) => desenharAlunos(e.target.value);
+      document.querySelectorAll("[data-ir]").forEach((b) => b.onclick = () => mostrar(b.dataset.ir));
+    }
     if (id === "seguranca") {
       desenharLogsAoVivo(false); desenharSaida();
       document.getElementById("buscaSaida").oninput = () => { liberada = false; desenharSaida(); };
@@ -426,11 +631,15 @@ async function mostrar(id) {
         if (tela === "seguranca") desenharLogsAoVivo(true);
       }, 3500);
     }
+    if (id === "frequencia") ligarFrequencia();
+    if (id === "busca") desenharBusca();
+    if (id === "relatorio") ligarRelatorio();
     if (id === "cadastro") desenharCadastroAluno();
     if (id === "usuarios") desenharUsuarios();
+    if (id === "turma") desenharChamada();
     if (id === "pais") desenharAutorizacoes();
   } catch (erro) {
-    if (usuarioLogado) document.getElementById("tela").innerHTML = `<div class="card"><b>Não foi possível carregar os dados.</b><small>${erro.message === "Sessão expirada" ? "Faça login novamente." : erro.message}</small></div>`;
+    if (usuarioLogado) document.getElementById("tela").innerHTML = `<div class="card"><b>Não foi possível carregar os dados.</b><small>${erro.message === "Sessão expirada" ? "Faça login novamente." : esc(erro.message)}</small></div>`;
   }
 }
 function desenharMenu() {

@@ -15,6 +15,10 @@ Resumo:
 4. `npm start`
 5. Abra `http://localhost:3000`
 
+## Funcionalidades
+Cadastro de alunos e usuários (3 papéis), senha provisória, logs de atividade, chamada do professor,
+controle e histórico de frequência, Busca Ativa automática por faltas e relatório mensal.
+
 ## Login
 Administração (vê tudo, cadastra alunos e usuários): `mariana` / `123456`
 Responsável (vê só o próprio filho): `anapaula` / `123456`
