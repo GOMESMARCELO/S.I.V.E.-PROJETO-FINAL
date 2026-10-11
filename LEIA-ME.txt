@@ -68,3 +68,25 @@ FREQUÊNCIA E BUSCA ATIVA (Fase 2)
 IMPORTANTE AO ATUALIZAR DA FASE 1 PARA A FASE 2: rode o database/sive.sql de novo
 (ele cria as tabelas de Busca Ativa e gera presenças de exemplo dos últimos 35 dias úteis,
 sempre contando a partir da data de hoje). Isso apaga os dados antigos do banco "sive".
+
+
+GESTÃO, FICHA DO ALUNO E AUTORIZAÇÕES DIGITAIS (Fase 3)
+- Central do Dia (gestão): a tabela de alunos mostra comunicados (lidos/novos), autorizações
+  (em dia/pendentes), pendências e ações/advertências. Dá para buscar, filtrar, ordenar clicando
+  nos títulos e abrir a "ficha" de cada aluno.
+- Ficha do aluno (abas): Comunicados, Autorizações, Documentos, Pendências e Ocorrências.
+  Gestão vê qualquer aluno; professor vê só a própria turma; responsável vê só o próprio filho.
+- Documentos: PDF, PNG, JPG, DOC ou DOCX (até 5 MB). Ficam na pasta uploads/ (não é pública).
+  Se o documento atende a uma pendência do tipo "Documento", ela é resolvida junto.
+- Comunicados: gestão publica para a escola toda ou uma turma; professor publica para a própria
+  turma. O responsável marca como lido e a gestão acompanha quantos leram.
+- Autorizações digitais: a gestão envia (para uma turma ou todos) e o responsável assina com nome
+  completo + senha. O sistema grava quem assinou, quando e um código de verificação, e gera um
+  comprovante para imprimir.
+
+IMPORTANTE AO ATUALIZAR DA FASE 2 PARA A FASE 3: rode o database/sive.sql de novo (apaga os dados
+antigos do banco "sive"). Não precisa rodar npm install de novo: nenhuma biblioteca nova foi adicionada.
+
+SEGURANÇA: o servidor agora só entrega as pastas css/, js/ e assets/ e o index.html. Antes, o
+config.json (com a senha do banco) e o server.js podiam ser baixados pelo navegador. A pasta
+uploads/ também não é pública e não vai para o Git.

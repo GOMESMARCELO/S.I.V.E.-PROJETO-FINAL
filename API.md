@@ -45,6 +45,30 @@ Usuários de teste (cadastrados em `database/sive.sql`):
 | PUT    | /api/busca-ativa/:id/encerrar              | Encerra o caso `{ texto }` (opcional)                           |
 | GET    | /api/relatorio-mensal?mes=AAAA-MM          | Relatório do mês (sem `mes`: mês atual)                         |
 
+## Gestão de alunos, ficha, documentos e autorizações digitais
+
+| Método | Rota                                       | Quem             | O que faz                                                         |
+|--------|----------------------------------------------|------------------|----------------------------------------------------------------------|
+| GET    | /api/gestao-alunos                         | gestão           | Tabela de gestão: comunicados, autorizações, pendências e ocorrências por aluno |
+| GET    | /api/alunos/:alunoId/ficha                 | gestão, professor (da turma), responsável (do filho) | Ficha completa em abas |
+| GET    | /api/comunicados                           | gestão, professor | Comunicados com quantos já leram                                   |
+| POST   | /api/comunicados                           | gestão, professor | Publica `{ titulo, texto, sala? }` (professor: sempre a própria turma) |
+| GET    | /api/comunicados/:id/leituras              | gestão, professor | Quem leu e quem não leu                                            |
+| POST   | /api/comunicados/:id/ler                   | responsável      | Marca como lido para o filho                                       |
+| POST   | /api/autorizacoes                          | gestão           | Cria a autorização `{ titulo, detalhe, validade, sala? }` para a turma ou a escola toda |
+| GET    | /api/autorizacoes-grupos                   | gestão           | Autorizações enviadas, com quantas foram assinadas                 |
+| GET    | /api/autorizacoes-grupos/:grupo            | gestão           | Quem assinou, quando e o código de verificação                     |
+| POST   | /api/autorizacoes/:id/assinar              | responsável      | Assinatura digital `{ nome, senha }`: grava quem, quando e um código |
+| POST   | /api/documentos                            | gestão, professor (da turma), responsável (do filho) | Anexa documento `{ aluno_id, categoria, titulo, nome_arquivo, conteudo (base64), pendencia_id? }` |
+| GET    | /api/documentos/:id/arquivo                | quem pode ver o aluno | Baixa o arquivo                                               |
+| DELETE | /api/documentos/:id                        | gestão           | Exclui o documento e o arquivo                                     |
+| POST   | /api/pendencias                            | gestão, professor (da turma) | Abre pendência `{ aluno_id, tipo, descricao }`        |
+| PUT    | /api/pendencias/:id/resolver               | gestão           | Marca como resolvida                                               |
+| POST   | /api/ocorrencias                           | gestão, professor (da turma) | Registra ação/advertência `{ aluno_id, tipo, descricao, data? }` |
+
+Regras dos documentos: PDF, PNG, JPG, DOC ou DOCX, até 5 MB. O servidor confere se o conteúdo bate com a extensão
+e guarda o arquivo com nome aleatório na pasta `uploads/`, que não é pública.
+
 ## Só professores
 
 | Método | Rota                | O que faz                                           |
@@ -63,8 +87,6 @@ Usuários de teste (cadastrados em `database/sive.sql`):
 | Método | Rota                              | O que faz                                   |
 |--------|-------------------------------------|----------------------------------------------|
 | GET    | /api/alunos/:alunoId               | Nome e sala de um aluno                       |
-| GET    | /api/autorizacoes/:alunoId         | Autorizações de um aluno                      |
-| PUT    | /api/autorizacoes/:id/alternar     | Aprova/desfaz uma autorização                 |
 | GET    | /api/presencas/:alunoId?dias=30    | Histórico de presença (padrão 30 dias, máx. 120) com totais e a situação de hoje |
 
 Se um responsável tentar acessar o `:alunoId` de outra família, o

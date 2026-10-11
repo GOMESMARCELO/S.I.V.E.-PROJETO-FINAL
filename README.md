@@ -17,7 +17,8 @@ Resumo:
 
 ## Funcionalidades
 Cadastro de alunos e usuários (3 papéis), senha provisória, logs de atividade, chamada do professor,
-controle e histórico de frequência, Busca Ativa automática por faltas e relatório mensal.
+controle e histórico de frequência, Busca Ativa automática por faltas, relatório mensal, tabela de gestão,
+ficha do aluno, comunicados, documentos anexados e autorizações digitais com assinatura.
 
 ## Login
 Administração (vê tudo, cadastra alunos e usuários): `mariana` / `123456`

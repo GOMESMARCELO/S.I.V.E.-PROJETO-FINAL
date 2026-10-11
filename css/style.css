@@ -96,3 +96,15 @@ select,textarea{font:inherit;padding:10px 12px;border:1px solid var(--border);bo
   body{background:#fff}
   .card{box-shadow:none}
 }
+
+/* ---- Fase 3: tabela de gestão, ficha com abas, comunicados e autorizações ---- */
+th.ord{cursor:pointer;user-select:none}
+th.ord:hover{color:var(--primary)}
+.seta{font-size:10px}
+.abas{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin:16px 0 12px}
+.aba{padding:10px 14px;border-radius:8px 8px 0 0;color:var(--muted-fg);font-weight:600;font-size:14px}
+.aba.ativa{background:var(--primary-soft);color:var(--primary)}
+.aba .qtd{display:inline-block;margin-left:4px;padding:1px 8px;border-radius:99px;background:var(--warning-soft);color:var(--warning);font-size:11px}
+.item{border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:10px}
+.barra{height:8px;border-radius:99px;background:var(--muted);overflow:hidden;margin-top:6px}
+.barra>i{display:block;height:100%;background:var(--success)}

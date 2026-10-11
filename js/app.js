@@ -34,6 +34,8 @@ const menusPorPapel = {
     { id: "frequencia", nome: "Frequência", dica: "Presença e faltas", icone: "📅" },
     { id: "busca", nome: "Busca Ativa", dica: "Faltas e acompanhamento", icone: "🔎" },
     { id: "relatorio", nome: "Relatório Mensal", dica: "Frequência e casos", icone: "📊" },
+    { id: "comunicados", nome: "Comunicados", dica: "Avisos e leituras", icone: "📢" },
+    { id: "autorizacoes", nome: "Autorizações", dica: "Assinatura digital", icone: "✍️" },
     { id: "cadastro", nome: "Cadastrar Aluno", dica: "Novo aluno", icone: "➕" },
     { id: "usuarios", nome: "Usuários", dica: "Acessos ao sistema", icone: "🔐" },
     { id: "logs", nome: "Logs", dica: "Atividade do sistema", icone: "📜" },
@@ -43,12 +45,14 @@ const menusPorPapel = {
   ],
   professor: [
     { id: "turma", nome: "Minha Turma", dica: "Chamada e contatos", icone: "📚" },
+    { id: "comunicados", nome: "Comunicados", dica: "Avisos da turma", icone: "📢" },
   ],
 };
 const titulos = {
   secretaria: "Central do Dia", seguranca: "Painel de Segurança", pais: "Portal dos Pais",
   frequencia: "Controle de Frequência", busca: "Busca Ativa", relatorio: "Relatório Mensal",
   cadastro: "Cadastrar Aluno", usuarios: "Usuários do Sistema", logs: "Logs de Atividade", turma: "Minha Turma",
+  ficha: "Ficha do Aluno", comunicados: "Comunicados", autorizacoes: "Autorizações Digitais",
 };
 const papelLabel = (p) => ({ admin: "Gestão", pai: "Responsável", professor: "Professor(a)", sistema: "Sistema" }[p] || p);
 const acaoLabel = (a) => ({
@@ -57,7 +61,10 @@ const acaoLabel = (a) => ({
   liberacao_saida: "Liberou saída", reativar_usuario: "Reativou usuário", desativar_usuario: "Desativou usuário",
   chamada_registrada: "Registrou a chamada", busca_ativa_aberta: "Abriu caso de Busca Ativa (automático)",
   busca_ativa_acompanhamento: "Anotou acompanhamento (Busca Ativa)", busca_ativa_encerrada: "Encerrou caso de Busca Ativa",
-  relatorio_mensal: "Gerou relatório mensal",
+  relatorio_mensal: "Gerou relatório mensal", comunicado_criado: "Publicou comunicado", comunicado_lido: "Leu comunicado",
+  autorizacao_criada: "Criou autorização", autorizacao_assinada: "Assinou autorização digitalmente", documento_enviado: "Anexou documento",
+  documento_excluido: "Excluiu documento", pendencia_criada: "Abriu pendência", pendencia_resolvida: "Resolveu pendência",
+  ocorrencia_registrada: "Registrou ação/advertência",
 }[a] || a);
 
 const pill = (texto, tom) => `<span class="pill ${tom}">${texto}</span>`;
@@ -189,21 +196,64 @@ function telaSecretaria() {
   <div class="topo"><h2>Atenção necessária</h2><small>Pendências que precisam de acompanhamento.</small></div>
   <div class="grade g3">
     ${alerta("⚠️", r.busca_ativa, "Crianças em busca ativa", "Por excesso de faltas", "danger", "busca")}
-    ${alerta("📄", "—", "Documentos aguardando", "Disponível em breve", "warning")}
-    ${alerta("📋", r.autorizacoes_pendentes, "Autorizações pendentes", "Aguardando assinatura", "info")}
+    ${alerta("📄", r.documentos_aguardando, "Documentos aguardando", "Entrega pelas famílias", "warning", "filtro:pendencias")}
+    ${alerta("📋", r.autorizacoes_pendentes, "Autorizações pendentes", "Aguardando assinatura", "info", "autorizacoes")}
   </div>
-  <section class="card"><div class="linha" style="flex-wrap:wrap"><div><h2>Gestão de alunos</h2><small>Informações e pendências recentes.</small></div>
-    <input id="busca" placeholder="🔍 Buscar aluno..." style="max-width:280px"></div>
-    <div class="tabela"><table><thead><tr><th>Nome da criança</th><th>Comunicados</th><th>Autorizações</th><th>Pendências</th><th>Ações</th></tr></thead>
-    <tbody id="linhas"></tbody></table></div></section>`;
+  <section class="card"><div class="linha" style="flex-wrap:wrap;gap:12px"><div><h2>Gestão de alunos</h2><small>Clique nos títulos para ordenar e abra a ficha de cada aluno.</small></div>
+    <div class="linha" style="gap:8px;flex-wrap:wrap">
+      <select id="g-filtro" style="width:auto"><option value="todos">Todos os alunos</option><option value="pendencias">Com pendências</option><option value="aut">Autorização pendente</option><option value="comunicados">Comunicado não lido</option><option value="adv">Com advertências</option></select>
+      <input id="busca" placeholder="🔍 Buscar aluno..." style="max-width:240px"></div></div>
+    <div class="tabela"><table><thead><tr>
+      <th class="ord" data-ord="nome">Nome da criança <span class="seta"></span></th><th class="ord" data-ord="novos">Comunicados <span class="seta"></span></th>
+      <th class="ord" data-ord="aut">Autorizações <span class="seta"></span></th><th class="ord" data-ord="pend">Pendências <span class="seta"></span></th>
+      <th class="ord" data-ord="adv">Ações e advertências <span class="seta"></span></th><th></th></tr></thead>
+    <tbody id="linhas"></tbody></table></div><small id="g-contagem" style="margin-top:8px"></small></section>`;
 }
-function desenharAlunos(filtro = "") {
-  const lista = dados.alunos.filter((a) => a.nome.toLowerCase().includes(filtro.toLowerCase()));
-  document.getElementById("linhas").innerHTML = lista.map((a) => `<tr>
-    <td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><div><b>${esc(a.nome)}</b><small>${esc(a.sala)}</small></div></div></td>
-    <td>${a.comunicados}</td>
-    <td>${pill(a.autorizacao, a.autorizacao.includes("pendente") ? "warning" : "success")}</td>
-    <td>${pill(a.pendencia, a.tom === "ok" ? "neutral" : a.tom)}</td><td>⋯</td></tr>`).join("");
+const chaveOrdem = {
+  nome: (a) => a.nome.toLowerCase(), novos: (a) => a.com_total - a.com_lidos, aut: (a) => a.aut_pendentes,
+  pend: (a) => a.pend_abertas + a.aut_pendentes, adv: (a) => a.advertencias * 100 + a.acoes,
+};
+const filtrosGestao = {
+  todos: () => true, pendencias: (a) => a.pend_abertas + a.aut_pendentes > 0, aut: (a) => a.aut_pendentes > 0,
+  comunicados: (a) => a.com_total - a.com_lidos > 0, adv: (a) => a.advertencias > 0,
+};
+function desenharAlunos() {
+  const busca = document.getElementById("busca").value.toLowerCase();
+  const { campo, dir } = dados.ordem;
+  const lista = dados.gestao.filter((a) => a.nome.toLowerCase().includes(busca) && filtrosGestao[dados.filtroGestao](a))
+    .sort((x, y) => { const a = chaveOrdem[campo](x), b = chaveOrdem[campo](y); return (a > b ? 1 : a < b ? -1 : x.nome.localeCompare(y.nome)) * dir; });
+  document.querySelectorAll("th.ord").forEach((th) => { th.querySelector(".seta").textContent = th.dataset.ord === campo ? (dir === 1 ? "▲" : "▼") : ""; });
+  document.getElementById("linhas").innerHTML = lista.length ? lista.map((a) => {
+    const novos = a.com_total - a.com_lidos;
+    const tipos = a.pend_tipos ? a.pend_tipos.split(",") : [];
+    const pendencias = (a.aut_pendentes > 0 ? pill("Autorização", "info") + " " : "") + tipos.map((t) => pill(t, "danger")).join(" ");
+    const ocorr = (a.advertencias ? pill(`${a.advertencias} advertência(s)`, "danger") + " " : "") + (a.acoes ? pill(`${a.acoes} ação(ões)`, "info") : "");
+    return `<tr>
+      <td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><div><b>${esc(a.nome)}</b><small>${esc(a.sala)}</small></div></div></td>
+      <td>${novos > 0 ? pill(`${novos} novo(s)`, "warning") : pill("Em dia", "success")}<small>${a.com_lidos} lido(s)</small></td>
+      <td>${a.aut_pendentes > 0 ? pill(`${a.aut_pendentes} pendente(s)`, "warning") : a.aut_assinadas > 0 ? pill("Em dia", "success") : pill("Nenhuma", "neutral")}</td>
+      <td>${pendencias || pill("Nenhuma", "neutral")}</td><td>${ocorr || "—"}</td>
+      <td><button class="btn outline pequeno" data-ficha="${a.id}">Abrir ficha</button></td></tr>`;
+  }).join("") : `<tr><td colspan="6"><div class="vazio"><small>Nenhum aluno encontrado com esse filtro.</small></div></td></tr>`;
+  document.getElementById("g-contagem").textContent = `${lista.length} de ${dados.gestao.length} alunos`;
+  document.querySelectorAll("[data-ficha]").forEach((b) => b.onclick = () => abrirFicha(Number(b.dataset.ficha), "secretaria"));
+}
+function ligarGestao() {
+  const filtro = document.getElementById("g-filtro");
+  document.querySelectorAll("[data-ir]").forEach((b) => b.onclick = () => {
+    const destino = b.dataset.ir;
+    if (!destino.startsWith("filtro:")) return mostrar(destino);
+    dados.filtroGestao = destino.slice(7); filtro.value = dados.filtroGestao; desenharAlunos();
+    document.getElementById("linhas").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  document.getElementById("busca").oninput = desenharAlunos;
+  filtro.value = dados.filtroGestao;
+  filtro.onchange = () => { dados.filtroGestao = filtro.value; desenharAlunos(); };
+  document.querySelectorAll("th.ord").forEach((th) => th.onclick = () => {
+    dados.ordem = dados.ordem.campo === th.dataset.ord ? { campo: th.dataset.ord, dir: -dados.ordem.dir } : { campo: th.dataset.ord, dir: 1 };
+    desenharAlunos();
+  });
+  desenharAlunos();
 }
 
 // ---------- Controle de frequência (administração) ----------
@@ -531,9 +581,9 @@ function telaTurma() {
   const alunos = dados.turma.alunos;
   const registrada = alunos.length > 0 && alunos.every((a) => a.status_hoje);
   const salva = dados.chamadaSalva; dados.chamadaSalva = false;
-  return `<div class="topo"><h2>Minha turma — ${esc(usuarioLogado.sala)}</h2><small>Chamada de hoje (${hoje}) e contato dos responsáveis.</small></div>
+  return `<div class="topo"><h2>Minha turma — ${esc(usuarioLogado.sala)}</h2><small>Chamada de hoje (${hoje}), contato dos responsáveis e ficha de cada aluno.</small></div>
   <section class="card"><div class="linha" style="flex-wrap:wrap;gap:8px"><h2>Chamada de hoje</h2>${registrada ? pill("Chamada registrada hoje", "success") : pill("Ainda não registrada", "warning")}</div>
-    ${alunos.length ? `<div class="tabela"><table><thead><tr><th>Aluno</th><th>Hoje</th><th>Faltas (${dados.turma.dias_faltas} dias)</th><th>Pendência</th><th>Responsáveis</th></tr></thead>
+    ${alunos.length ? `<div class="tabela"><table><thead><tr><th>Aluno</th><th>Hoje</th><th>Faltas (${dados.turma.dias_faltas} dias)</th><th>Pendências</th><th>Responsáveis</th><th></th></tr></thead>
       <tbody id="chamada-linhas"></tbody></table></div>
       <p class="pill success ${salva ? "" : "oculto"}" style="margin-top:12px">Chamada salva com sucesso!</p>
       <button class="btn" id="chamada-salvar" style="max-width:260px">Salvar chamada de hoje</button>`
@@ -548,9 +598,11 @@ function desenharChamada() {
     return `<tr><td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><b>${esc(a.nome)}</b></div></td>
       <td><div class="seg"><button class="${s === "Presente" ? "on-p" : ""}" data-aluno="${a.id}" data-status="Presente">Presente</button><button class="${s === "Ausente" ? "on-a" : ""}" data-aluno="${a.id}" data-status="Ausente">Ausente</button></div></td>
       <td>${pill(a.faltas, a.faltas >= 5 ? "danger" : a.faltas > 0 ? "warning" : "neutral")}</td>
-      <td>${pill(esc(a.pendencia), a.pendencia === "Nenhuma" ? "neutral" : "warning")}</td><td>${esc(a.responsaveis || "—")}</td></tr>`;
+      <td>${a.pendencias ? pill(`${a.pendencias} em aberto`, "warning") : pill("Nenhuma", "neutral")}</td><td>${esc(a.responsaveis || "—")}</td>
+      <td><button class="btn outline pequeno" data-ficha="${a.id}">Ficha</button></td></tr>`;
   }).join("");
   corpo.querySelectorAll("[data-aluno]").forEach((b) => b.onclick = () => { dados.chamada[b.dataset.aluno] = b.dataset.status; desenharChamada(); });
+  corpo.querySelectorAll("[data-ficha]").forEach((b) => b.onclick = () => abrirFicha(Number(b.dataset.ficha), "turma"));
   document.getElementById("chamada-salvar").onclick = seguro(async () => {
     await api("/api/chamada", { method: "POST", body: JSON.stringify({
       registros: Object.entries(dados.chamada).map(([id, status]) => ({ aluno_id: Number(id), status })),
@@ -566,26 +618,275 @@ function telaPais() {
   const status = hoje ? (hoje.status === "Presente" ? "Na Escola" : "Ausente hoje") : "Sem registro hoje";
   const selo = hoje ? (hoje.status === "Presente" ? "● Seguro" : "● Ausente") : "● Sem registro";
   return `<div class="topo"><small>Olá, ${esc(usuarioLogado.nome.split(" ")[0])}</small><h2>Acompanhe ${dados.filho ? "o(a) " + esc(dados.filho.nome.split(" ")[0]) : "seu filho"}</h2></div>
-  <div class="grade pais" style="align-items:start"><div>
+  <div class="grade pais" style="align-items:start">
     <section class="status"><div class="linha"><div><small style="color:#dbe6ff">Status agora</small><h3>${status}</h3></div><span class="pill" style="background:rgba(255,255,255,.2)">${selo}</span></div>
       <hr style="margin:20px 0;opacity:.3"><small style="color:#dbe6ff">Registro de hoje</small><b>${hoje ? esc(hoje.observacao) : "Chamada ainda não registrada"}</b>
       <small style="color:#dbe6ff;margin-top:10px">Turma</small><b>${dados.filho ? esc(dados.filho.sala) : "—"}</b></section>
-    <div class="topo" style="margin-top:24px"><h2>Autorizações digitais</h2><small>Revise e aprove com um toque.</small></div><div id="autorizacoes"></div></div>
-    <aside class="card"><h2>Histórico de presença</h2><small>Últimos ${h.dias} dias</small>
-      ${blocoHistorico(h)}
-      <button class="btn outline">✉️ Solicitar relatório</button></aside></div>`;
+    <aside class="card"><h2>Histórico de presença</h2><small>Últimos ${h.dias} dias</small>${blocoHistorico(h)}</aside>
+  </div>
+  <section class="card" style="margin-top:20px"><h2>Ficha do meu filho</h2><small>Comunicados, autorizações para assinar, documentos, pendências e ocorrências.</small><div id="ficha-corpo"></div></section>`;
 }
-function desenharAutorizacoes() {
-  document.getElementById("autorizacoes").innerHTML = dados.autorizacoes.map((a) => {
-    const ok = !!a.aprovada;
-    return `<article class="card" style="margin-bottom:12px"><div class="linha"><div><b>${esc(a.titulo)}</b><small>📅 ${esc(a.data)}</small><small style="margin-top:6px">${esc(a.detalhe)}</small></div>${ok ? '<span class="icone success">✔</span>' : ""}</div>
-      <button class="btn ${ok ? "outline" : ""}" data-id="${a.id}">${ok ? "Autorização aprovada" : "Revisar e aprovar"}</button></article>`;
-  }).join("");
-  document.querySelectorAll("#autorizacoes button").forEach((b) => b.onclick = async () => {
-    await api(`/api/autorizacoes/${b.dataset.id}/alternar`, { method: "PUT" });
-    dados.autorizacoes = await api(`/api/autorizacoes/${usuarioLogado.aluno_id}`);
-    desenharAutorizacoes();
-  });
+
+// ---------- Ficha do aluno (abas): usada pela gestão, pelo professor da turma e pelo responsável ----------
+const tamanhoLegivel = (b) => (b < 1024 * 1024 ? Math.max(1, Math.round(b / 1024)) + " KB" : (b / 1024 / 1024).toFixed(1).replace(".", ",") + " MB");
+const lerBase64 = (arquivo) => new Promise((ok, erro) => {
+  const r = new FileReader();
+  r.onload = () => ok(String(r.result).split(",")[1]);
+  r.onerror = () => erro(new Error("Não foi possível ler o arquivo"));
+  r.readAsDataURL(arquivo);
+});
+const vazio = (texto) => `<div class="vazio"><small>${texto}</small></div>`;
+const erroBox = (id) => `<p class="pill danger oculto" id="${id}" style="margin-top:8px"></p>`;
+const mostrarErro = (id, msg) => { const e = document.getElementById(id); e.textContent = msg; e.classList.remove("oculto"); };
+
+function abrirFicha(alunoId, origem) {
+  dados.fichaAlunoId = alunoId; dados.fichaOrigem = origem; dados.fichaAba = "comunicados";
+  mostrar("ficha");
+}
+function telaFicha() {
+  return `<div class="no-print" style="margin-bottom:12px"><button class="btn outline pequeno" id="ficha-voltar">← Voltar</button></div><div id="ficha-corpo"></div>`;
+}
+async function recarregarFicha() {
+  dados.ficha = await api(`/api/alunos/${dados.ficha.aluno.id}/ficha`);
+  desenharFicha();
+}
+function abaComunicados(f, ehPai) {
+  return f.comunicados.length ? f.comunicados.map((c) => `<div class="item">
+    <div class="linha" style="gap:8px;flex-wrap:wrap"><b>${esc(c.titulo)}</b>${c.lido ? pill("Lido", "success") : pill("Não lido", "warning")}</div>
+    <small>${c.data} • ${esc(c.criado_por_nome)} • ${c.sala ? esc(c.sala) : "Escola toda"}</small>
+    <p style="margin-top:8px">${esc(c.texto)}</p>
+    ${c.lido ? `<small style="margin-top:6px">Lido em ${c.lido_em}</small>` : ehPai ? `<button class="btn pequeno" data-ler="${c.id}" style="margin-top:10px">Marcar como lido</button>` : ""}</div>`).join("") : vazio("Nenhum comunicado para este aluno.");
+}
+function abaAutorizacoes(f, ehPai) {
+  return f.autorizacoes.length ? f.autorizacoes.map((a) => `<div class="item">
+    <div class="linha" style="gap:8px;flex-wrap:wrap"><div><b>${esc(a.titulo)}</b><small>📅 ${esc(a.validade || "—")}</small></div>${a.assinada ? pill("Assinada", "success") : pill("Pendente", "warning")}</div>
+    <small style="margin-top:6px">${esc(a.detalhe || "")}</small>
+    ${a.assinada
+      ? `<div class="nota sistema"><small><b>Assinatura digital</b> • ${esc(a.assinada_nome)} • ${a.assinada_em}</small>Código de verificação: <b>${esc(a.codigo)}</b></div>
+         <button class="btn outline pequeno" data-comprovante="${a.id}">Ver comprovante</button>`
+      : ehPai ? `<small style="margin-top:10px">Ao assinar, você autoriza o que está descrito acima. Para confirmar, digite seu nome completo e sua senha.</small>
+         <div class="grade dois" style="margin-top:8px"><input placeholder="Seu nome completo" data-as-nome="${a.id}" autocomplete="off"><input type="password" placeholder="Sua senha" data-as-senha="${a.id}" autocomplete="off"></div>
+         <button class="btn pequeno" data-assinar="${a.id}" style="margin-top:10px">✍️ Assinar digitalmente</button>` : ""}
+  </div>`).join("") : vazio("Nenhuma autorização para este aluno.");
+}
+function abaDocumentos(f, ehGestao) {
+  const solicitacoes = f.pendencias.filter((p) => p.status === "Aberta" && p.tipo === "Documento");
+  const lista = f.documentos.length ? f.documentos.map((d) => `<div class="item">
+    <div class="linha" style="gap:8px;flex-wrap:wrap"><div><b>📄 ${esc(d.titulo)}</b><small>${esc(d.nome_original)} • ${tamanhoLegivel(d.tamanho)} • ${d.enviado_em} • ${esc(d.enviado_por_nome)}</small></div>${pill(esc(d.categoria), "info")}</div>
+    <div class="acoes"><button class="btn outline pequeno" data-baixar="${d.id}" data-nome="${esc(d.nome_original)}">⬇️ Baixar</button>${ehGestao ? `<button class="btn outline pequeno" data-excluir-doc="${d.id}">🗑️ Excluir</button>` : ""}</div></div>`).join("") : vazio("Nenhum documento anexado ainda.");
+  return `${lista}
+  <form id="form-doc" class="item" style="background:var(--muted)"><b>Anexar documento</b>
+    <div class="grade dois" style="margin-top:8px"><div><small>Categoria</small><select id="doc-cat">${f.categorias.map((c) => `<option>${esc(c)}</option>`).join("")}</select></div>
+      <div><small>Título</small><input id="doc-titulo" required maxlength="120" placeholder="Ex.: Relatório do 1º bimestre"></div></div>
+    ${solicitacoes.length ? `<div style="margin-top:8px"><small>Este documento atende a qual solicitação da escola? (opcional)</small><select id="doc-pend"><option value="">Nenhuma</option>${solicitacoes.map((p) => `<option value="${p.id}">${esc(p.descricao)}</option>`).join("")}</select></div>` : ""}
+    <div style="margin-top:8px"><small>Arquivo (PDF, PNG, JPG, DOC ou DOCX — até 5 MB)</small><input type="file" id="doc-arquivo" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" required></div>
+    ${erroBox("doc-erro")}<button class="btn pequeno" type="submit" style="margin-top:10px">Enviar documento</button></form>`;
+}
+function abaPendencias(f, podeRegistrar, ehGestao) {
+  const lista = f.pendencias.length ? f.pendencias.map((p) => `<div class="item">
+    <div class="linha" style="gap:8px;flex-wrap:wrap"><div><b>${esc(p.descricao)}</b><small>${pill(p.tipo, "neutral")} Aberta em ${p.criada_em} por ${esc(p.criada_por_nome)}</small></div>${p.status === "Aberta" ? pill("Aberta", "danger") : pill("Resolvida", "success")}</div>
+    ${p.status === "Resolvida" ? `<small style="margin-top:6px">Resolvida em ${p.resolvida_em} por ${esc(p.resolvida_por_nome)}</small>` : ehGestao ? `<button class="btn outline pequeno" data-resolver="${p.id}" style="margin-top:10px">Marcar como resolvida</button>` : ""}</div>`).join("") : vazio("Nenhuma pendência.");
+  return lista + (podeRegistrar ? `<form id="form-pend" class="item" style="background:var(--muted)"><b>Nova pendência</b>
+    <div class="grade dois" style="margin-top:8px"><div><small>Tipo</small><select id="pend-tipo"><option>Documento</option><option>Cadastro</option><option>Outro</option></select></div>
+      <div><small>Descrição</small><input id="pend-desc" required maxlength="200" placeholder="Ex.: Entregar comprovante de residência"></div></div>
+    ${erroBox("pend-erro")}<button class="btn pequeno" type="submit" style="margin-top:10px">Abrir pendência</button></form>` : "");
+}
+function abaOcorrencias(f, podeRegistrar) {
+  const lista = f.ocorrencias.length ? f.ocorrencias.map((o) => `<div class="item">
+    <div class="linha" style="gap:8px;flex-wrap:wrap"><small>${o.data} • registrada por ${esc(o.registrada_por_nome)}</small>${o.tipo === "Advertencia" ? pill("Advertência", "danger") : pill("Ação", "info")}</div><p style="margin-top:6px">${esc(o.descricao)}</p></div>`).join("") : vazio("Nenhuma ação ou advertência registrada.");
+  return lista + (podeRegistrar ? `<form id="form-ocor" class="item" style="background:var(--muted)"><b>Registrar ação ou advertência</b>
+    <div class="grade dois" style="margin-top:8px"><div><small>Tipo</small><select id="ocor-tipo"><option value="Advertencia">Advertência</option><option value="Acao">Ação</option></select></div>
+      <div><small>Data</small><input type="date" id="ocor-data"></div></div>
+    <div style="margin-top:8px"><small>Descrição</small><textarea id="ocor-desc" rows="3" maxlength="500" required></textarea></div>
+    ${erroBox("ocor-erro")}<button class="btn pequeno" type="submit" style="margin-top:10px">Registrar</button></form>` : "");
+}
+function abrirComprovante(a, aluno) {
+  const w = window.open("", "_blank");
+  if (!w) { alert("Permita pop-ups neste site para ver o comprovante."); return; }
+  w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Comprovante ${esc(a.codigo)}</title>
+    <style>body{font-family:Arial,sans-serif;max-width:640px;margin:40px auto;padding:0 20px;color:#1c2b45}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin:20px 0}td{padding:10px;border-bottom:1px solid #dde3ef}td:first-child{color:#61708a;width:38%}.cod{font-size:20px;letter-spacing:2px;font-weight:700}@media print{button{display:none}}</style></head><body>
+    <h1>🛡️ S.I.V.E. — Comprovante de autorização digital</h1>
+    <table><tr><td>Autorização</td><td>${esc(a.titulo)}</td></tr><tr><td>Detalhes</td><td>${esc(a.detalhe || "—")}</td></tr>
+    <tr><td>Aluno(a)</td><td>${esc(aluno.nome)} — ${esc(aluno.sala)}</td></tr><tr><td>Assinada por</td><td>${esc(a.assinada_nome)}</td></tr>
+    <tr><td>Data e hora</td><td>${esc(a.assinada_em)}</td></tr><tr><td>Código de verificação</td><td class="cod">${esc(a.codigo)}</td></tr></table>
+    <p>Documento gerado pelo sistema S.I.V.E. A assinatura foi confirmada com o nome completo e a senha do responsável.</p><button onclick="window.print()">Imprimir</button></body></html>`);
+  w.document.close();
+}
+async function baixarDocumento(id, nome) {
+  const r = await fetch(`/api/documentos/${id}/arquivo`, { headers: { Authorization: "Bearer " + usuarioLogado.token } });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).erro || "Não foi possível baixar");
+  const url = URL.createObjectURL(await r.blob());
+  const link = document.createElement("a");
+  link.href = url; link.download = nome; link.click();
+  URL.revokeObjectURL(url);
+}
+function desenharFicha() {
+  const f = dados.ficha, papel = usuarioLogado.papel;
+  const ehPai = papel === "pai", ehGestao = papel === "admin", podeRegistrar = !ehPai;
+  const aba = dados.fichaAba;
+  const naoLidos = f.comunicados.filter((c) => !c.lido).length, autPend = f.autorizacoes.filter((a) => !a.assinada).length;
+  const pendAbertas = f.pendencias.filter((p) => p.status === "Aberta").length;
+  const abas = [["comunicados", "Comunicados", naoLidos ? `${naoLidos} novo(s)` : ""], ["autorizacoes", "Autorizações", autPend ? `${autPend} pendente(s)` : ""],
+    ["documentos", "Documentos", f.documentos.length || ""], ["pendencias", "Pendências", pendAbertas ? `${pendAbertas} aberta(s)` : ""], ["ocorrencias", "Ocorrências", f.ocorrencias.length || ""]];
+  const cabecalho = ehPai ? "" : `<section class="card"><div class="aluno"><span class="avatar">${iniciais(f.aluno.nome)}</span><div><h2>${esc(f.aluno.nome)}</h2><small>${esc(f.aluno.sala)} • Matrícula ${esc(f.aluno.matricula || "—")}</small></div></div>
+    <small style="margin-top:10px;font-weight:700;text-transform:uppercase">Responsáveis</small>
+    ${f.responsaveis.length ? f.responsaveis.map((r) => `<small>${esc(r.nome)} (${esc(r.parentesco)}) • 📞 ${esc(r.telefone || "—")}</small>`).join("") : "<small>Nenhum responsável cadastrado.</small>"}</section>`;
+  const conteudo = { comunicados: () => abaComunicados(f, ehPai), autorizacoes: () => abaAutorizacoes(f, ehPai), documentos: () => abaDocumentos(f, ehGestao),
+    pendencias: () => abaPendencias(f, podeRegistrar, ehGestao), ocorrencias: () => abaOcorrencias(f, podeRegistrar) }[aba]();
+  const msg = dados.fichaMsg; dados.fichaMsg = "";
+  document.getElementById("ficha-corpo").innerHTML = `${cabecalho}
+    <div class="abas">${abas.map(([id, nome, qtd]) => `<button class="aba ${id === aba ? "ativa" : ""}" data-aba="${id}">${nome}${qtd !== "" ? ` <span class="qtd">${qtd}</span>` : ""}</button>`).join("")}</div>
+    ${msg ? `<p class="pill success" style="margin-bottom:8px">${esc(msg)}</p>` : ""}${conteudo}`;
+
+  const corpo = document.getElementById("ficha-corpo");
+  corpo.querySelectorAll("[data-aba]").forEach((b) => b.onclick = () => { dados.fichaAba = b.dataset.aba; desenharFicha(); });
+  corpo.querySelectorAll("[data-ler]").forEach((b) => b.onclick = seguro(async () => {
+    await api(`/api/comunicados/${b.dataset.ler}/ler`, { method: "POST", body: "{}" }); await recarregarFicha();
+  }));
+  corpo.querySelectorAll("[data-assinar]").forEach((b) => b.onclick = seguro(async () => {
+    const id = b.dataset.assinar;
+    await api(`/api/autorizacoes/${id}/assinar`, { method: "POST", body: JSON.stringify({
+      nome: corpo.querySelector(`[data-as-nome="${id}"]`).value, senha: corpo.querySelector(`[data-as-senha="${id}"]`).value }) });
+    dados.fichaMsg = "Autorização assinada! O comprovante está disponível abaixo.";
+    await recarregarFicha();
+  }));
+  corpo.querySelectorAll("[data-comprovante]").forEach((b) => b.onclick = () =>
+    abrirComprovante(f.autorizacoes.find((a) => a.id === Number(b.dataset.comprovante)), f.aluno));
+  corpo.querySelectorAll("[data-baixar]").forEach((b) => b.onclick = seguro(() => baixarDocumento(b.dataset.baixar, b.dataset.nome)));
+  corpo.querySelectorAll("[data-excluir-doc]").forEach((b) => b.onclick = seguro(async () => {
+    if (!confirm("Excluir este documento? Essa ação não pode ser desfeita.")) return;
+    await api(`/api/documentos/${b.dataset.excluirDoc}`, { method: "DELETE" });
+    dados.fichaMsg = "Documento excluído."; await recarregarFicha();
+  }));
+  corpo.querySelectorAll("[data-resolver]").forEach((b) => b.onclick = seguro(async () => {
+    await api(`/api/pendencias/${b.dataset.resolver}/resolver`, { method: "PUT", body: "{}" });
+    dados.fichaMsg = "Pendência resolvida."; await recarregarFicha();
+  }));
+  const formDoc = document.getElementById("form-doc");
+  if (formDoc) formDoc.onsubmit = async (e) => {
+    e.preventDefault();
+    document.getElementById("doc-erro").classList.add("oculto");
+    try {
+      const arquivo = document.getElementById("doc-arquivo").files[0];
+      if (!arquivo) throw new Error("Escolha um arquivo");
+      if (arquivo.size > 5 * 1024 * 1024) throw new Error("O arquivo passa de 5 MB");
+      const pend = document.getElementById("doc-pend");
+      const r = await api("/api/documentos", { method: "POST", body: JSON.stringify({
+        aluno_id: f.aluno.id, categoria: document.getElementById("doc-cat").value, titulo: document.getElementById("doc-titulo").value,
+        nome_arquivo: arquivo.name, conteudo: await lerBase64(arquivo), pendencia_id: pend && pend.value ? Number(pend.value) : undefined }) });
+      dados.fichaMsg = r.pendencia_resolvida ? "Documento enviado e a solicitação da escola foi atendida!" : "Documento enviado com sucesso!";
+      await recarregarFicha();
+    } catch (erro) { if (erro.message !== "Sessão expirada") mostrarErro("doc-erro", erro.message); }
+  };
+  const formPend = document.getElementById("form-pend");
+  if (formPend) formPend.onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api("/api/pendencias", { method: "POST", body: JSON.stringify({ aluno_id: f.aluno.id, tipo: document.getElementById("pend-tipo").value, descricao: document.getElementById("pend-desc").value }) });
+      dados.fichaMsg = "Pendência aberta."; await recarregarFicha();
+    } catch (erro) { if (erro.message !== "Sessão expirada") mostrarErro("pend-erro", erro.message); }
+  };
+  const formOcor = document.getElementById("form-ocor");
+  if (formOcor) formOcor.onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api("/api/ocorrencias", { method: "POST", body: JSON.stringify({ aluno_id: f.aluno.id, tipo: document.getElementById("ocor-tipo").value,
+        descricao: document.getElementById("ocor-desc").value, data: document.getElementById("ocor-data").value || undefined }) });
+      dados.fichaMsg = "Registro salvo."; await recarregarFicha();
+    } catch (erro) { if (erro.message !== "Sessão expirada") mostrarErro("ocor-erro", erro.message); }
+  };
+}
+
+// ---------- Comunicados (gestão e professor) ----------
+function telaComunicados() {
+  const prof = usuarioLogado.papel === "professor";
+  const salas = prof ? [] : [...new Set(dados.alunos.map((a) => a.sala))].sort();
+  return `<section class="card"><h2>Novo comunicado</h2>
+    <small>${prof ? `Será enviado aos responsáveis da turma ${esc(usuarioLogado.sala)}.` : "Escolha uma turma ou envie para a escola toda."}</small>
+    <form id="form-com" style="margin-top:14px"><small>Título</small><input id="com-titulo" required maxlength="120">
+      ${prof ? "" : `<div style="margin-top:12px"><small>Destino</small><select id="com-sala"><option value="">Escola toda</option>${salas.map((s) => `<option>${esc(s)}</option>`).join("")}</select></div>`}
+      <div style="margin-top:12px"><small>Texto</small><textarea id="com-texto" rows="4" maxlength="1500" required></textarea></div>
+      <p class="pill danger oculto" id="com-erro" style="margin-top:12px"></p><p class="pill success oculto" id="com-ok" style="margin-top:12px">Comunicado publicado!</p>
+      <button class="btn" type="submit" style="margin-top:16px;max-width:240px">Publicar comunicado</button></form></section>
+    <div class="topo" style="margin-top:24px"><h2>Comunicados publicados</h2><small>Acompanhe quantos responsáveis já leram cada um.</small></div><div id="com-lista"></div>`;
+}
+function desenharComunicados() {
+  document.getElementById("com-lista").innerHTML = dados.comunicados.length ? dados.comunicados.map((c) => {
+    const p = c.destinatarios ? Math.round(c.lidos * 100 / c.destinatarios) : 0;
+    return `<article class="card" style="margin-bottom:12px">
+      <div class="linha" style="gap:8px;flex-wrap:wrap"><div><b>${esc(c.titulo)}</b><small>${c.criado_em} • ${esc(c.criado_por_nome)}</small></div>${pill(c.sala ? esc(c.sala) : "Escola toda", "info")}</div>
+      <p style="margin-top:8px">${esc(c.texto)}</p>
+      <div class="linha" style="margin-top:12px"><small>Lido por <b>${c.lidos}</b> de <b>${c.destinatarios}</b> aluno(s)</small><small>${p}%</small></div>
+      <div class="barra"><i style="width:${p}%"></i></div>
+      <button class="btn outline pequeno" data-leituras="${c.id}" style="margin-top:12px">Ver quem leu</button><div id="leit-${c.id}" class="oculto" style="margin-top:10px"></div></article>`;
+  }).join("") : vazio("Nenhum comunicado publicado ainda.");
+  document.querySelectorAll("[data-leituras]").forEach((b) => b.onclick = seguro(async () => {
+    const box = document.getElementById("leit-" + b.dataset.leituras);
+    if (!box.classList.contains("oculto")) { box.classList.add("oculto"); return; }
+    const lista = await api(`/api/comunicados/${b.dataset.leituras}/leituras`);
+    box.innerHTML = lista.map((l) => `<div class="linha" style="padding:6px 0;border-top:1px solid var(--border)"><span>${esc(l.nome)} <small style="display:inline">(${esc(l.sala)})</small></span>${l.lido ? pill("Leu em " + l.lido_em, "success") : pill("Não leu", "warning")}</div>`).join("");
+    box.classList.remove("oculto");
+  }));
+}
+function ligarComunicados() {
+  desenharComunicados();
+  document.getElementById("form-com").onsubmit = async (e) => {
+    e.preventDefault();
+    document.getElementById("com-erro").classList.add("oculto"); document.getElementById("com-ok").classList.add("oculto");
+    try {
+      const sala = document.getElementById("com-sala");
+      await api("/api/comunicados", { method: "POST", body: JSON.stringify({ titulo: document.getElementById("com-titulo").value, texto: document.getElementById("com-texto").value, sala: sala ? sala.value : undefined }) });
+      document.getElementById("form-com").reset();
+      dados.comunicados = await api("/api/comunicados"); desenharComunicados();
+      document.getElementById("com-ok").classList.remove("oculto");
+    } catch (erro) { if (erro.message !== "Sessão expirada") mostrarErro("com-erro", erro.message); }
+  };
+}
+
+// ---------- Autorizações digitais (gestão) ----------
+function telaAutorizacoes() {
+  const salas = [...new Set(dados.alunos.map((a) => a.sala))].sort();
+  return `<section class="card"><h2>Nova autorização</h2><small>O responsável de cada aluno do destino receberá a autorização para assinar digitalmente.</small>
+    <form id="form-aut" style="margin-top:14px"><div class="grade dois"><div><small>Título</small><input id="aut-titulo" required maxlength="100" placeholder="Ex.: Passeio ao zoológico"></div>
+      <div><small>Validade / data</small><input id="aut-validade" maxlength="50" placeholder="Ex.: 25 de outubro"></div></div>
+      <div style="margin-top:12px"><small>Detalhes</small><input id="aut-detalhe" maxlength="250" placeholder="Ex.: Saída às 8h, retorno às 15h"></div>
+      <div style="margin-top:12px"><small>Destino</small><select id="aut-sala"><option value="">Todos os alunos</option>${salas.map((s) => `<option>${esc(s)}</option>`).join("")}</select></div>
+      <p class="pill danger oculto" id="aut-erro" style="margin-top:12px"></p><p class="pill success oculto" id="aut-ok" style="margin-top:12px"></p>
+      <button class="btn" type="submit" style="margin-top:16px;max-width:240px">Enviar para assinatura</button></form></section>
+    <div class="topo" style="margin-top:24px"><h2>Autorizações enviadas</h2><small>Acompanhe quem já assinou.</small></div><div id="aut-lista"></div>`;
+}
+function desenharGrupos() {
+  document.getElementById("aut-lista").innerHTML = dados.grupos.length ? dados.grupos.map((g) => {
+    const p = g.total ? Math.round(g.assinadas * 100 / g.total) : 0;
+    return `<article class="card" style="margin-bottom:12px">
+      <div class="linha" style="gap:8px;flex-wrap:wrap"><div><b>${esc(g.titulo)}</b><small>📅 ${esc(g.validade || "—")} • criada em ${g.criada_em} por ${esc(g.criada_por_nome)}</small></div>${g.assinadas === g.total ? pill("Todas assinadas", "success") : pill(`${g.total - g.assinadas} pendente(s)`, "warning")}</div>
+      ${g.detalhe ? `<small style="margin-top:6px">${esc(g.detalhe)}</small>` : ""}
+      <div class="linha" style="margin-top:12px"><small>Assinadas: <b>${g.assinadas}</b> de <b>${g.total}</b></small><small>${p}%</small></div><div class="barra"><i style="width:${p}%"></i></div>
+      <button class="btn outline pequeno" data-grupo="${g.grupo}" style="margin-top:12px">Ver detalhes</button><div id="grp-${g.grupo}" class="oculto" style="margin-top:10px"></div></article>`;
+  }).join("") : vazio("Nenhuma autorização enviada ainda.");
+  document.querySelectorAll("[data-grupo]").forEach((b) => b.onclick = seguro(async () => {
+    const box = document.getElementById("grp-" + b.dataset.grupo);
+    if (!box.classList.contains("oculto")) { box.classList.add("oculto"); return; }
+    const lista = await api(`/api/autorizacoes-grupos/${b.dataset.grupo}`);
+    box.innerHTML = `<div class="tabela"><table><thead><tr><th>Aluno</th><th>Situação</th><th>Assinada por</th><th>Data e hora</th><th>Código</th></tr></thead><tbody>${lista.map((l) => `<tr><td><b>${esc(l.nome)}</b><small>${esc(l.sala)}</small></td>
+      <td>${l.assinada ? pill("Assinada", "success") : pill("Pendente", "warning")}</td><td>${esc(l.assinada_nome || "—")}</td><td>${l.assinada_em || "—"}</td><td>${esc(l.codigo || "—")}</td></tr>`).join("")}</tbody></table></div>`;
+    box.classList.remove("oculto");
+  }));
+}
+function ligarAutorizacoes() {
+  desenharGrupos();
+  document.getElementById("form-aut").onsubmit = async (e) => {
+    e.preventDefault();
+    const ok = document.getElementById("aut-ok");
+    document.getElementById("aut-erro").classList.add("oculto"); ok.classList.add("oculto");
+    try {
+      const r = await api("/api/autorizacoes", { method: "POST", body: JSON.stringify({ titulo: document.getElementById("aut-titulo").value,
+        validade: document.getElementById("aut-validade").value, detalhe: document.getElementById("aut-detalhe").value, sala: document.getElementById("aut-sala").value }) });
+      document.getElementById("form-aut").reset();
+      dados.grupos = await api("/api/autorizacoes-grupos"); desenharGrupos();
+      ok.textContent = `Autorização enviada para ${r.alunos} aluno(s)!`; ok.classList.remove("oculto");
+    } catch (erro) { if (erro.message !== "Sessão expirada") mostrarErro("aut-erro", erro.message); }
+  };
 }
 
 // ---------- Navegação ----------
@@ -596,11 +897,20 @@ async function mostrar(id) {
   desenharMenu();
   fecharMenu();
   try {
-    if (id === "secretaria") { dados.resumo = await api("/api/resumo"); dados.alunos = await api("/api/alunos"); }
+    if (id === "secretaria") {
+      dados.resumo = await api("/api/resumo"); dados.gestao = await api("/api/gestao-alunos");
+      dados.ordem = dados.ordem || { campo: "nome", dir: 1 }; dados.filtroGestao = dados.filtroGestao || "todos";
+    }
     if (id === "seguranca") logs = await api("/api/acessos");
     if (id === "frequencia") dados.freq = await api("/api/frequencia");
     if (id === "busca") dados.busca = await api("/api/busca-ativa");
     if (id === "relatorio") dados.relatorio = await api("/api/relatorio-mensal");
+    if (id === "ficha") dados.ficha = await api(`/api/alunos/${dados.fichaAlunoId}/ficha`);
+    if (id === "comunicados") {
+      dados.comunicados = await api("/api/comunicados");
+      if (usuarioLogado.papel === "admin") dados.alunos = await api("/api/alunos");
+    }
+    if (id === "autorizacoes") { dados.grupos = await api("/api/autorizacoes-grupos"); dados.alunos = await api("/api/alunos"); }
     if (id === "usuarios") { dados.alunos = await api("/api/alunos"); dados.usuarios = await api("/api/usuarios"); }
     if (id === "logs") dados.logs = await api("/api/logs");
     if (id === "turma") {
@@ -610,17 +920,16 @@ async function mostrar(id) {
     if (id === "pais") {
       const alunoId = usuarioLogado.aluno_id;
       dados.filho = await api(`/api/alunos/${alunoId}`);
-      dados.autorizacoes = await api(`/api/autorizacoes/${alunoId}`);
       dados.historico = await api(`/api/presencas/${alunoId}?dias=30`);
+      dados.ficha = await api(`/api/alunos/${alunoId}/ficha`);
+      dados.fichaAba = dados.ficha.autorizacoes.some((a) => !a.assinada) ? "autorizacoes" : "comunicados";
     }
     document.getElementById("tela").innerHTML = {
       secretaria: telaSecretaria, seguranca: telaSeguranca, pais: telaPais, frequencia: telaFrequencia, busca: telaBusca,
       relatorio: telaRelatorio, cadastro: telaCadastroAluno, usuarios: telaUsuarios, logs: telaLogs, turma: telaTurma,
+      ficha: telaFicha, comunicados: telaComunicados, autorizacoes: telaAutorizacoes,
     }[id]();
-    if (id === "secretaria") {
-      desenharAlunos(); document.getElementById("busca").oninput = (e) => desenharAlunos(e.target.value);
-      document.querySelectorAll("[data-ir]").forEach((b) => b.onclick = () => mostrar(b.dataset.ir));
-    }
+    if (id === "secretaria") ligarGestao();
     if (id === "seguranca") {
       desenharLogsAoVivo(false); desenharSaida();
       document.getElementById("buscaSaida").oninput = () => { liberada = false; desenharSaida(); };
@@ -637,14 +946,18 @@ async function mostrar(id) {
     if (id === "cadastro") desenharCadastroAluno();
     if (id === "usuarios") desenharUsuarios();
     if (id === "turma") desenharChamada();
-    if (id === "pais") desenharAutorizacoes();
+    if (id === "ficha") { document.getElementById("ficha-voltar").onclick = () => mostrar(dados.fichaOrigem); desenharFicha(); }
+    if (id === "comunicados") ligarComunicados();
+    if (id === "autorizacoes") ligarAutorizacoes();
+    if (id === "pais") desenharFicha();
   } catch (erro) {
     if (usuarioLogado) document.getElementById("tela").innerHTML = `<div class="card"><b>Não foi possível carregar os dados.</b><small>${erro.message === "Sessão expirada" ? "Faça login novamente." : esc(erro.message)}</small></div>`;
   }
 }
 function desenharMenu() {
   const menus = menusPorPapel[usuarioLogado.papel];
-  document.getElementById("nav").innerHTML = menus.map((m) => `<button class="${m.id === tela ? "ativo" : ""}" data-id="${m.id}"><span>${m.icone}</span><span><b>${m.nome}</b><small>${m.dica}</small></span></button>`).join("");
+  const ativa = tela === "ficha" ? dados.fichaOrigem : tela;
+  document.getElementById("nav").innerHTML = menus.map((m) => `<button class="${m.id === ativa ? "ativo" : ""}" data-id="${m.id}"><span>${m.icone}</span><span><b>${m.nome}</b><small>${m.dica}</small></span></button>`).join("");
   document.querySelectorAll("#nav button").forEach((b) => b.onclick = () => mostrar(b.dataset.id));
 }
 function fecharMenu() { menu.classList.remove("aberto"); overlay.classList.remove("aberto"); }
