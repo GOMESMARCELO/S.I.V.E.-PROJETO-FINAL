@@ -32,7 +32,7 @@ index.html          estrutura da página
 css/style.css       estilos
 js/app.js           telas e interações (conversa com o servidor)
 server.js           servidor Node.js (rotas /api/... que consultam o MySQL)
-config.json         porta do servidor e dados de conexão do banco
+config.json         porta, conexão do banco, dados da escola (política de privacidade) e chaves de segurança
 database/sive.sql   criação das tabelas e dados de exemplo
 API.md               lista de rotas da API, para consultar ou testar com curl/Postman
 assets/             fotos dos responsáveis (troque pelas originais)
@@ -90,3 +90,31 @@ antigos do banco "sive"). Não precisa rodar npm install de novo: nenhuma biblio
 SEGURANÇA: o servidor agora só entrega as pastas css/, js/ e assets/ e o index.html. Antes, o
 config.json (com a senha do banco) e o server.js podiam ser baixados pelo navegador. A pasta
 uploads/ também não é pública e não vai para o Git.
+
+SEGURANÇA E LGPD (versão atual)
+- Na primeira vez que o servidor liga, ele cria sozinho duas chaves no config.json (criptografia dos documentos e
+  assinatura do login). FAÇA BACKUP do config.json e da pasta uploads/: sem a chave, os documentos não abrem mais.
+  Se você trocar o config.json por outro (por exemplo, ao copiar uma versão nova do projeto), os documentos antigos
+  deixam de abrir. Copie a seção "seguranca" junto.
+- Preencha a seção "escola" do config.json: nome da escola, encarregado de dados, e-mail e prazo de guarda dos dados.
+- Rode o database/sive.sql de novo (apaga o banco "sive" e recria): a tabela de usuários ganhou colunas novas
+  (aceite da política) e as senhas agora ficam em hash. Os usuários de demonstração continuam com a senha 123456.
+- No primeiro acesso, cada pessoa lê e aceita a política de privacidade.
+- O responsável também recebe o Termo de Consentimento (imagem e informações do aluno). Ele pode responder na hora ou depois,
+  e alterar ou revogar quando quiser pelo Portal dos Pais. A gestão acompanha na tela Consentimentos.
+- O banco ganhou a tabela consentimentos: rode o database/sive.sql de novo.
+- Documentos enviados antes desta versão (sem criptografia) são criptografados automaticamente ao ligar o servidor.
+- O sistema roda em HTTP. Para uso real, coloque-o atrás de HTTPS.
+
+IMPORTAR ALUNOS POR PLANILHA
+- Em "Cadastrar Aluno" há o cartão "Importar vários alunos de uma planilha": baixe o modelo, preencha e envie (CSV ou Excel .xlsx).
+  O sistema mostra o que está pronto, com erro ou já cadastrado ANTES de gravar. Só Nome e Turma são obrigatórios.
+- Para ler arquivos do Excel (.xlsx) rode "npm install" de novo na pasta do projeto (dependência nova: read-excel-file)
+  e reinicie o servidor. O CSV funciona mesmo sem isso.
+
+PROTEÇÃO DA CRIANÇA (ECA)
+- O banco ganhou a tabela comunicacoes_conselho: rode o database/sive.sql de novo (ele apaga e recria o banco).
+- Menu "Proteção": registra casos de suspeita de maus-tratos e comunicações por faltas ao Conselho Tutelar. Os registros são
+  sigilosos (o responsável nunca vê). O sistema NÃO envia nada ao Conselho Tutelar: a gestão comunica pelo canal oficial
+  e registra aqui a data e o protocolo.
+- A política de privacidade passou para a versão 1.1: todos precisam aceitar de novo no próximo acesso.

@@ -3,6 +3,12 @@
   "version": "1.0.0",
   "description": "S.I.V.E. - Vigilância Escolar Inteligente",
   "main": "server.js",
-  "scripts": { "start": "node server.js" },
-  "dependencies": { "express": "^4.21.2", "mysql2": "^3.11.0" }
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "mysql2": "^3.11.0",
+    "read-excel-file": "^9.3.12"
+  }
 }

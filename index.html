@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#140040">
   <title>S.I.V.E. — Vigilância Escolar Inteligente</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -19,6 +20,7 @@
       <p id="login-erro" class="pill danger oculto" style="margin-top:12px"></p>
       <button class="btn" type="submit">Entrar</button>
       <small style="margin-top:16px;text-align:center">Administração: <b>mariana</b> / 123456 &nbsp;•&nbsp; Responsável: <b>anapaula</b> / 123456 &nbsp;•&nbsp; Professora: <b>patricia</b> / 123456</small>
+      <button type="button" class="link-texto" id="link-privacidade">🔒 Política de privacidade e proteção de dados</button>
     </form>
   </div>
 
@@ -39,6 +41,51 @@
     </form>
   </div>
 
+  <div id="tela-termo" class="oculto">
+    <section class="card termo-caixa">
+      <div class="logo" style="margin-bottom:12px">
+        <span class="logo-icon">🔒</span><div><b>Privacidade e proteção de dados</b><small id="termo-versao"></small></div>
+      </div>
+      <p id="termo-aviso" class="pill info oculto" style="margin-bottom:12px;white-space:normal"></p>
+      <div id="termo-texto" class="termo-texto"></div>
+      <form id="form-termo" class="oculto">
+        <label class="termo-aceite"><input type="checkbox" id="termo-check"> <span>Li a política de privacidade e concordo com o tratamento dos dados descrito nela. Se sou responsável por um aluno, declaro que sou pai, mãe ou responsável legal.</span></label>
+        <p id="termo-erro" class="pill danger oculto" style="margin-top:8px"></p>
+        <button class="btn" type="submit">Aceitar e continuar</button>
+        <button class="btn outline" id="termo-sair" type="button" style="margin-top:8px">Sair</button>
+      </form>
+      <button class="btn outline oculto" id="termo-voltar" type="button">Voltar</button>
+    </section>
+  </div>
+
+  <div id="tela-consent" class="oculto">
+    <section class="card termo-caixa">
+      <div class="logo" style="margin-bottom:12px">
+        <span class="logo-icon">📝</span><div><b>Termo de consentimento</b><small id="cons-versao"></small></div>
+      </div>
+      <p id="cons-aviso" class="pill info" style="margin-bottom:12px;white-space:normal"></p>
+      <div id="cons-texto" class="termo-texto"></div>
+      <form id="form-consent">
+        <b style="display:block;margin-top:16px">Sua escolha para <span id="cons-aluno"></span></b>
+        <small>Marque só o que você autoriza. O que ficar desmarcado é "não autorizo".</small>
+        <div id="cons-opcoes"></div>
+        <small style="margin-top:14px">Para assinar, confirme seu nome completo e sua senha</small>
+        <input id="cons-nome" placeholder="Nome completo" autocomplete="off" required>
+        <input id="cons-senha" type="password" placeholder="Sua senha" autocomplete="current-password" required style="margin-top:8px">
+        <p id="cons-erro" class="pill danger oculto" style="margin-top:8px"></p>
+        <button class="btn" type="submit">Assinar e continuar</button>
+        <button class="btn outline" id="cons-depois" type="button" style="margin-top:8px">Responder depois</button>
+      </form>
+    </section>
+  </div>
+
+  <div id="tela-carregando" class="oculto" role="status" aria-live="polite">
+    <div class="carregando-logo"><span class="carregando-anel"></span><span class="carregando-icone">🛡️</span></div>
+    <b>S.I.V.E.</b>
+    <small id="carregando-texto">Entrando...</small>
+    <div class="carregando-barra"><span></span></div>
+  </div>
+
   <div id="app" class="oculto">
     <aside id="menu">
       <div class="logo"><span class="logo-icon">🛡️</span><div><b>S.I.V.E.</b><small>Vigilância Escolar</small></div></div>
@@ -46,7 +93,8 @@
       <div class="user">
         <span class="avatar" id="user-iniciais"></span>
         <div><b id="user-nome"></b><small id="user-papel"></small></div>
-        <button id="btn-trocar-senha" title="Trocar senha" aria-label="Trocar senha" style="margin-left:auto;font-size:16px">🔑</button>
+        <button id="btn-privacidade" title="Política de privacidade" aria-label="Política de privacidade" style="margin-left:auto;font-size:16px">🔒</button>
+        <button id="btn-trocar-senha" title="Trocar senha" aria-label="Trocar senha" style="font-size:16px">🔑</button>
         <button id="btn-sair" title="Sair" aria-label="Sair" style="font-size:18px">🚪</button>
       </div>
     </aside>
