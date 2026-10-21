@@ -7,6 +7,11 @@ let timerAcesso = null;
 let simulado = false;
 let usuarioLogado = null; // { token, papel, nome, aluno_id, sala, senha_temporaria }
 let forcarTrocaSenha = false;
+let origemTermo = "login"; // de onde a pessoa abriu a política, para o botão "Voltar"
+let consentPuladoNaSessao = false; // o responsável escolheu "Responder depois" nesta sessão
+// (declaradas aqui no topo porque o código que restaura o login ao recarregar a página roda antes do resto do arquivo)
+const statusConsent = { autorizado: ["Autorizado", "success"], parcial: ["Autorizado em parte", "warning"], nao_autorizado: ["Não autorizado", "danger"], pendente: ["Pendente", "warning"] };
+const sinal = (v) => (v ? "✅" : "⛔");
 
 // Chama a API do servidor Node e devolve o JSON, já enviando o login (token)
 async function api(url, opcoes = {}) {
@@ -17,14 +22,15 @@ async function api(url, opcoes = {}) {
   if (resposta.status === 401 || resposta.status === 403) {
     const corpo = await resposta.json().catch(() => ({}));
     if (resposta.status === 401) { sair(); throw new Error("Sessão expirada"); }
+    if (corpo.codigo === "ACEITE_PENDENTE") { usuarioLogado.aceite_ok = false; mostrarTermo("aceitar"); throw new Error("Aceite pendente"); }
     throw new Error(corpo.erro || "Acesso negado");
   }
-  if (!resposta.ok) throw new Error((await resposta.json().catch(() => ({}))).erro || "Falha na API");
+  if (!resposta.ok) { const corpo = await resposta.json().catch(() => ({})); throw Object.assign(new Error(corpo.erro || "Falha na API"), { codigo: corpo.codigo, alunos: corpo.alunos }); }
   return resposta.json();
 }
 // Usado nos botões: se a API der erro, avisa na tela em vez de falhar em silêncio
 const seguro = (fn) => async (...args) => {
-  try { await fn(...args); } catch (e) { if (e.message !== "Sessão expirada") alert(e.message); }
+  try { await fn(...args); } catch (e) { if (e.message !== "Sessão expirada" && e.message !== "Aceite pendente") alert(e.message); }
 };
 
 const menusPorPapel = {
@@ -33,9 +39,11 @@ const menusPorPapel = {
     { id: "seguranca", nome: "Monitoramento", dica: "Segurança", icone: "🛡️" },
     { id: "frequencia", nome: "Frequência", dica: "Presença e faltas", icone: "📅" },
     { id: "busca", nome: "Busca Ativa", dica: "Faltas e acompanhamento", icone: "🔎" },
+    { id: "protecao", nome: "Proteção", dica: "Conselho Tutelar", icone: "🧒" },
     { id: "relatorio", nome: "Relatório Mensal", dica: "Frequência e casos", icone: "📊" },
     { id: "comunicados", nome: "Comunicados", dica: "Avisos e leituras", icone: "📢" },
     { id: "autorizacoes", nome: "Autorizações", dica: "Assinatura digital", icone: "✍️" },
+    { id: "consentimentos", nome: "Consentimentos", dica: "Imagem e informações", icone: "📝" },
     { id: "cadastro", nome: "Cadastrar Aluno", dica: "Novo aluno", icone: "➕" },
     { id: "usuarios", nome: "Usuários", dica: "Acessos ao sistema", icone: "🔐" },
     { id: "logs", nome: "Logs", dica: "Atividade do sistema", icone: "📜" },
@@ -46,13 +54,14 @@ const menusPorPapel = {
   professor: [
     { id: "turma", nome: "Minha Turma", dica: "Chamada e contatos", icone: "📚" },
     { id: "comunicados", nome: "Comunicados", dica: "Avisos da turma", icone: "📢" },
+    { id: "protecao", nome: "Proteção", dica: "Registrar um caso", icone: "🧒" },
   ],
 };
 const titulos = {
   secretaria: "Central do Dia", seguranca: "Painel de Segurança", pais: "Portal dos Pais",
   frequencia: "Controle de Frequência", busca: "Busca Ativa", relatorio: "Relatório Mensal",
   cadastro: "Cadastrar Aluno", usuarios: "Usuários do Sistema", logs: "Logs de Atividade", turma: "Minha Turma",
-  ficha: "Ficha do Aluno", comunicados: "Comunicados", autorizacoes: "Autorizações Digitais",
+  ficha: "Ficha do Aluno", comunicados: "Comunicados", autorizacoes: "Autorizações Digitais", consentimentos: "Consentimento dos Responsáveis", protecao: "Proteção da Criança",
 };
 const papelLabel = (p) => ({ admin: "Gestão", pai: "Responsável", professor: "Professor(a)", sistema: "Sistema" }[p] || p);
 const acaoLabel = (a) => ({
@@ -64,7 +73,12 @@ const acaoLabel = (a) => ({
   relatorio_mensal: "Gerou relatório mensal", comunicado_criado: "Publicou comunicado", comunicado_lido: "Leu comunicado",
   autorizacao_criada: "Criou autorização", autorizacao_assinada: "Assinou autorização digitalmente", documento_enviado: "Anexou documento",
   documento_excluido: "Excluiu documento", pendencia_criada: "Abriu pendência", pendencia_resolvida: "Resolveu pendência",
-  ocorrencia_registrada: "Registrou ação/advertência",
+  ocorrencia_registrada: "Registrou ação/advertência", aceite_privacidade: "Aceitou a política de privacidade",
+  consentimento_registrado: "Assinou o termo de consentimento", exportacao_dados_aluno: "Baixou os dados do aluno (LGPD)",
+  documento_baixado: "Baixou documento", documento_acesso_negado: "Tentou baixar documento sem permissão",
+  documento_integridade_falhou: "Arquivo de documento alterado ou ilegível", login_bloqueado: "Login bloqueado (muitas tentativas)", importacao_alunos: "Importou alunos de planilha",
+  protecao_registrada: "Registrou caso de proteção da criança", protecao_comunicada: "Registrou comunicação ao Conselho Tutelar",
+  protecao_consultada: "Consultou registros de proteção", comunicado_com_nome_de_aluno: "Publicou comunicado citando nome de aluno",
 }[a] || a);
 
 const pill = (texto, tom) => `<span class="pill ${tom}">${texto}</span>`;
@@ -91,17 +105,29 @@ document.getElementById("form-login").onsubmit = async (e) => {
     if (!r.ok) throw new Error(dadosLogin.erro || "Não foi possível entrar");
     usuarioLogado = dadosLogin;
     localStorage.setItem("sive-usuario", JSON.stringify(usuarioLogado));
-    if (usuarioLogado.senha_temporaria) mostrarTelaSenha(true); else entrarNoApp();
+    await telaCarregando();
+    seguirLogin();
   } catch (erro) {
     erroBox.textContent = erro.message;
     erroBox.classList.remove("oculto");
   }
 };
+// Animação de 3s entre o login e a próxima tela
+function telaCarregando() {
+  const tela = document.getElementById("tela-carregando");
+  document.getElementById("carregando-texto").textContent = `${saudacao()}, ${usuarioLogado.nome.trim().split(/\s+/)[0]}!`;
+  document.getElementById("tela-login").classList.add("oculto");
+  tela.classList.remove("oculto");
+  return new Promise((ok) => setTimeout(() => { tela.classList.add("oculto"); ok(); }, 3000));
+}
 function sair() {
   usuarioLogado = null;
   localStorage.removeItem("sive-usuario");
   document.getElementById("app").classList.add("oculto");
   document.getElementById("tela-senha").classList.add("oculto");
+  document.getElementById("tela-termo").classList.add("oculto");
+  document.getElementById("tela-consent").classList.add("oculto");
+  consentPuladoNaSessao = false;
   document.getElementById("tela-login").classList.remove("oculto");
   document.getElementById("form-login").reset();
 }
@@ -111,7 +137,7 @@ function entrarNoApp() {
   document.getElementById("tela-login").classList.add("oculto");
   document.getElementById("tela-senha").classList.add("oculto");
   document.getElementById("app").classList.remove("oculto");
-  document.getElementById("user-nome").textContent = usuarioLogado.nome;
+  document.getElementById("user-nome").textContent = usuarioLogado.nome.trim().split(/\s+/)[0];
   document.getElementById("user-papel").textContent = papelLabel(usuarioLogado.papel);
   document.getElementById("user-iniciais").textContent = iniciais(usuarioLogado.nome);
   const telaInicial = { admin: "secretaria", pai: "pais", professor: "turma" }[usuarioLogado.papel];
@@ -121,11 +147,235 @@ function entrarNoApp() {
 const salvo = localStorage.getItem("sive-usuario");
 if (salvo) {
   usuarioLogado = JSON.parse(salvo);
-  if (usuarioLogado.senha_temporaria === undefined) { localStorage.removeItem("sive-usuario"); usuarioLogado = null; }
+  if (usuarioLogado.senha_temporaria === undefined || usuarioLogado.aceite_ok === undefined) { localStorage.removeItem("sive-usuario"); usuarioLogado = null; }
 }
-if (usuarioLogado) {
-  if (usuarioLogado.senha_temporaria) mostrarTelaSenha(true); else entrarNoApp();
+if (usuarioLogado) seguirLogin();
+
+// ---------- Política de privacidade (LGPD) ----------
+// Ordem do primeiro acesso: trocar a senha provisória -> aceitar a política de privacidade -> usar o sistema.
+async function seguirLogin() {
+  if (usuarioLogado.senha_temporaria) return mostrarTelaSenha(true);
+  if (!usuarioLogado.aceite_ok) return mostrarTermo("aceitar");
+  if (usuarioLogado.papel === "pai" && !consentPuladoNaSessao) { // consentimento do filho ainda pendente: pergunta antes de entrar
+    try {
+      const c = await api(`/api/alunos/${usuarioLogado.aluno_id}/consentimento`);
+      if (c.status === "pendente") return mostrarConsentimento("primeiro");
+    } catch (e) { if (e.message === "Sessão expirada" || e.message === "Aceite pendente") return; }
+  }
+  entrarNoApp();
 }
+function montarTexto(caixa, secoes) { // monta com textContent: o texto nunca é interpretado como HTML
+  caixa.replaceChildren();
+  for (const sec of secoes) {
+    const h = document.createElement("h3"); h.textContent = sec.titulo; caixa.append(h);
+    (sec.paragrafos || []).forEach((txt) => { const el = document.createElement("p"); el.textContent = txt; caixa.append(el); });
+    if (sec.itens) { const ul = document.createElement("ul"); sec.itens.forEach((txt) => { const li = document.createElement("li"); li.textContent = txt; ul.append(li); }); caixa.append(ul); }
+  }
+}
+async function mostrarTermo(modo) {
+  const $ = (id) => document.getElementById(id);
+  const aceitar = modo === "aceitar";
+  if (!aceitar) origemTermo = usuarioLogado ? "app" : "login";
+  ["tela-login", "tela-senha", "app"].forEach((id) => $(id).classList.add("oculto"));
+  $("tela-termo").classList.remove("oculto");
+  $("form-termo").classList.toggle("oculto", !aceitar);
+  $("termo-voltar").classList.toggle("oculto", aceitar);
+  $("termo-aviso").classList.toggle("oculto", !aceitar);
+  $("termo-aviso").textContent = "Para continuar, leia e aceite a política de privacidade.";
+  $("termo-check").checked = false; $("termo-erro").classList.add("oculto");
+  const caixa = $("termo-texto");
+  try {
+    const p = await (await fetch("/api/privacidade")).json();
+    $("termo-versao").textContent = `Versão ${p.versao} • ${p.atualizada_em}`;
+    caixa.replaceChildren();
+    montarTexto(caixa, p.secoes);
+  } catch { caixa.textContent = "Não foi possível carregar a política de privacidade."; }
+}
+document.getElementById("link-privacidade").onclick = () => mostrarTermo("ler");
+document.getElementById("btn-privacidade").onclick = () => mostrarTermo("ler");
+document.getElementById("termo-voltar").onclick = () => {
+  document.getElementById("tela-termo").classList.add("oculto");
+  document.getElementById(origemTermo === "app" ? "app" : "tela-login").classList.remove("oculto");
+};
+document.getElementById("termo-sair").onclick = () => { document.getElementById("tela-termo").classList.add("oculto"); sair(); };
+document.getElementById("form-termo").onsubmit = async (e) => {
+  e.preventDefault();
+  const erro = document.getElementById("termo-erro");
+  if (!document.getElementById("termo-check").checked) { erro.textContent = "Marque a caixa para confirmar que você leu e concorda."; erro.classList.remove("oculto"); return; }
+  try {
+    await api("/api/aceite-privacidade", { method: "POST", body: "{}" });
+    usuarioLogado.aceite_ok = true;
+    localStorage.setItem("sive-usuario", JSON.stringify(usuarioLogado));
+    document.getElementById("tela-termo").classList.add("oculto");
+    seguirLogin();
+  } catch (err) { erro.textContent = err.message; erro.classList.remove("oculto"); }
+};
+
+// ---------- Termo de consentimento dos responsáveis (imagem e informações do aluno) ----------
+async function mostrarConsentimento(modo) { // modo "primeiro" (logo após o login) ou "alterar" (pelo Portal dos Pais)
+  const $ = (id) => document.getElementById(id);
+  const alunoId = usuarioLogado.aluno_id;
+  const [termo, estado, filho] = await Promise.all([fetch("/api/consentimento-termo").then((r) => r.json()), api(`/api/alunos/${alunoId}/consentimento`), api(`/api/alunos/${alunoId}`)]);
+  ["tela-login", "tela-senha", "tela-termo", "app"].forEach((id) => $(id).classList.add("oculto"));
+  $("tela-consent").classList.remove("oculto");
+  $("cons-versao").textContent = `Versão ${termo.versao} • ${termo.atualizado_em}`;
+  $("cons-aluno").textContent = filho.nome;
+  $("cons-aviso").textContent = estado.status === "pendente"
+    ? "A escola precisa saber o que você autoriza sobre o uso de imagem e informações do seu filho. Leia o termo e escolha."
+    : "Você pode alterar ou revogar o que autorizou. Cada alteração fica registrada com data e código.";
+  $("cons-depois").textContent = modo === "primeiro" ? "Responder depois" : "Cancelar";
+  $("cons-depois").onclick = () => { if (modo === "primeiro") consentPuladoNaSessao = true; $("tela-consent").classList.add("oculto"); entrarNoApp(); };
+  montarTexto($("cons-texto"), termo.secoes);
+  const lista = $("cons-opcoes"); lista.replaceChildren();
+  for (const o of termo.opcoes) {
+    const rotulo = document.createElement("label"); rotulo.className = "termo-aceite";
+    const caixa = document.createElement("input"); caixa.type = "checkbox"; caixa.dataset.opcao = o.id; caixa.checked = !!(estado.atual && estado.atual[o.id]);
+    const texto = document.createElement("span"); texto.textContent = o.rotulo;
+    const detalhe = document.createElement("small"); detalhe.style.display = "block"; detalhe.textContent = o.detalhe; texto.append(detalhe);
+    rotulo.append(caixa, texto); lista.append(rotulo);
+  }
+  $("cons-nome").value = ""; $("cons-senha").value = ""; $("cons-erro").classList.add("oculto");
+}
+document.getElementById("form-consent").onsubmit = async (e) => {
+  e.preventDefault();
+  const $ = (id) => document.getElementById(id), erro = $("cons-erro");
+  erro.classList.add("oculto");
+  const escolhas = {};
+  document.querySelectorAll("#cons-opcoes input").forEach((c) => { escolhas[c.dataset.opcao] = c.checked; });
+  if (!Object.values(escolhas).some(Boolean) && !confirm("Você não está autorizando nenhum item. Confirma que NÃO autoriza?")) return;
+  try {
+    await api(`/api/alunos/${usuarioLogado.aluno_id}/consentimento`, { method: "POST", body: JSON.stringify({ ...escolhas, nome: $("cons-nome").value, senha: $("cons-senha").value }) });
+    $("cons-nome").value = ""; $("cons-senha").value = "";
+    $("tela-consent").classList.add("oculto");
+    entrarNoApp();
+  } catch (err) { if (err.message !== "Sessão expirada") { erro.textContent = err.message; erro.classList.remove("oculto"); } }
+};
+// cartão do Portal dos Pais
+function cartaoConsentimento() {
+  const c = dados.ficha.consentimento, [rotulo, tom] = statusConsent[c.status], a = c.atual;
+  const itens = a ? `<small>${sinal(a.informacoes)} Informações do aluno no sistema</small><small>${sinal(a.imagem)} Imagens (fotos) do aluno no sistema</small><small>${sinal(a.monitoramento)} Câmeras de segurança e reconhecimento facial</small>` : "";
+  return `<section class="card" style="margin-top:20px"><div class="linha" style="gap:8px;flex-wrap:wrap"><h2>Consentimento (imagem e informações)</h2>${pill(rotulo, tom)}</div>
+    ${a ? `<small>Assinado por ${esc(a.assinado_nome)} em ${a.assinado_em}.</small>${itens}`
+        : "<small>A escola precisa da sua autorização para usar as informações e as imagens do seu filho no sistema. Leia o termo e escolha o que você autoriza.</small>"}
+    <div class="acoes" style="margin-top:10px"><button class="btn pequeno" data-consent="alterar">${a ? "Alterar ou revogar" : "Ler o termo e responder"}</button>${a ? '<button class="btn outline pequeno" data-consent="comprovante">Ver comprovante</button>' : ""}</div></section>`;
+}
+// situação do consentimento na ficha (gestão e professor)
+function consentimentoNaFicha(f) {
+  const c = f.consentimento; if (!c) return "";
+  const [rotulo, tom] = statusConsent[c.status], a = c.atual;
+  const detalhe = a ? ` <small>${sinal(a.informacoes)} informações • ${sinal(a.imagem)} imagens • ${sinal(a.monitoramento)} câmeras e reconhecimento facial</small>` : "";
+  return `<small style="margin-top:10px;font-weight:700;text-transform:uppercase">Consentimento dos responsáveis</small><span>${pill(rotulo, tom)}${detalhe}</span>`;
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-consent]"); if (!b) return;
+  if (b.dataset.consent === "alterar") seguro(() => mostrarConsentimento("alterar"))();
+  if (b.dataset.consent === "comprovante") seguro(() => abrirComprovanteConsentimento(dados.ficha.consentimento.atual, dados.ficha.aluno))();
+});
+async function abrirComprovanteConsentimento(c, aluno) {
+  const w = window.open("", "_blank");
+  if (!w) { alert("Permita pop-ups neste site para ver o comprovante."); return; }
+  const termo = await (await fetch("/api/consentimento-termo")).json();
+  const linhas = termo.opcoes.map((o) => `<tr><td>${esc(o.curto)}</td><td><b>${c[o.id] ? "✅ Autorizo" : "⛔ Não autorizo"}</b></td></tr>`).join("");
+  w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Comprovante ${esc(c.codigo)}</title>
+    <style>body{font-family:Arial,sans-serif;max-width:640px;margin:40px auto;padding:0 20px;color:#140040}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin:20px 0}td{padding:10px;border-bottom:1px solid #EAD6CA}td:first-child{color:#5B5278;width:48%}.cod{font-size:20px;letter-spacing:2px;font-weight:700}@media print{button{display:none}}</style></head><body>
+    <h1>🛡️ S.I.V.E. — Comprovante de consentimento</h1>
+    <table><tr><td>Termo</td><td>${esc(termo.titulo)} (versão ${esc(c.versao || termo.versao)})</td></tr>
+    <tr><td>Aluno(a)</td><td>${esc(aluno.nome)} — ${esc(aluno.sala)}</td></tr><tr><td>Assinado por</td><td>${esc(c.assinado_nome)}</td></tr>
+    <tr><td>Data e hora</td><td>${esc(c.assinado_em)}</td></tr><tr><td>Código de verificação</td><td class="cod">${esc(c.codigo)}</td></tr></table>
+    <h3>Escolhas do responsável</h3><table>${linhas}</table>
+    <p>Documento gerado pelo sistema S.I.V.E. O consentimento foi confirmado com o nome completo e a senha do responsável e pode ser alterado ou revogado a qualquer momento no Portal dos Pais.</p><button id="imprimir">Imprimir</button></body></html>`);
+  w.document.close();
+  w.document.getElementById("imprimir").addEventListener("click", () => w.print());
+}
+// tela da gestão: situação de todos os alunos
+function telaConsentimentos() {
+  const r = dados.consents.resumo;
+  const resumo = [["Autorizados", r.autorizado, "success"], ["Em parte", r.parcial, "warning"], ["Não autorizados", r.nao_autorizado, "danger"], ["Pendentes", r.pendente, "warning"]].map(([n, v, tom]) => pill(`${n}: ${v}`, tom)).join(" ");
+  const linhas = dados.consents.alunos.map((a) => {
+    const [rotulo, tom] = statusConsent[a.status], marca = (v) => (a.status === "pendente" ? "—" : sinal(v));
+    return `<tr><td><b>${esc(a.nome)}</b></td><td>${esc(a.sala)}</td><td>${pill(rotulo, tom)}</td><td>${marca(a.informacoes)}</td><td>${marca(a.imagem)}</td><td>${marca(a.monitoramento)}</td><td>${a.assinado_nome ? `${esc(a.assinado_nome)}<small>${a.assinado_em}</small>` : "—"}</td></tr>`;
+  }).join("");
+  return `<div class="topo"><h2>Consentimento dos responsáveis</h2><small>Uso de imagem e informações dos alunos (termo versão ${esc(dados.consents.versao)}). Cada responsável assina pelo Portal dos Pais.</small></div>
+  <section class="card"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${resumo}</div>
+  <div class="tabela"><table><thead><tr><th>Aluno</th><th>Turma</th><th>Situação</th><th>Informações</th><th>Imagens</th><th>Câmeras</th><th>Assinado por</th></tr></thead><tbody>${linhas}</tbody></table></div></section>`;
+}
+
+// ---------- Proteção da criança: comunicações ao Conselho Tutelar (ECA arts. 13 e 56; LDB art. 12, VIII) ----------
+const motivosProtecao = { "Maus-tratos": "Suspeita ou confirmação de maus-tratos", Faltas: "Faltas reiteradas / evasão escolar", Outro: "Outro motivo de proteção" };
+const hojeLocalISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+function telaProtecao() {
+  const ehAdmin = usuarioLogado.papel === "admin", p = dados.protecao;
+  const motivos = (ehAdmin ? ["Maus-tratos", "Faltas", "Outro"] : ["Maus-tratos", "Outro"]).map((m) => `<option value="${m}">${motivosProtecao[m]}</option>`).join("");
+  const alunos = dados.alunosProtecao.map((a) => `<option value="${a.id}">${esc(a.nome)}${a.sala ? " — " + esc(a.sala) : ""}</option>`).join("");
+  const msg = dados.protecaoMsg || ""; dados.protecaoMsg = "";
+  return `<div class="topo"><h2>Proteção da criança</h2><small>Comunicações ao Conselho Tutelar e registros sigilosos.</small></div>
+  <section class="card" style="margin-bottom:16px"><b>Por que esta tela existe</b>
+    <small>• <b>ECA, art. 13:</b> casos de suspeita ou confirmação de maus-tratos devem ser comunicados ao Conselho Tutelar. Deixar de comunicar é infração administrativa (art. 245).</small>
+    <small>• <b>ECA, art. 56:</b> o dirigente da escola comunica ao Conselho Tutelar os maus-tratos e as faltas reiteradas ou a evasão, depois de esgotados os recursos da escola.</small>
+    <small>• <b>Sigilo:</b> estes registros não aparecem para os responsáveis nem para outros professores. Cada consulta e cada registro ficam nos logs.</small></section>
+  ${ehAdmin && p.pendentes ? `<p class="pill danger" style="white-space:normal;margin-bottom:14px">⚠️ ${p.pendentes} registro(s) aguardando a comunicação ao Conselho Tutelar.</p>` : ""}
+  ${msg ? `<p class="pill success" style="white-space:normal;margin-bottom:14px">${esc(msg)}</p>` : ""}
+  <form id="form-protecao" class="card" style="margin-bottom:16px;max-width:760px">
+    <b>Registrar um caso</b>
+    <div class="grade dois" style="margin-top:10px"><div><small>Aluno</small><select id="pro-aluno" required><option value="">Escolha o aluno...</option>${alunos}</select></div>
+      <div><small>Motivo</small><select id="pro-motivo">${motivos}</select></div></div>
+    <div style="margin-top:10px"><small>Fatos observados (o que viu ou ouviu, quando e onde; sem julgamentos)</small><textarea id="pro-descricao" rows="4" maxlength="1500" required></textarea></div>
+    <div style="margin-top:10px"><small>Medidas já adotadas pela escola (opcional)</small><textarea id="pro-medidas" rows="2" maxlength="1500"></textarea></div>
+    <label class="termo-aceite oculto" id="pro-esgotados-box"><input type="checkbox" id="pro-esgotados"> <span>Os recursos da escola foram esgotados (contatos e visitas com a família estão descritos acima).</span></label>
+    <p id="pro-erro" class="pill danger oculto" style="margin-top:10px;white-space:normal"></p>
+    <button class="btn" type="submit" style="margin-top:12px;max-width:240px">Registrar</button>
+  </form>
+  <div id="protecao-lista"></div><div id="protecao-limite"></div>`;
+}
+function ligarProtecao() {
+  const $ = (id) => document.getElementById(id);
+  const sincronizar = () => $("pro-esgotados-box").classList.toggle("oculto", $("pro-motivo").value !== "Faltas");
+  $("pro-motivo").onchange = sincronizar; sincronizar();
+  $("form-protecao").onsubmit = async (e) => {
+    e.preventDefault(); $("pro-erro").classList.add("oculto");
+    try {
+      await api("/api/protecao", { method: "POST", body: JSON.stringify({ aluno_id: Number($("pro-aluno").value), motivo: $("pro-motivo").value,
+        descricao: $("pro-descricao").value, medidas: $("pro-medidas").value, recursos_esgotados: $("pro-esgotados").checked }) });
+      dados.protecaoMsg = "Registro salvo. Ele é sigiloso e fica pendente até a gestão comunicar ao Conselho Tutelar.";
+      await mostrar("protecao");
+    } catch (erro) { if (erro.message !== "Sessão expirada") { $("pro-erro").textContent = erro.message; $("pro-erro").classList.remove("oculto"); } }
+  };
+  desenharProtecao();
+}
+function desenharProtecao() {
+  const ehAdmin = usuarioLogado.papel === "admin", itens = dados.protecao.itens;
+  const cartao = (i) => `<article class="card" style="margin-bottom:12px;${i.pendente ? "border-left:4px solid var(--danger)" : ""}">
+    <div class="linha" style="flex-wrap:wrap;gap:8px">
+      <div class="aluno"><span class="avatar">${iniciais(i.aluno_nome)}</span><div><b>${esc(i.aluno_nome)}</b><small>${esc(i.aluno_sala)} • registrado em ${i.registrada_em} por ${esc(i.registrada_por)}</small></div></div>
+      <div>${pill(motivosProtecao[i.motivo], i.motivo === "Maus-tratos" ? "danger" : "warning")} ${i.pendente ? pill(`Pendente de comunicação${i.dias_registro ? " há " + i.dias_registro + " dia(s)" : ""}`, "danger") : pill("Comunicado ao Conselho Tutelar", "success")}</div>
+    </div>
+    <div class="nota"><small><b>Fatos</b></small>${esc(i.descricao)}</div>
+    ${i.medidas ? `<div class="nota"><small><b>Medidas adotadas pela escola</b></small><span style="white-space:pre-line">${esc(i.medidas)}</span></div>` : ""}
+    ${i.pendente
+      ? (ehAdmin ? `<div class="grade dois" style="margin-top:10px"><div><small>Data em que comunicou ao Conselho Tutelar</small><input type="date" data-ct-data="${i.id}" value="${hojeLocalISO()}" max="${hojeLocalISO()}"></div>
+          <div><small>Protocolo ou nº do ofício (se houver)</small><input data-ct-protocolo="${i.id}" maxlength="60"></div></div>
+          <div class="acoes"><button class="btn pequeno" data-ct-comunicar="${i.id}">Registrar que comunicou ao Conselho Tutelar</button></div>`
+        : "<small>Aguardando a gestão comunicar ao Conselho Tutelar.</small>")
+      : `<small style="margin-top:8px">Comunicado em ${i.comunicado_em} por ${esc(i.comunicado_por)}${i.protocolo ? " • protocolo " + esc(i.protocolo) : ""}</small>`}
+  </article>`;
+  document.getElementById("protecao-lista").innerHTML = `<div class="topo"><h2>${ehAdmin ? "Registros" : "Meus registros"} (${itens.length})</h2></div>` +
+    (itens.length ? itens.map(cartao).join("") : `<div class="vazio"><b>Nenhum registro</b><small>Quando um caso for registrado, ele aparece aqui.</small></div>`);
+  document.querySelectorAll("[data-ct-comunicar]").forEach((b) => b.onclick = seguro(async () => {
+    const id = b.dataset.ctComunicar;
+    await api(`/api/protecao/${id}/comunicado`, { method: "PUT", body: JSON.stringify({ data: document.querySelector(`[data-ct-data="${id}"]`).value, protocolo: document.querySelector(`[data-ct-protocolo="${id}"]`).value.trim() }) });
+    dados.protecaoMsg = "Comunicação ao Conselho Tutelar registrada.";
+    await mostrar("protecao");
+  }));
+  const l = dados.limiteFaltas;
+  if (ehAdmin && l) {
+    const virgula = (n) => String(n).replace(".", ",");
+    document.getElementById("protecao-limite").innerHTML = `<section class="card" style="margin-top:24px"><h2>Alunos acima do limite de faltas</h2>
+      <small>LDB, art. 12, VIII: a escola notifica ao Conselho Tutelar os alunos com faltas acima de 30% do percentual permitido em lei. Como a frequência mínima é 75% (faltas permitidas: 25%), o limite aqui é ${virgula(l.percentual)}% das aulas com chamada registrada no sistema. Confira a regra da sua rede de ensino.</small>
+      ${l.alunos.length ? `<div class="tabela"><table><thead><tr><th>Aluno</th><th>Turma</th><th>Dias com chamada</th><th>Faltas</th><th>%</th><th>Conselho Tutelar</th></tr></thead><tbody>${l.alunos.map((a) => `<tr><td><b>${esc(a.nome)}</b></td><td>${esc(a.sala)}</td><td>${a.dias}</td><td>${a.faltas}</td><td>${pill(virgula(a.percentual) + "%", "danger")}</td><td>${a.comunicado ? pill("Comunicado", "success") : pill("Ainda não comunicado", "warning")}</td></tr>`).join("")}</tbody></table></div>`
+        : '<div class="vazio"><b>Nenhum aluno acima do limite</b></div>'}</section>`;
+  }
+}
+document.addEventListener("click", (e) => { if (e.target.closest("[data-ir-protecao]")) seguro(() => mostrar("protecao"))(); });
 
 // ---------- Troca de senha (forçada no primeiro acesso, ou voluntária pelo botão 🔑) ----------
 function mostrarTelaSenha(forcado) {
@@ -159,7 +409,7 @@ document.getElementById("form-senha").onsubmit = async (e) => {
     localStorage.setItem("sive-usuario", JSON.stringify(usuarioLogado));
     document.getElementById("form-senha").reset();
     document.getElementById("tela-senha").classList.add("oculto");
-    if (forcarTrocaSenha) entrarNoApp(); else document.getElementById("app").classList.remove("oculto");
+    if (forcarTrocaSenha) seguirLogin(); else document.getElementById("app").classList.remove("oculto");
   } catch (erro) {
     erroBox.textContent = erro.message;
     erroBox.classList.remove("oculto");
@@ -188,6 +438,7 @@ function telaSecretaria() {
   const tag = r.eh_hoje ? "Hoje" : dataCurta(r.data);
   const aviso = r.eh_hoje ? "" : ` Mostrando o último dia com chamada registrada (${dataCurta(r.data)}).`;
   return `<div class="topo"><p class="destaque">Visão geral</p><h2>${saudacao()}, ${esc(usuarioLogado.nome.split(" ")[0])}</h2><small>Acompanhe os indicadores e prioridades da escola.${aviso}</small></div>
+  ${r.comunicacoes_pendentes ? `<div class="card" style="margin-bottom:16px;border-left:4px solid var(--danger)"><div class="linha" style="flex-wrap:wrap;gap:8px"><b>⚠️ ${r.comunicacoes_pendentes} comunicação(ões) ao Conselho Tutelar pendente(s)</b><button class="btn pequeno" data-ir-protecao style="width:auto">Abrir Proteção</button></div><small>O ECA (arts. 13 e 56) pede que casos de maus-tratos e de faltas reiteradas sejam comunicados ao Conselho Tutelar.</small></div>` : ""}
   <div class="grade g3">
     ${metrica("👥", "Total de Alunos", r.total_alunos, "alunos cadastrados", "info", "Escola")}
     ${metrica("✅", "Presentes", r.presentes, r.percentual == null ? "Sem chamada registrada" : `${pct(r.percentual)} de presença`, "success", tag)}
@@ -311,6 +562,18 @@ function telaBusca() {
   const c = dados.busca.criterio;
   return `<div class="topo"><h2>Busca Ativa</h2><small>O sistema conta as faltas e abre o caso sozinho quando o aluno chega a ${c.faltas} faltas nos últimos ${c.dias} dias.</small></div><div id="busca-lista"></div>`;
 }
+function blocoConselho(c) { // ECA, art. 56, II: faltas reiteradas, esgotados os recursos da escola -> comunicar ao Conselho Tutelar
+  if (c.comunicacao_id) return `<div style="margin-top:10px">${c.comunicacao_feita ? pill("Comunicado ao Conselho Tutelar", "success") : pill("Comunicação registrada: falta enviar ao Conselho Tutelar", "danger")} <button class="btn outline pequeno" data-ir-protecao style="width:auto">Ver em Proteção</button></div>`;
+  if (usuarioLogado.papel !== "admin" || c.status !== "Em acompanhamento") return "";
+  return `<div style="margin-top:10px"><button class="btn outline pequeno" data-ct-abrir="${c.id}" style="width:auto">Comunicar ao Conselho Tutelar</button></div>
+    <div class="oculto" data-ct-painel="${c.id}" style="margin-top:10px;padding:12px;background:var(--muted);border-radius:8px">
+      <small><b>Comunicação ao Conselho Tutelar</b> (ECA, art. 56, II). Antes, registre acima as ações da escola (ligação, visita, conversa com a família): elas seguem como "medidas adotadas".</small>
+      <textarea rows="3" maxlength="1500" data-ct-fatos="${c.id}" style="margin-top:6px">Aluno com ${c.faltas_atuais} faltas nos últimos ${dados.busca.criterio.dias} dias, em acompanhamento pela Busca Ativa desde ${c.aberta_em}.</textarea>
+      <label class="termo-aceite"><input type="checkbox" data-ct-esgotei="${c.id}"> <span>Os recursos da escola foram esgotados (as ações estão registradas acima).</span></label>
+      <p class="pill danger oculto" data-ct-erro="${c.id}" style="white-space:normal;margin-top:8px"></p>
+      <div class="acoes"><button class="btn pequeno" data-ct-enviar="${c.id}">Registrar comunicação</button><button class="btn outline pequeno" data-ct-cancelar="${c.id}">Cancelar</button></div>
+    </div>`;
+}
 function cartaoCaso(c) {
   const aberto = c.status === "Em acompanhamento";
   return `<article class="card" style="margin-bottom:16px">
@@ -321,6 +584,7 @@ function cartaoCaso(c) {
     <div style="margin-top:8px">${c.registros.map((r) => `<div class="nota ${r.nome_usuario === "Sistema" ? "sistema" : ""}"><small><b>${esc(r.nome_usuario)}</b> • ${r.quando}</small>${esc(r.texto)}</div>`).join("")}</div>
     ${aberto ? `<textarea rows="2" maxlength="450" data-nota="${c.id}" placeholder="Anote o acompanhamento (ligação, visita, conversa com a família...)" style="margin-top:8px"></textarea>
       <div class="acoes"><button class="btn pequeno" data-anotar="${c.id}">Registrar acompanhamento</button><button class="btn outline pequeno" data-encerrar="${c.id}">Encerrar caso</button></div>` : ""}
+    ${blocoConselho(c)}
   </article>`;
 }
 function desenharBusca() {
@@ -342,6 +606,18 @@ function desenharBusca() {
     await api(`/api/busca-ativa/${b.dataset.encerrar}/encerrar`, { method: "PUT", body: JSON.stringify({ texto }) });
     await recarregar();
   }));
+  const painel = (id) => document.querySelector(`[data-ct-painel="${id}"]`);
+  document.querySelectorAll("[data-ct-abrir]").forEach((b) => b.onclick = () => painel(b.dataset.ctAbrir).classList.toggle("oculto"));
+  document.querySelectorAll("[data-ct-cancelar]").forEach((b) => b.onclick = () => painel(b.dataset.ctCancelar).classList.add("oculto"));
+  document.querySelectorAll("[data-ct-enviar]").forEach((b) => b.onclick = async () => {
+    const id = b.dataset.ctEnviar, caso = dados.busca.casos.find((c) => String(c.id) === id), erro = document.querySelector(`[data-ct-erro="${id}"]`);
+    erro.classList.add("oculto");
+    try {
+      await api("/api/protecao", { method: "POST", body: JSON.stringify({ aluno_id: caso.aluno_id, motivo: "Faltas", bua_id: caso.id,
+        descricao: document.querySelector(`[data-ct-fatos="${id}"]`).value, recursos_esgotados: document.querySelector(`[data-ct-esgotei="${id}"]`).checked }) });
+      await recarregar();
+    } catch (e) { if (e.message !== "Sessão expirada") { erro.textContent = e.message; erro.classList.remove("oculto"); } }
+  });
 }
 
 // ---------- Relatório mensal (administração) ----------
@@ -446,7 +722,93 @@ function telaCadastroAluno() {
     <p id="ca-erro" class="pill danger oculto" style="margin-top:14px"></p>
     <p id="ca-sucesso" class="pill success oculto" style="margin-top:14px"></p>
     <button class="btn" type="submit" style="margin-top:18px;max-width:220px">Cadastrar aluno</button>
-  </form>`;
+  </form>
+  <section class="card" style="max-width:980px;margin-top:20px">
+    <h2>Importar vários alunos de uma planilha</h2>
+    <small>Cadastre a turma inteira de uma vez. Aceita CSV e Excel (.xlsx).</small>
+    <ol style="margin:12px 0 12px 20px;font-size:14px;line-height:1.6">
+      <li>Baixe o modelo e preencha uma linha por aluno (pode copiar e colar da sua lista de chamada).</li>
+      <li>Escolha o arquivo. O sistema confere tudo <b>antes</b> de cadastrar.</li>
+      <li>Revise o resultado e confirme a importação.</li>
+    </ol>
+    <button type="button" class="btn outline" id="imp-modelo" style="width:auto;padding:8px 16px">⬇️ Baixar modelo da planilha</button>
+    <div style="margin-top:14px"><small>Turma para todos os alunos (opcional: vale quando a coluna Turma estiver vazia ou não existir)</small><input id="imp-turma" placeholder="Ex.: 2º Ano B"></div>
+    <div style="margin-top:14px"><small>Arquivo da planilha (a primeira aba é usada)</small><input type="file" id="imp-arquivo" accept=".csv,.xlsx,.txt,text/csv"></div>
+    <p id="imp-erro" class="pill danger oculto" style="margin-top:12px;white-space:normal"></p>
+    <div id="imp-previa" style="margin-top:14px"></div>
+  </section>`;
+}
+// ---------- Importar alunos por planilha (CSV ou Excel) ----------
+// Dois passos: "conferir" (nada é gravado) e "importar". O arquivo fica só na memória do navegador até a confirmação.
+const MODELO_CSV = "\uFEFF" + [
+  "Nome do aluno;Turma;Matrícula;Responsável;Parentesco;Telefone;Responsável 2;Parentesco 2;Telefone 2",
+  "EXEMPLO - Maria da Silva;2º Ano B;2026001;Ana da Silva;Mãe;(11) 98888-1111;Carlos da Silva;Pai;(11) 97777-2222",
+  "EXEMPLO - João Souza;2º Ano B;;Paula Souza;Mãe;(11) 96666-3333;;;",
+].join("\r\n");
+let impArquivo = null; // { nome, base64 } do arquivo escolhido
+const situacaoImp = { ok: ["Pronto", "success"], erro: ["Com erro", "danger"], duplicado: ["Já cadastrado", "warning"], importado: ["Importado", "success"] };
+function bufferParaBase64(buffer) {
+  let binario = ""; const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.length; i += 0x8000) binario += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(binario);
+}
+function erroImportacao(texto) {
+  const caixa = document.getElementById("imp-erro");
+  caixa.textContent = texto || ""; caixa.classList.toggle("oculto", !texto);
+}
+function iniciarImportacao() {
+  const $ = (id) => document.getElementById(id);
+  impArquivo = null;
+  $("imp-modelo").onclick = () => {
+    const url = URL.createObjectURL(new Blob([MODELO_CSV], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a"); link.href = url; link.download = "modelo-importacao-alunos.csv"; link.click(); URL.revokeObjectURL(url);
+  };
+  $("imp-arquivo").onchange = async (e) => {
+    const arquivo = e.target.files[0]; e.target.value = ""; // limpa para poder escolher o mesmo arquivo de novo
+    if (!arquivo) return;
+    $("imp-previa").replaceChildren(); erroImportacao("");
+    if (arquivo.size > 2 * 1024 * 1024) return erroImportacao("O arquivo tem mais de 2 MB. Divida a planilha em partes.");
+    impArquivo = { nome: arquivo.name, base64: bufferParaBase64(await arquivo.arrayBuffer()) };
+    await enviarPlanilha(false);
+  };
+  $("imp-turma").onchange = () => { if (impArquivo) enviarPlanilha(false); };
+}
+async function enviarPlanilha(confirmar) {
+  erroImportacao("");
+  try {
+    const r = await api("/api/alunos/importar", { method: "POST", body: JSON.stringify({
+      nome_arquivo: impArquivo.nome, conteudo: impArquivo.base64, turma_padrao: document.getElementById("imp-turma").value.trim(), confirmar }) });
+    desenharPrevia(r, confirmar);
+    if (confirmar) impArquivo = null;
+  } catch (e) {
+    if (e.message === "Sessão expirada" || e.message === "Aceite pendente") return;
+    document.getElementById("imp-previa").replaceChildren(); erroImportacao(e.message);
+  }
+}
+function desenharPrevia(r, importado) {
+  const linhas = r.linhas.map((l) => {
+    const [rotulo, tom] = situacaoImp[l.status];
+    const resp = l.responsaveis.map((x) => `${esc(x.nome)} <small>(${esc(x.parentesco)}${x.telefone ? ", " + esc(x.telefone) : ""})</small>`).join("<br>") || "—";
+    const problemas = l.problemas.map((p) => `<small style="display:block;color:var(--danger)">${esc(p)}</small>`).join("");
+    return `<tr><td>${l.linha}</td><td style="min-width:180px">${pill(rotulo, tom)}${problemas}</td><td><b>${esc(l.nome) || "—"}</b></td><td>${esc(l.sala) || "—"}</td><td>${esc(l.matricula) || "—"}</td><td>${resp}</td></tr>`;
+  }).join("");
+  const resumo = importado
+    ? `${pill(`✅ ${r.importados} aluno(s) importado(s)`, "success")} ${r.ignorados ? pill(`${r.ignorados} linha(s) não importada(s)`, "warning") : ""}`
+    : `${pill(`${r.total} linha(s)`, "info")} ${pill(`${r.prontos} pronta(s)`, "success")} ${r.duplicados ? pill(`${r.duplicados} já cadastrada(s)`, "warning") : ""} ${r.com_erro ? pill(`${r.com_erro} com erro`, "danger") : ""}`;
+  const ignoradas = r.ignoradas && r.ignoradas.length ? `<small style="display:block;margin-top:6px">Colunas que não fazem parte do cadastro e foram ignoradas: ${r.ignoradas.map(esc).join(", ")}.</small>` : "";
+  const acoes = importado
+    ? `<button type="button" class="btn outline" id="imp-nova" style="width:auto;padding:8px 16px">Importar outra planilha</button>`
+    : `<button type="button" class="btn" id="imp-confirmar" style="width:auto;padding:8px 18px" ${r.prontos ? "" : "disabled"}>Importar ${r.prontos} aluno(s)</button>
+       <button type="button" class="btn outline" id="imp-cancelar" style="width:auto;padding:8px 16px">Cancelar</button>`;
+  document.getElementById("imp-previa").innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><b style="word-break:break-all">${esc(impArquivo ? impArquivo.nome : "")}</b></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">${resumo}</div>
+    ${importado || r.prontos ? "" : '<p class="pill danger" style="white-space:normal">Nenhum aluno pronto para importar. Corrija a planilha e escolha o arquivo de novo.</p>'}
+    <div class="tabela" style="max-height:420px;overflow:auto;border:1px solid var(--border);border-radius:8px"><table><thead><tr><th>Linha</th><th>Situação</th><th>Aluno</th><th>Turma</th><th>Matrícula</th><th>Responsáveis</th></tr></thead><tbody>${linhas}</tbody></table></div>
+    ${ignoradas}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${acoes}</div>`;
+  const $ = (id) => document.getElementById(id);
+  if ($("imp-confirmar")) $("imp-confirmar").onclick = async () => { $("imp-confirmar").disabled = true; await enviarPlanilha(true); };
+  if ($("imp-cancelar")) $("imp-cancelar").onclick = () => { impArquivo = null; $("imp-previa").replaceChildren(); erroImportacao(""); };
+  if ($("imp-nova")) $("imp-nova").onclick = () => { $("imp-previa").replaceChildren(); $("imp-arquivo").click(); };
 }
 function linhaResponsavel() {
   return `<div class="card" style="margin-top:10px;padding:14px;background:var(--muted)" data-linha-resp>
@@ -462,6 +824,7 @@ function wireRemoverResponsavel() {
   document.querySelectorAll(".r-remover").forEach((b) => b.onclick = () => b.closest("[data-linha-resp]").remove());
 }
 function desenharCadastroAluno() {
+  iniciarImportacao();
   const lista = document.getElementById("ca-responsaveis");
   lista.innerHTML = linhaResponsavel();
   wireRemoverResponsavel();
@@ -619,11 +982,12 @@ function telaPais() {
   const selo = hoje ? (hoje.status === "Presente" ? "● Seguro" : "● Ausente") : "● Sem registro";
   return `<div class="topo"><small>Olá, ${esc(usuarioLogado.nome.split(" ")[0])}</small><h2>Acompanhe ${dados.filho ? "o(a) " + esc(dados.filho.nome.split(" ")[0]) : "seu filho"}</h2></div>
   <div class="grade pais" style="align-items:start">
-    <section class="status"><div class="linha"><div><small style="color:#dbe6ff">Status agora</small><h3>${status}</h3></div><span class="pill" style="background:rgba(255,255,255,.2)">${selo}</span></div>
-      <hr style="margin:20px 0;opacity:.3"><small style="color:#dbe6ff">Registro de hoje</small><b>${hoje ? esc(hoje.observacao) : "Chamada ainda não registrada"}</b>
-      <small style="color:#dbe6ff;margin-top:10px">Turma</small><b>${dados.filho ? esc(dados.filho.sala) : "—"}</b></section>
+    <section class="status"><div class="linha"><div><small style="color:#DCEEF8">Status agora</small><h3>${status}</h3></div><span class="pill" style="background:rgba(255,255,255,.2)">${selo}</span></div>
+      <hr style="margin:20px 0;opacity:.3"><small style="color:#DCEEF8">Registro de hoje</small><b>${hoje ? esc(hoje.observacao) : "Chamada ainda não registrada"}</b>
+      <small style="color:#DCEEF8;margin-top:10px">Turma</small><b>${dados.filho ? esc(dados.filho.sala) : "—"}</b></section>
     <aside class="card"><h2>Histórico de presença</h2><small>Últimos ${h.dias} dias</small>${blocoHistorico(h)}</aside>
   </div>
+  ${cartaoConsentimento()}
   <section class="card" style="margin-top:20px"><h2>Ficha do meu filho</h2><small>Comunicados, autorizações para assinar, documentos, pendências e ocorrências.</small><div id="ficha-corpo"></div></section>`;
 }
 
@@ -674,7 +1038,7 @@ function abaDocumentos(f, ehGestao) {
   const lista = f.documentos.length ? f.documentos.map((d) => `<div class="item">
     <div class="linha" style="gap:8px;flex-wrap:wrap"><div><b>📄 ${esc(d.titulo)}</b><small>${esc(d.nome_original)} • ${tamanhoLegivel(d.tamanho)} • ${d.enviado_em} • ${esc(d.enviado_por_nome)}</small></div>${pill(esc(d.categoria), "info")}</div>
     <div class="acoes"><button class="btn outline pequeno" data-baixar="${d.id}" data-nome="${esc(d.nome_original)}">⬇️ Baixar</button>${ehGestao ? `<button class="btn outline pequeno" data-excluir-doc="${d.id}">🗑️ Excluir</button>` : ""}</div></div>`).join("") : vazio("Nenhum documento anexado ainda.");
-  return `${lista}
+  return `<small class="nota-seguranca">🔒 Os arquivos ficam criptografados e cada download é registrado (LGPD).</small>${lista}
   <form id="form-doc" class="item" style="background:var(--muted)"><b>Anexar documento</b>
     <div class="grade dois" style="margin-top:8px"><div><small>Categoria</small><select id="doc-cat">${f.categorias.map((c) => `<option>${esc(c)}</option>`).join("")}</select></div>
       <div><small>Título</small><input id="doc-titulo" required maxlength="120" placeholder="Ex.: Relatório do 1º bimestre"></div></div>
@@ -697,20 +1061,29 @@ function abaOcorrencias(f, podeRegistrar) {
   return lista + (podeRegistrar ? `<form id="form-ocor" class="item" style="background:var(--muted)"><b>Registrar ação ou advertência</b>
     <div class="grade dois" style="margin-top:8px"><div><small>Tipo</small><select id="ocor-tipo"><option value="Advertencia">Advertência</option><option value="Acao">Ação</option></select></div>
       <div><small>Data</small><input type="date" id="ocor-data"></div></div>
-    <div style="margin-top:8px"><small>Descrição</small><textarea id="ocor-desc" rows="3" maxlength="500" required></textarea></div>
+    <div style="margin-top:8px"><small>Descrição (só fatos, sem rótulos nem julgamentos sobre a criança: ECA, arts. 17 e 18)</small><textarea id="ocor-desc" rows="3" maxlength="500" required></textarea></div>
     ${erroBox("ocor-erro")}<button class="btn pequeno" type="submit" style="margin-top:10px">Registrar</button></form>` : "");
 }
 function abrirComprovante(a, aluno) {
   const w = window.open("", "_blank");
   if (!w) { alert("Permita pop-ups neste site para ver o comprovante."); return; }
   w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Comprovante ${esc(a.codigo)}</title>
-    <style>body{font-family:Arial,sans-serif;max-width:640px;margin:40px auto;padding:0 20px;color:#1c2b45}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin:20px 0}td{padding:10px;border-bottom:1px solid #dde3ef}td:first-child{color:#61708a;width:38%}.cod{font-size:20px;letter-spacing:2px;font-weight:700}@media print{button{display:none}}</style></head><body>
+    <style>body{font-family:Arial,sans-serif;max-width:640px;margin:40px auto;padding:0 20px;color:#140040}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin:20px 0}td{padding:10px;border-bottom:1px solid #EAD6CA}td:first-child{color:#5B5278;width:38%}.cod{font-size:20px;letter-spacing:2px;font-weight:700}@media print{button{display:none}}</style></head><body>
     <h1>🛡️ S.I.V.E. — Comprovante de autorização digital</h1>
     <table><tr><td>Autorização</td><td>${esc(a.titulo)}</td></tr><tr><td>Detalhes</td><td>${esc(a.detalhe || "—")}</td></tr>
     <tr><td>Aluno(a)</td><td>${esc(aluno.nome)} — ${esc(aluno.sala)}</td></tr><tr><td>Assinada por</td><td>${esc(a.assinada_nome)}</td></tr>
     <tr><td>Data e hora</td><td>${esc(a.assinada_em)}</td></tr><tr><td>Código de verificação</td><td class="cod">${esc(a.codigo)}</td></tr></table>
-    <p>Documento gerado pelo sistema S.I.V.E. A assinatura foi confirmada com o nome completo e a senha do responsável.</p><button onclick="window.print()">Imprimir</button></body></html>`);
+    <p>Documento gerado pelo sistema S.I.V.E. A assinatura foi confirmada com o nome completo e a senha do responsável.</p><button id="imprimir">Imprimir</button></body></html>`);
   w.document.close();
+  w.document.getElementById("imprimir").addEventListener("click", () => w.print());
+}
+async function baixarDadosAluno(alunoId) {
+  const r = await fetch(`/api/alunos/${alunoId}/meus-dados`, { headers: { Authorization: "Bearer " + usuarioLogado.token } });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).erro || "Não foi possível gerar o arquivo");
+  const url = URL.createObjectURL(await r.blob());
+  const link = document.createElement("a");
+  link.href = url; link.download = `dados-aluno-${alunoId}.json`; link.click();
+  URL.revokeObjectURL(url);
 }
 async function baixarDocumento(id, nome) {
   const r = await fetch(`/api/documentos/${id}/arquivo`, { headers: { Authorization: "Bearer " + usuarioLogado.token } });
@@ -730,11 +1103,12 @@ function desenharFicha() {
     ["documentos", "Documentos", f.documentos.length || ""], ["pendencias", "Pendências", pendAbertas ? `${pendAbertas} aberta(s)` : ""], ["ocorrencias", "Ocorrências", f.ocorrencias.length || ""]];
   const cabecalho = ehPai ? "" : `<section class="card"><div class="aluno"><span class="avatar">${iniciais(f.aluno.nome)}</span><div><h2>${esc(f.aluno.nome)}</h2><small>${esc(f.aluno.sala)} • Matrícula ${esc(f.aluno.matricula || "—")}</small></div></div>
     <small style="margin-top:10px;font-weight:700;text-transform:uppercase">Responsáveis</small>
-    ${f.responsaveis.length ? f.responsaveis.map((r) => `<small>${esc(r.nome)} (${esc(r.parentesco)}) • 📞 ${esc(r.telefone || "—")}</small>`).join("") : "<small>Nenhum responsável cadastrado.</small>"}</section>`;
+    ${f.responsaveis.length ? f.responsaveis.map((r) => `<small>${esc(r.nome)} (${esc(r.parentesco)}) • 📞 ${esc(r.telefone || "—")}</small>`).join("") : "<small>Nenhum responsável cadastrado.</small>"}${consentimentoNaFicha(f)}</section>`;
   const conteudo = { comunicados: () => abaComunicados(f, ehPai), autorizacoes: () => abaAutorizacoes(f, ehPai), documentos: () => abaDocumentos(f, ehGestao),
     pendencias: () => abaPendencias(f, podeRegistrar, ehGestao), ocorrencias: () => abaOcorrencias(f, podeRegistrar) }[aba]();
   const msg = dados.fichaMsg; dados.fichaMsg = "";
-  document.getElementById("ficha-corpo").innerHTML = `${cabecalho}
+  const botaoDados = ehPai || ehGestao ? `<div class="acoes" style="margin:10px 0"><button class="btn outline pequeno" data-baixar-dados="${f.aluno.id}" title="Direito de acesso aos dados (LGPD, art. 18)">📄 Baixar os dados do aluno (LGPD)</button></div>` : "";
+  document.getElementById("ficha-corpo").innerHTML = `${cabecalho}${botaoDados}
     <div class="abas">${abas.map(([id, nome, qtd]) => `<button class="aba ${id === aba ? "ativa" : ""}" data-aba="${id}">${nome}${qtd !== "" ? ` <span class="qtd">${qtd}</span>` : ""}</button>`).join("")}</div>
     ${msg ? `<p class="pill success" style="margin-bottom:8px">${esc(msg)}</p>` : ""}${conteudo}`;
 
@@ -752,6 +1126,7 @@ function desenharFicha() {
   }));
   corpo.querySelectorAll("[data-comprovante]").forEach((b) => b.onclick = () =>
     abrirComprovante(f.autorizacoes.find((a) => a.id === Number(b.dataset.comprovante)), f.aluno));
+  corpo.querySelectorAll("[data-baixar-dados]").forEach((b) => b.onclick = seguro(() => baixarDadosAluno(b.dataset.baixarDados)));
   corpo.querySelectorAll("[data-baixar]").forEach((b) => b.onclick = seguro(() => baixarDocumento(b.dataset.baixar, b.dataset.nome)));
   corpo.querySelectorAll("[data-excluir-doc]").forEach((b) => b.onclick = seguro(async () => {
     if (!confirm("Excluir este documento? Essa ação não pode ser desfeita.")) return;
@@ -805,7 +1180,7 @@ function telaComunicados() {
     <small>${prof ? `Será enviado aos responsáveis da turma ${esc(usuarioLogado.sala)}.` : "Escolha uma turma ou envie para a escola toda."}</small>
     <form id="form-com" style="margin-top:14px"><small>Título</small><input id="com-titulo" required maxlength="120">
       ${prof ? "" : `<div style="margin-top:12px"><small>Destino</small><select id="com-sala"><option value="">Escola toda</option>${salas.map((s) => `<option>${esc(s)}</option>`).join("")}</select></div>`}
-      <div style="margin-top:12px"><small>Texto</small><textarea id="com-texto" rows="4" maxlength="1500" required></textarea></div>
+      <div style="margin-top:12px"><small>Texto (não cite nomes de alunos: todas as famílias leem este aviso — ECA, arts. 17 e 18)</small><textarea id="com-texto" rows="4" maxlength="1500" required></textarea></div>
       <p class="pill danger oculto" id="com-erro" style="margin-top:12px"></p><p class="pill success oculto" id="com-ok" style="margin-top:12px">Comunicado publicado!</p>
       <button class="btn" type="submit" style="margin-top:16px;max-width:240px">Publicar comunicado</button></form></section>
     <div class="topo" style="margin-top:24px"><h2>Comunicados publicados</h2><small>Acompanhe quantos responsáveis já leram cada um.</small></div><div id="com-lista"></div>`;
@@ -835,7 +1210,13 @@ function ligarComunicados() {
     document.getElementById("com-erro").classList.add("oculto"); document.getElementById("com-ok").classList.add("oculto");
     try {
       const sala = document.getElementById("com-sala");
-      await api("/api/comunicados", { method: "POST", body: JSON.stringify({ titulo: document.getElementById("com-titulo").value, texto: document.getElementById("com-texto").value, sala: sala ? sala.value : undefined }) });
+      const corpo = { titulo: document.getElementById("com-titulo").value, texto: document.getElementById("com-texto").value, sala: sala ? sala.value : undefined };
+      try { await api("/api/comunicados", { method: "POST", body: JSON.stringify(corpo) }); }
+      catch (e) {
+        if (e.codigo !== "NOME_DE_ALUNO") throw e;
+        if (!confirm(`Este comunicado cita o nome de aluno(s): ${e.alunos.join(", ")}.\n\nTodas as famílias que recebem o aviso vão ler. Publicar mesmo assim?`)) return;
+        await api("/api/comunicados", { method: "POST", body: JSON.stringify({ ...corpo, confirmar_nomes: true }) });
+      }
       document.getElementById("form-com").reset();
       dados.comunicados = await api("/api/comunicados"); desenharComunicados();
       document.getElementById("com-ok").classList.remove("oculto");
@@ -913,6 +1294,12 @@ async function mostrar(id) {
     if (id === "autorizacoes") { dados.grupos = await api("/api/autorizacoes-grupos"); dados.alunos = await api("/api/alunos"); }
     if (id === "usuarios") { dados.alunos = await api("/api/alunos"); dados.usuarios = await api("/api/usuarios"); }
     if (id === "logs") dados.logs = await api("/api/logs");
+    if (id === "consentimentos") dados.consents = await api("/api/consentimentos");
+    if (id === "protecao") {
+      dados.protecao = await api("/api/protecao");
+      dados.alunosProtecao = usuarioLogado.papel === "admin" ? await api("/api/alunos") : (await api("/api/minha-turma")).alunos;
+      if (usuarioLogado.papel === "admin") dados.limiteFaltas = await api("/api/protecao/faltas-limite");
+    }
     if (id === "turma") {
       dados.turma = await api("/api/minha-turma");
       dados.chamada = Object.fromEntries(dados.turma.alunos.map((a) => [a.id, a.status_hoje || "Presente"]));
@@ -927,7 +1314,7 @@ async function mostrar(id) {
     document.getElementById("tela").innerHTML = {
       secretaria: telaSecretaria, seguranca: telaSeguranca, pais: telaPais, frequencia: telaFrequencia, busca: telaBusca,
       relatorio: telaRelatorio, cadastro: telaCadastroAluno, usuarios: telaUsuarios, logs: telaLogs, turma: telaTurma,
-      ficha: telaFicha, comunicados: telaComunicados, autorizacoes: telaAutorizacoes,
+      ficha: telaFicha, comunicados: telaComunicados, autorizacoes: telaAutorizacoes, consentimentos: telaConsentimentos, protecao: telaProtecao,
     }[id]();
     if (id === "secretaria") ligarGestao();
     if (id === "seguranca") {
@@ -948,6 +1335,7 @@ async function mostrar(id) {
     if (id === "turma") desenharChamada();
     if (id === "ficha") { document.getElementById("ficha-voltar").onclick = () => mostrar(dados.fichaOrigem); desenharFicha(); }
     if (id === "comunicados") ligarComunicados();
+    if (id === "protecao") ligarProtecao();
     if (id === "autorizacoes") ligarAutorizacoes();
     if (id === "pais") desenharFicha();
   } catch (erro) {

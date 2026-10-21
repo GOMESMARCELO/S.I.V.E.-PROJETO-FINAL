@@ -1,27 +1,39 @@
-:root{--bg:#f4f6fb;--fg:#1c2b45;--card:#fff;--primary:#2456c8;--primary-soft:#e6eefc;--muted:#eef1f7;--muted-fg:#61708a;--border:#dde3ef;--success:#1f8a5b;--success-soft:#e3f6ec;--warning:#b7791f;--warning-soft:#fdf1d8;--danger:#d64545;--danger-soft:#fde8e8;--sombra:0 1px 3px rgba(20,40,80,.08)}
+/* ===== Identidade visual (paleta oficial) =====================================================
+   Cores aprovadas:  creme #FFF2EB · índigo #140040 · tijolo #68150A · azul #0B78B3
+   Derivadas (estados e bordas): azul-escuro #085C8A · azul-suave #DCEEF8 · tijolo-suave #F4DAD3 · borda #EAD6CA
+   fundo-suave #F9E6DB · texto-2 #5B5278 · verde #17624A / #D9F0E6 · âmbar #7C4A03 / #FBE7C4
+   Uso: creme = fundos · índigo = menu e textos · azul = a ação (botões, item ativo) · tijolo só para perigo, alertas e Proteção.
+   Contrastes (WCAG): índigo/creme 17:1 · branco/azul 4,8:1 · azul puro como texto pequeno sobre creme só 4,4:1, então
+   texto azul usa --primary-ink (6,6:1). Tijolo e índigo são parecidos em luminosidade (1,5:1): nunca um sobre o outro. */
+:root{--bg:#FFF2EB;--fg:#140040;--card:#FFFAF7;--primary:#0B78B3;--primary-ink:#085C8A;--primary-soft:#DCEEF8;--muted:#F9E6DB;--muted-fg:#5B5278;--border:#EAD6CA;--success:#17624A;--success-soft:#D9F0E6;--warning:#7C4A03;--warning-soft:#FBE7C4;--danger:#68150A;--danger-soft:#F4DAD3;--sombra:0 1px 2px rgba(20,0,64,.06),0 6px 16px rgba(20,0,64,.05);--menu:#140040;--menu-fg:#E9E1F2;--menu-fg-2:#BFB4D8;--menu-linha:rgba(255,242,235,.16);--menu-hover:rgba(255,242,235,.08)}
 *{box-sizing:border-box;margin:0}
 body{font-family:"DM Sans",Arial,sans-serif;background:var(--bg);color:var(--fg)}
 h1,h2,h3,b{font-family:"Manrope",Arial,sans-serif}
 small{display:block;font-size:12px;color:var(--muted-fg)}
 button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
 input{font:inherit;padding:10px 12px;border:1px solid var(--border);border-radius:8px;width:100%}
-#menu{position:fixed;inset:0 auto 0 0;width:270px;background:#fbfcff;border-right:1px solid var(--border);padding:20px 16px;display:flex;flex-direction:column;transform:translateX(-100%);transition:.25s;z-index:50}
+#menu{position:fixed;inset:0 auto 0 0;width:320px;max-width:85vw;background:var(--menu);padding:20px 16px;display:flex;flex-direction:column;transform:translateX(-100%);transition:.25s;z-index:50}
 #menu.aberto{transform:none}
-#overlay{display:none;position:fixed;inset:0;background:rgba(10,20,40,.5);z-index:40}
+#overlay{display:none;position:fixed;inset:0;background:rgba(20,0,64,.55);z-index:40}
 #overlay.aberto{display:block}
 .logo{display:flex;gap:12px;align-items:center;margin-bottom:36px}
 .logo-icon{background:var(--primary);width:44px;height:44px;border-radius:10px;display:grid;place-items:center;font-size:22px}
 .logo b{font-size:20px}
-#nav button{display:flex;width:100%;gap:12px;align-items:center;text-align:left;padding:12px;border-radius:8px;color:var(--muted-fg);margin-bottom:4px}
-#nav button.ativo{background:var(--primary-soft);color:var(--primary)}
+#menu .logo b{color:var(--bg)} /* só no menu escuro: o mesmo logo aparece no login e nos termos, sobre fundo claro */
+#menu small{color:var(--menu-fg-2)}
+#nav button{display:flex;width:100%;gap:12px;align-items:center;text-align:left;padding:12px;border-radius:8px;color:var(--menu-fg);margin-bottom:4px}
+#nav button:hover{background:var(--menu-hover)}
+#nav button.ativo{background:var(--primary);color:#fff}
+#nav button.ativo small{color:var(--primary-soft)}
 #nav b{display:block;font-size:14px}
-.user{margin-top:auto;border-top:1px solid var(--border);padding-top:14px;display:flex;gap:8px;align-items:center}
+.user{margin-top:auto;border-top:1px solid var(--menu-linha);padding-top:14px;display:flex;gap:8px;align-items:center}
 .user>div{flex:1;min-width:0}
-.user>div b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.user>div b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;color:var(--bg)}
 .user button{flex-shrink:0}
 .avatar{width:36px;height:36px;border-radius:50%;background:var(--muted);display:grid;place-items:center;font-size:12px;font-weight:700;flex-shrink:0}
+#menu .avatar{background:rgba(255,242,235,.14);color:var(--bg)}
 .conteudo{min-height:100vh}
-header{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(244,246,251,.95);border-bottom:1px solid var(--border)}
+header{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(255,242,235,.92);border-bottom:1px solid var(--border)}
 header div{flex:1}
 header h1{font-size:18px}
 #btn-menu{font-size:22px;padding:4px 8px}
@@ -31,13 +43,13 @@ main{padding:16px;max-width:1400px;margin:auto}
 .card h2{font-size:19px}
 .topo{margin-bottom:16px}
 .topo h2{font-size:26px}
-.topo .destaque{color:var(--primary);font-weight:600;font-size:14px}
+.topo .destaque{color:var(--primary-ink);font-weight:600;font-size:14px}
 .pill{display:inline-block;padding:4px 10px;border-radius:99px;font-size:12px;font-weight:600}
 .success{background:var(--success-soft);color:var(--success)}
 .warning{background:var(--warning-soft);color:var(--warning)}
 .danger{background:var(--danger-soft);color:var(--danger)}
 .neutral{background:var(--muted);color:var(--muted-fg)}
-.info{background:var(--primary-soft);color:var(--primary)}
+.info{background:var(--primary-soft);color:var(--primary-ink)}
 .icone{width:40px;height:40px;border-radius:8px;display:grid;place-items:center;font-size:18px}
 .metrica .num{font-family:Manrope,Arial;font-size:32px;font-weight:800;margin:6px 0}
 .linha{display:flex;justify-content:space-between;align-items:center;gap:12px}
@@ -47,7 +59,7 @@ main{padding:16px;max-width:1400px;margin:auto}
 .alerta .num{font-family:Manrope,Arial;font-size:24px;font-weight:800}
 .tabela{overflow-x:auto}
 table{width:100%;min-width:700px;border-collapse:collapse;font-size:14px}
-th{background:var(--muted);text-align:left;font-size:12px;text-transform:uppercase;color:var(--muted-fg);padding:12px}
+th{background:var(--muted);text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted-fg);padding:12px}
 td{padding:12px;border-top:1px solid var(--border)}
 .aluno{display:flex;gap:10px;align-items:center}
 .log{display:flex;gap:12px;align-items:center;padding:14px 0;border-top:1px solid var(--border)}
@@ -59,9 +71,11 @@ td{padding:12px;border-top:1px solid var(--border)}
 .resp{border:1px solid var(--border);border-radius:10px;padding:12px}
 .resp img{width:48px;height:48px;border-radius:50%;object-fit:cover}
 .btn{display:block;width:100%;padding:12px;border-radius:8px;font-weight:600;background:var(--primary);color:#fff;margin-top:14px}
+.btn:hover{background:var(--primary-ink)}
 .btn.outline{background:none;color:var(--fg);border:1px solid var(--border)}
+.btn.outline:hover{background:var(--muted)}
 .btn:disabled{opacity:.7;cursor:default}
-.status{background:var(--primary);color:#fff;border-radius:10px;padding:22px}
+.status{background:linear-gradient(135deg,#140040 0%,#0B5E8E 100%);color:#fff;border-radius:10px;padding:22px}
 .status h3{font-size:24px}
 .hist{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
 .hist .ponto{width:8px;height:8px;border-radius:50%;background:var(--success)}
@@ -73,7 +87,7 @@ td{padding:12px;border-top:1px solid var(--border)}
 .login-caixa .logo{gap:12px}
 #login-erro{text-align:center}
 @media(min-width:640px){.g3{grid-template-columns:repeat(3,1fr)}main{padding:28px}}
-@media(min-width:1024px){#menu{transform:none}#btn-menu{display:none}.conteudo{padding-left:270px}main{padding:40px}.dois{grid-template-columns:1fr 1fr}.pais{grid-template-columns:1.1fr .9fr}.resp-2{grid-template-columns:1fr 1fr}}
+@media(min-width:1024px){#menu{transform:none}#btn-menu{display:none}.conteudo{padding-left:320px}main{padding:40px}.dois{grid-template-columns:1fr 1fr}.pais{grid-template-columns:1.1fr .9fr}.resp-2{grid-template-columns:1fr 1fr}}
 
 /* ---- Fase 2: frequência, chamada, Busca Ativa e relatório ---- */
 #menu{overflow-y:auto}
@@ -99,12 +113,41 @@ select,textarea{font:inherit;padding:10px 12px;border:1px solid var(--border);bo
 
 /* ---- Fase 3: tabela de gestão, ficha com abas, comunicados e autorizações ---- */
 th.ord{cursor:pointer;user-select:none}
-th.ord:hover{color:var(--primary)}
+th.ord:hover{color:var(--primary-ink)}
 .seta{font-size:10px}
 .abas{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin:16px 0 12px}
 .aba{padding:10px 14px;border-radius:8px 8px 0 0;color:var(--muted-fg);font-weight:600;font-size:14px}
-.aba.ativa{background:var(--primary-soft);color:var(--primary)}
+.aba.ativa{background:var(--primary-soft);color:var(--primary-ink)}
 .aba .qtd{display:inline-block;margin-left:4px;padding:1px 8px;border-radius:99px;background:var(--warning-soft);color:var(--warning);font-size:11px}
 .item{border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:10px}
 .barra{height:8px;border-radius:99px;background:var(--muted);overflow:hidden;margin-top:6px}
 .barra>i{display:block;height:100%;background:var(--success)}
+
+/* ---- LGPD: termo de privacidade ---- */
+#tela-termo,#tela-consent{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.termo-caixa{width:100%;max-width:760px}
+.termo-texto{max-height:50vh;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:16px;background:#fff;line-height:1.5}
+.termo-texto h3{font-size:15px;margin:16px 0 6px}
+.termo-texto h3:first-child{margin-top:0}
+.termo-texto p,.termo-texto li{font-size:14px;margin-bottom:6px}
+.termo-texto ul{padding-left:20px}
+.termo-aceite{display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-size:14px;cursor:pointer}
+.termo-aceite input{width:auto;margin-top:3px}
+.link-texto{background:none;color:var(--primary-ink);font-size:13px;margin-top:14px;text-align:center;text-decoration:underline}
+.nota-seguranca{display:block;margin-bottom:10px;color:var(--muted-fg)}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--primary);outline-offset:1px;border-color:var(--primary)}
+
+/* ===== Tela de carregamento (3s depois do login) ===== */
+#tela-carregando{position:fixed;inset:0;z-index:100;background:var(--menu);color:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;animation:carregando-entra .4s ease}
+#tela-carregando b{font-size:22px;letter-spacing:2px;margin-top:12px}
+#tela-carregando small{color:var(--menu-fg-2);font-size:14px}
+.carregando-logo{position:relative;width:96px;height:96px;display:grid;place-items:center}
+.carregando-anel{position:absolute;inset:0;border-radius:50%;border:4px solid var(--menu-linha);border-top-color:var(--primary);animation:carregando-gira 1s linear infinite}
+.carregando-icone{font-size:40px;animation:carregando-pulsa 1.5s ease-in-out infinite}
+.carregando-barra{width:220px;max-width:70vw;height:6px;border-radius:99px;background:var(--menu-linha);overflow:hidden;margin-top:14px}
+.carregando-barra span{display:block;height:100%;width:0;background:var(--primary);border-radius:inherit;animation:carregando-enche 3s ease-in-out forwards}
+@keyframes carregando-gira{to{transform:rotate(360deg)}}
+@keyframes carregando-pulsa{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+@keyframes carregando-enche{to{width:100%}}
+@keyframes carregando-entra{from{opacity:0}}
+@media(prefers-reduced-motion:reduce){.carregando-anel,.carregando-icone{animation:none}}

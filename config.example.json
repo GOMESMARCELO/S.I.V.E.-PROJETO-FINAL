@@ -7,5 +7,11 @@
     "password": "sive123",
     "database": "sive",
     "charset": "utf8mb4"
+  },
+  "escola": {
+    "nome": "[Nome da escola]",
+    "encarregado_nome": "[Nome do encarregado de dados]",
+    "encarregado_email": "[e-mail do encarregado]",
+    "prazo_retencao": "[prazo definido pela escola]"
   }
 }
