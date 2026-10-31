@@ -11,11 +11,45 @@ PASSO A PASSO
      npm start
 4. Abra no navegador: http://localhost:3000
 
+BACKUP (FAÇA!)
+O servidor faz sozinho um backup por dia, CRIPTOGRAFADO (banco inteiro + pasta uploads/), na pasta backups/.
+Ficam os 14 mais recentes. Para mudar a pasta ou a quantidade, no config.json:
+    "backup": { "pasta": "D:\backups-sive", "manter": 30 }
+Para fazer um na hora:  npm run backup
+Para restaurar:
+    node backup.js --decifrar backups/<pasta>/sive.sql.enc      (gera o sive.sql)
+    mysql -u root -p sive < backups/<pasta>/sive.sql           (e copie a pasta uploads/ de volta)
+    depois APAGUE o sive.sql gerado (ele tem os dados em texto aberto).
+IMPORTANTE: guarde uma cópia do config.json em OUTRO lugar seguro, separada dos backups.
+Sem ele, os backups, os documentos e as assinaturas não abrem; com ele junto dos backups, quem pegar os dois lê tudo.
+O projeto está dentro do OneDrive: o ideal é movê-lo para uma pasta fora da nuvem (ex.: C:SIVE).
+Os logs de atividade com mais de 2 anos são apagados sozinhos (config.json: "retencao": { "logs_anos": 2 }).
+
+SEGURANÇA DO LOGIN
+- Senhas: pelo menos 8 caracteres, com letras e números. Quem entrar com senha fraca (ex.: 123456)
+  é obrigado a criar uma nova antes de usar o sistema.
+- Gestão: no primeiro login, configura a verificação em duas etapas (aplicativo autenticador no celular:
+  Google Authenticator, Microsoft Authenticator...). Perdeu o celular? Outra pessoa da gestão usa
+  "Zerar 2 etapas" em Usuários.
+- "Sair" encerra o login em todos os aparelhos. Trocar a senha encerra os outros aparelhos.
+- Só para DEMONSTRAÇÃO (nunca com dados reais), dá para desligar as duas regras no config.json:
+    "seguranca": { ..., "exigir_senha_forte": false, "exigir_2fa_gestao": false }
+- Publicação na internet: use HTTPS. Ou o sistema sobe direto em HTTPS com
+    "https": { "certificado": "caminho/cert.pem", "chave": "caminho/chave.pem" }
+  ou, atrás de um Nginx com HTTPS, use "seguranca": { ..., "atras_de_proxy": true }.
+
+BANCO JÁ EXISTENTE (atualização)
+Se o seu banco foi criado com uma versão anterior, rode database/migracao-atualizacao.sql
+(depois de um backup). Ele não apaga dados.
+
 LOGIN
-O sistema agora pede login. Três tipos de usuário, já cadastrados no banco:
+O sistema pede login. Três tipos de usuário, já cadastrados no banco (senhas de DEMONSTRAÇÃO: no primeiro login
+elas são consideradas fracas e o sistema pede uma senha nova; a gestão também configura as duas etapas):
   Administração -> usuário: mariana   senha: 123456   (vê tudo)
   Responsável   -> usuário: anapaula  senha: 123456   (vê só os dados do próprio filho)
   Professor(a)  -> usuário: patricia  senha: 123456   (vê só a própria turma)
+  Outros (senha 123456): claudia (mãe da Ana Clara), marcos (pai da Beatriz),
+  roberto (professor há 75 dias sem acessar) e fernanda (professora há 53 dias sem acessar).
 
 A administração cadastra novos usuários pela própria tela do sistema
 (menu "Usuários"). A senha é gerada automaticamente (6 dígitos) e marcada
@@ -107,7 +141,7 @@ SEGURANÇA E LGPD (versão atual)
 - O sistema roda em HTTP. Para uso real, coloque-o atrás de HTTPS.
 
 IMPORTAR ALUNOS POR PLANILHA
-- Em "Cadastrar Aluno" há o cartão "Importar vários alunos de uma planilha": baixe o modelo, preencha e envie (CSV ou Excel .xlsx).
+- Em "Cadastro de Aluno" há o cartão "Importar vários alunos de uma planilha": baixe o modelo, preencha e envie (CSV ou Excel .xlsx).
   O sistema mostra o que está pronto, com erro ou já cadastrado ANTES de gravar. Só Nome e Turma são obrigatórios.
 - Para ler arquivos do Excel (.xlsx) rode "npm install" de novo na pasta do projeto (dependência nova: read-excel-file)
   e reinicie o servidor. O CSV funciona mesmo sem isso.
@@ -118,3 +152,20 @@ PROTEÇÃO DA CRIANÇA (ECA)
   sigilosos (o responsável nunca vê). O sistema NÃO envia nada ao Conselho Tutelar: a gestão comunica pelo canal oficial
   e registra aqui a data e o protocolo.
 - A política de privacidade passou para a versão 1.1: todos precisam aceitar de novo no próximo acesso.
+
+FASE 4 — CALENDÁRIO, PERFIL DO RESPONSÁVEL E REATIVAÇÃO DE PROFESSORES
+- IMPORTANTE: rode o database/sive.sql de novo (ele apaga e recria o banco "sive"). Não precisa de npm install.
+- A política de privacidade passou para a versão 1.2: todos aceitam de novo no próximo acesso.
+- Menu "Calendário" (todos): eventos do mês. Gestão e professores criam eventos; marcando "banner", o evento
+  aparece no topo da Central do Dia, da Minha Turma e do Portal dos Pais.
+- Menu "Meu perfil" (responsável): telefones, e-mail e forma de contato preferida, últimos acessos e privacidade.
+- Professor com 60 dias sem acessar é suspenso sozinho. Ao tentar entrar, o pedido chega à gestão, que reativa
+  em "Usuários" (gera uma senha provisória nova). Teste com o usuário roberto.
+
+FASE 5 — CÂMERAS E RECONHECIMENTO FACIAL (SIMULADOS) E STATUS AO VIVO
+- Menu "Monitoramento" (gestão): câmeras simuladas, botão para ligar e desligar o reconhecimento facial,
+  "Simular passagem", "Simular chegada de quem falta", passagens de hoje e situação de cada aluno.
+- O reconhecimento só vale para turmas a partir do Pré e para alunos cujo responsável autorizou no termo.
+  Sem isso, a imagem é descartada e ninguém é identificado. O sistema não guarda fotos nem biometria.
+- Portal dos Pais: "Status agora" mostra se o filho entrou ou saiu, a que horas e por qual portão.
+- Roteiro de apresentação: veja o README.md, seção "Fase 5".
