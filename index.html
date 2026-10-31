@@ -5,46 +5,240 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#140040">
   <title>S.I.V.E. — Vigilância Escolar Inteligente</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/favicon.png">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <div id="tela-login">
-    <form id="form-login" class="card login-caixa">
-      <div class="logo" style="justify-content:center;margin-bottom:24px">
-        <span class="logo-icon">🛡️</span><div><b>S.I.V.E.</b><small>Vigilância Escolar</small></div>
+  <div id="tela-login" class="lp">
+    <!-- ===== Página de apresentação (vem antes do sistema). Os botões "Entrar" abrem a página de login (#entrar). ===== -->
+    <div id="lp-home">
+    <header class="lp-topo">
+      <div class="lp-faixa">
+        <a href="#inicio" class="lp-marca"><img src="assets/logo-sive.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar"></a>
+        <nav class="lp-nav" aria-label="Seções da página">
+          <a href="#o-que-faz">O que faz</a><a href="#para-quem">Para quem</a><a href="#seguranca">Segurança</a><a href="#perguntas">Perguntas</a>
+        </nav>
+        <a href="#entrar" class="lp-btn lp-btn-cheio">Entrar</a>
       </div>
-      <small>Usuário</small>
-      <input id="login-usuario" placeholder="mariana, anapaula ou patricia" autocomplete="username" required>
-      <small style="margin-top:12px">Senha</small>
-      <input id="login-senha" type="password" placeholder="••••••" autocomplete="current-password" required>
-      <p id="login-erro" class="pill danger oculto" style="margin-top:12px"></p>
-      <button class="btn" type="submit">Entrar</button>
-      <small style="margin-top:16px;text-align:center">Administração: <b>mariana</b> / 123456 &nbsp;•&nbsp; Responsável: <b>anapaula</b> / 123456 &nbsp;•&nbsp; Professora: <b>patricia</b> / 123456</small>
-      <button type="button" class="link-texto" id="link-privacidade">🔒 Política de privacidade e proteção de dados</button>
-    </form>
+    </header>
+
+    <div class="lp-progresso" id="lp-progresso" aria-hidden="true"></div>
+    <section class="lp-hero" id="inicio">
+      <span class="lp-bolha b1" aria-hidden="true"></span><span class="lp-bolha b2" aria-hidden="true"></span><span class="lp-bolha b3" aria-hidden="true"></span>
+      <div class="lp-faixa lp-hero-grade">
+        <div class="lp-hero-texto">
+          <p class="lp-selo"><span data-ico="escudoOk"></span> Vigilância escolar inteligente</p>
+          <h1>A escola inteira <span class="lp-troca" id="lp-troca">segura e conectada</span> em um só sistema</h1>
+          <p class="lp-sub">Frequência, portaria, ocorrências, comunicados e autorizações no mesmo lugar. Gestão, professores e famílias acessam a mesma informação, de qualquer lugar, pelo navegador.</p>
+          <ul class="lp-checks">
+            <li><span data-ico="confere"></span> Sem instalação: funciona no computador e no celular</li>
+            <li><span data-ico="confere"></span> Assinatura digital de ocorrências e autorizações</li>
+            <li><span data-ico="confere"></span> Feito de acordo com a LGPD e o ECA</li>
+          </ul>
+          <div class="lp-acoes"><a href="#o-que-faz" class="lp-btn lp-btn-cheio">Conhecer o sistema</a><a href="#entrar" class="lp-btn lp-btn-linha">Já tenho acesso</a></div>
+        </div>
+
+        <!-- Ilustração do login (não funciona aqui: o botão leva à página de login de verdade) e cartões do sistema em volta, sem cobrir -->
+        <div class="lp-vitrine">
+          <div class="lp-chip c1" aria-hidden="true"><span data-ico="confere"></span><div><b>Chamada feita</b><small>2º Ano B • 24 presentes</small></div></div>
+          <div class="lp-chip c2" aria-hidden="true"><span data-ico="olho"></span><div><b>Entrada às 07:32</b><small>Portão principal</small></div></div>
+          <div class="lp-mock">
+            <img src="assets/logo-sive.png" alt="" class="lp-mock-logo">
+            <b>Acesse o S.I.V.E.</b>
+            <small>Usuário</small><span class="lp-mock-campo"></span>
+            <small>Senha</small><span class="lp-mock-campo"></span>
+            <a href="#entrar" class="lp-mock-btn">Entrar</a>
+          </div>
+          <div class="lp-chip c3" aria-hidden="true"><span data-ico="caneta"></span><div><b>Ocorrência assinada</b><small>pela família e pela gestão</small></div></div>
+          <div class="lp-chip c4" aria-hidden="true"><span data-ico="megafone"></span><div><b>Comunicado lido</b><small>22 de 24 famílias</small></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="lp-ticker" aria-label="Recursos do sistema">
+      <div class="lp-ticker-trilho">
+        <span><i data-ico="presenca"></i> Chamada online</span><span><i data-ico="lupa"></i> Busca Ativa</span><span><i data-ico="olho"></i> Reconhecimento nos portões</span><span><i data-ico="prancheta"></i> Ocorrências assinadas</span><span><i data-ico="megafone"></i> Comunicados</span><span><i data-ico="caneta"></i> Autorizações digitais</span><span><i data-ico="familia"></i> Portal dos Pais</span><span><i data-ico="escudo"></i> Proteção da criança</span><span><i data-ico="cadeado"></i> LGPD</span>
+      </div>
+    </section>
+
+    <section class="lp-secao">
+      <div class="lp-faixa">
+        <p class="lp-sobretitulo">Agora, na sua escola</p>
+        <h2 class="lp-titulo">Cada pessoa vê o que precisa, no mesmo instante</h2>
+        <div class="lp-grade lp-g4">
+          <article class="lp-card lp-revela"><span class="lp-avatar">SE</span><b>Secretaria</b><p>Abre a Central do Dia e já sabe quem faltou, quais documentos chegaram e quais ocorrências esperam assinatura.</p></article>
+          <article class="lp-card lp-revela"><span class="lp-avatar">PR</span><b>Professora</b><p>Faz a chamada, registra uma ocorrência e assina com um clique. A família e a gestão recebem na hora.</p></article>
+          <article class="lp-card lp-revela"><span class="lp-avatar">PO</span><b>Portaria</b><p>Confere quem está autorizado a buscar o aluno e registra a entrada e a saída pelas câmeras dos portões.</p></article>
+          <article class="lp-card lp-revela"><span class="lp-avatar">FA</span><b>Família</b><p>Acompanha a frequência do filho, lê os comunicados e assina autorizações e ocorrências pelo celular.</p></article>
+        </div>
+        <p class="lp-nota-centro">Uma única base de dados, atualizada para todos ao mesmo tempo.</p>
+      </div>
+    </section>
+
+
+    <section class="lp-secao lp-azul" id="o-que-e">
+      <div class="lp-faixa lp-estreita">
+        <h2 class="lp-titulo">O que é o S.I.V.E.</h2>
+        <p class="lp-texto"><b>O S.I.V.E. (Sistema Inteligente de Vigilância Escolar) é um sistema online que reúne a rotina de segurança e de comunicação da escola em um só lugar.</b> Ele substitui cadernos de chamada, bilhetes na agenda, fichas de ocorrência em papel e listas de quem pode buscar cada aluno.</p>
+        <p class="lp-texto">Como tudo fica na mesma base, a informação não se perde entre a sala de aula, a secretaria e a casa do aluno: uma falta vira alerta de Busca Ativa, uma ocorrência chega à família para assinatura e a gestão acompanha tudo pela Central do Dia.</p>
+      </div>
+    </section>
+
+
+    <section class="lp-secao" id="o-que-faz">
+      <div class="lp-faixa">
+        <p class="lp-sobretitulo">O que o sistema faz</p>
+        <h2 class="lp-titulo">Tudo o que a rotina da escola pede</h2>
+        <div class="lp-grade lp-g3">
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="presenca"></span><b>Nenhuma falta passa despercebida</b><p>Chamada online, frequência por turma e Busca Ativa automática.</p><ul><li>Chamada pelo professor</li><li>Relatório mensal em PDF e planilha</li><li>Alerta de faltas seguidas</li></ul></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="olho"></span><b>Portões monitorados</b><p>Entrada e saída registradas pelas câmeras, só para quem a família autorizou.</p><ul><li>Reconhecimento facial nos portões</li><li>Quem está na escola agora</li><li>Liberação de saída pela portaria</li></ul></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="prancheta"></span><b>Ocorrências com assinatura</b><p>O professor registra, a família toma ciência e a gestão arquiva.</p><ul><li>Assinatura digital confirmada com senha</li><li>Código de verificação</li><li>Arquivo por mês</li></ul></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="megafone"></span><b>Comunicação que chega</b><p>Comunicados com confirmação de leitura e autorizações digitais.</p><ul><li>Comunicados por turma</li><li>Autorizações assinadas pelo celular</li><li>Calendário e banners de eventos</li></ul></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="familia"></span><b>Portal dos Pais</b><p>A família acompanha o filho de qualquer lugar.</p><ul><li>Frequência, entradas e saídas</li><li>Documentos e pendências</li><li>Aviso de ocorrências novas</li></ul></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="escudo"></span><b>Proteção da criança</b><p>Casos sensíveis tratados com sigilo, como pede o ECA.</p><ul><li>Registro sigiloso de casos</li><li>Comunicação ao Conselho Tutelar</li><li>Histórico protegido</li></ul></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="lp-secao lp-azul" id="para-quem">
+      <div class="lp-faixa">
+        <p class="lp-sobretitulo">Para quem</p>
+        <h2 class="lp-titulo">Um sistema, três jeitos de usar</h2>
+        <div class="lp-grade lp-g3">
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="casa"></span><b>Gestão e secretaria</b><p>Central do Dia com indicadores, cadastro de alunos, documentos, usuários e logs de auditoria.</p></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="livro"></span><b>Professores</b><p>Minha Turma com chamada e contatos, comunicados, ocorrências e calendário da turma.</p></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="pessoa"></span><b>Responsáveis</b><p>Portal dos Pais com a vida escolar do filho, assinaturas e consentimentos.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="lp-secao" id="seguranca">
+      <div class="lp-faixa lp-estreita">
+        <h2 class="lp-titulo">Segurança e privacidade desde o início</h2>
+        <p class="lp-texto">Dados de crianças pedem cuidado redobrado. No S.I.V.E., cada perfil vê só o que precisa, os documentos ficam criptografados, cada acesso fica registrado e o reconhecimento facial só funciona com o consentimento do responsável, que pode revogá-lo a qualquer momento (LGPD, arts. 11 e 14).</p>
+        <div class="lp-grade lp-g3 lp-selos">
+          <div><span data-ico="cadeado"></span> Arquivos criptografados</div>
+          <div><span data-ico="atividade"></span> Registro de cada acesso</div>
+          <div><span data-ico="termo"></span> Consentimento dos responsáveis</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="lp-secao lp-suave" id="perguntas">
+      <div class="lp-faixa">
+        <h2 class="lp-titulo">Perguntas frequentes</h2>
+        <div class="lp-faq-grade">
+        <details class="lp-faq"><summary>Preciso instalar alguma coisa?</summary><p>Não. O S.I.V.E. funciona no navegador do computador ou do celular. Basta entrar com o usuário e a senha fornecidos pela escola.</p></details>
+        <details class="lp-faq"><summary>Quem pode acessar o sistema?</summary><p>A gestão da escola, os professores (cada um vê a própria turma) e os responsáveis (cada um vê o próprio filho).</p></details>
+        <details class="lp-faq"><summary>Como funciona a assinatura digital?</summary><p>Quem assina confirma com a própria senha do sistema. O S.I.V.E. guarda a data, a hora, uma impressão digital (SHA-256) do texto assinado e um selo criptográfico. Cada assinatura tem um código e um QR code: qualquer pessoa confere a autenticidade em "Verificar assinatura", e qualquer alteração feita depois é detectada.</p></details>
+        <details class="lp-faq"><summary>O reconhecimento facial é obrigatório?</summary><p>Não. Ele só funciona para alunos cujo responsável autorizou no Termo de Consentimento, só nos portões e sem guardar fotos. O responsável pode revogar quando quiser.</p></details>
+        <details class="lp-faq"><summary>Os dados dos alunos estão seguros?</summary><p>Sim. O acesso é separado por perfil, os documentos ficam criptografados e cada acesso fica registrado, como pede a LGPD.</p></details>
+        <details class="lp-faq"><summary>Esqueci minha senha. E agora?</summary><p>Procure a secretaria da escola: a gestão gera uma senha provisória, e você cria uma nova no primeiro acesso.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="lp-chamada">
+      <div class="lp-faixa lp-estreita">
+        <h2>Pronto para começar o dia com tudo sob controle?</h2>
+        <p>Entre com o seu usuário e acompanhe a escola em tempo real.</p>
+        <a href="#entrar" class="lp-btn lp-btn-claro">Acessar o S.I.V.E.</a>
+      </div>
+    </section>
+
+    <footer class="lp-rodape">
+      <div class="lp-faixa lp-rodape-grade">
+        <div><img src="assets/logo-sive-branco.png" alt="S.I.V.E." class="lp-rodape-logo"><p>Vigilância escolar inteligente: segurança, presença e comunicação em um só lugar.</p></div>
+        <div><b>Navegue</b><a href="#o-que-faz">O que faz</a><a href="#para-quem">Para quem</a><a href="#seguranca">Segurança</a><a href="#perguntas">Perguntas frequentes</a></div>
+        <div><b>Acesso</b><a href="#entrar">Entrar no sistema</a><a href="#verificar">Verificar assinatura</a><a href="#seguranca">Privacidade e LGPD</a></div>
+      </div>
+      <p class="lp-copy">© <span id="lp-ano"></span> S.I.V.E. — Sistema Inteligente de Vigilância Escolar</p>
+    </footer>
+    <a href="#inicio" class="lp-topo-btn" id="lp-topo-btn" aria-label="Voltar ao topo"><span data-ico="setaCima"></span></a>
+    </div>
+
+    <!-- ===== Página de login: só o usuário e a senha ===== -->
+    <div id="lp-entrar" class="lp-entrar oculto">
+      <span class="lp-bolha b1" aria-hidden="true"></span><span class="lp-bolha b2" aria-hidden="true"></span>
+      <div class="lp-entrar-caixa">
+        <a href="#inicio" class="lp-voltar">&larr; Voltar para o site</a>
+        <form id="form-login" class="card login-caixa">
+          <img class="lp-entrar-logo" src="assets/logo-sive.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar">
+          <b class="lp-login-titulo">Acesse o S.I.V.E.</b>
+          <small style="margin-bottom:14px">Gestão, professores e responsáveis entram por aqui.</small>
+          <small>Usuário</small>
+          <input id="login-usuario" autocomplete="username" required>
+          <small style="margin-top:12px">Senha</small>
+          <input id="login-senha" type="password" autocomplete="current-password" required>
+          <div id="login-2fa" class="oculto" style="margin-top:12px"><small>Código do aplicativo autenticador (6 números)</small>
+            <input id="login-codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}"></div>
+          <p id="login-erro" class="pill danger oculto" style="margin-top:12px"></p>
+          <button class="btn" type="submit">Entrar</button>
+          <button type="button" class="link-texto" id="link-privacidade"><span data-ico="cadeado"></span> Política de privacidade e proteção de dados</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===== Verificar assinatura (pública, sem login): é o que o QR code dos comprovantes abre ===== -->
+    <div id="lp-verificar" class="lp-entrar oculto">
+      <span class="lp-bolha b1" aria-hidden="true"></span><span class="lp-bolha b2" aria-hidden="true"></span>
+      <div class="lp-entrar-caixa" style="max-width:520px">
+        <a href="/" class="lp-voltar">&larr; Voltar para o site</a>
+        <div class="card login-caixa">
+          <img class="lp-entrar-logo" src="assets/logo-sive.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar">
+          <b class="lp-login-titulo">Verificar assinatura</b>
+          <small style="margin-bottom:14px">Digite o código de verificação que aparece no documento ou no comprovante, ou leia o QR code.</small>
+          <form id="form-verificar" class="linha" style="gap:8px">
+            <input id="ver-codigo" maxlength="20" required placeholder="Ex.: 3F9A0C7E12B45D68" autocomplete="off" spellcheck="false" style="text-transform:uppercase;letter-spacing:1px">
+            <button class="btn" type="submit" style="width:auto;margin-top:0;padding:10px 18px">Verificar</button>
+          </form>
+          <div id="ver-resultado" aria-live="polite"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="tela-senha" class="oculto">
     <form id="form-senha" class="card login-caixa">
       <div class="logo" style="justify-content:center;margin-bottom:24px">
-        <span class="logo-icon">🔑</span><div><b>Trocar senha</b><small id="senha-subtitulo"></small></div>
+        <span class="logo-icon" data-ico="chave"></span><div><b>Trocar senha</b><small id="senha-subtitulo"></small></div>
       </div>
       <small>Senha atual</small>
       <input id="senha-atual" type="password" required>
       <small style="margin-top:12px">Nova senha</small>
-      <input id="senha-nova" type="password" required minlength="4">
+      <input id="senha-nova" type="password" required minlength="8" maxlength="128" autocomplete="new-password">
+      <small style="margin-top:4px">Pelo menos 8 caracteres, com letras e números. Não use o seu usuário nem sequências como 12345678.</small>
       <small style="margin-top:12px">Confirmar nova senha</small>
-      <input id="senha-confirmar" type="password" required minlength="4">
+      <input id="senha-confirmar" type="password" required minlength="8" maxlength="128" autocomplete="new-password">
       <p id="senha-erro" class="pill danger oculto" style="margin-top:12px"></p>
       <button class="btn" type="submit">Salvar nova senha</button>
       <button class="btn outline oculto" id="senha-cancelar" type="button" style="margin-top:8px">Cancelar</button>
     </form>
   </div>
 
+  <!-- Verificação em duas etapas: a gestão configura o aplicativo autenticador no primeiro acesso -->
+  <div id="tela-2fa" class="oculto">
+    <section class="card login-caixa" style="max-width:440px">
+      <div class="logo" style="justify-content:center;margin-bottom:16px">
+        <span class="logo-icon" data-ico="escudoOk"></span><div><b>Verificação em duas etapas</b><small>Proteção extra para a conta da gestão</small></div>
+      </div>
+      <small>1. Instale no celular um aplicativo autenticador (Google Authenticator, Microsoft Authenticator ou outro).</small>
+      <small style="margin-top:6px">2. No aplicativo, toque em "adicionar" e leia o QR code abaixo.</small>
+      <div id="dois-qr" style="width:200px;margin:12px auto;background:#fff;padding:6px;border-radius:8px"></div>
+      <small style="text-align:center">Sem câmera? Digite a chave: <b id="dois-segredo" style="word-break:break-all"></b></small>
+      <small style="margin-top:12px">3. Digite o código de 6 números que aparece no aplicativo.</small>
+      <input id="dois-codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+      <p id="dois-erro" class="pill danger oculto" style="margin-top:12px;white-space:normal"></p>
+      <button class="btn" type="button" id="dois-ativar">Ativar e continuar</button>
+      <button class="btn outline" type="button" id="dois-sair" style="margin-top:8px">Sair</button>
+    </section>
+  </div>
+
   <div id="tela-termo" class="oculto">
     <section class="card termo-caixa">
       <div class="logo" style="margin-bottom:12px">
-        <span class="logo-icon">🔒</span><div><b>Privacidade e proteção de dados</b><small id="termo-versao"></small></div>
+        <span class="logo-icon" data-ico="cadeado"></span><div><b>Privacidade e proteção de dados</b><small id="termo-versao"></small></div>
       </div>
       <p id="termo-aviso" class="pill info oculto" style="margin-bottom:12px;white-space:normal"></p>
       <div id="termo-texto" class="termo-texto"></div>
@@ -61,7 +255,7 @@
   <div id="tela-consent" class="oculto">
     <section class="card termo-caixa">
       <div class="logo" style="margin-bottom:12px">
-        <span class="logo-icon">📝</span><div><b>Termo de consentimento</b><small id="cons-versao"></small></div>
+        <span class="logo-icon" data-ico="termo"></span><div><b>Termo de consentimento</b><small id="cons-versao"></small></div>
       </div>
       <p id="cons-aviso" class="pill info" style="margin-bottom:12px;white-space:normal"></p>
       <div id="cons-texto" class="termo-texto"></div>
@@ -80,29 +274,29 @@
   </div>
 
   <div id="tela-carregando" class="oculto" role="status" aria-live="polite">
-    <div class="carregando-logo"><span class="carregando-anel"></span><span class="carregando-icone">🛡️</span></div>
-    <b>S.I.V.E.</b>
+    <span class="carregando-logo"><img class="logo-img" src="assets/logo-sive-branco.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar"></span>
     <small id="carregando-texto">Entrando...</small>
     <div class="carregando-barra"><span></span></div>
   </div>
 
   <div id="app" class="oculto">
     <aside id="menu">
-      <div class="logo"><span class="logo-icon">🛡️</span><div><b>S.I.V.E.</b><small>Vigilância Escolar</small></div></div>
+      <div class="logo"><img class="logo-img" src="assets/logo-sive-branco.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar"></div>
       <nav id="nav"></nav>
       <div class="user">
         <span class="avatar" id="user-iniciais"></span>
         <div><b id="user-nome"></b><small id="user-papel"></small></div>
-        <button id="btn-privacidade" title="Política de privacidade" aria-label="Política de privacidade" style="margin-left:auto;font-size:16px">🔒</button>
-        <button id="btn-trocar-senha" title="Trocar senha" aria-label="Trocar senha" style="font-size:16px">🔑</button>
-        <button id="btn-sair" title="Sair" aria-label="Sair" style="font-size:18px">🚪</button>
+        <button id="btn-privacidade" title="Política de privacidade" aria-label="Política de privacidade" class="botao-icone" data-ico="cadeado" style="margin-left:auto"></button>
+        <button id="btn-trocar-senha" title="Trocar senha" aria-label="Trocar senha" class="botao-icone" data-ico="chave"></button>
+        <button id="btn-sair" title="Sair" aria-label="Sair" class="botao-icone" data-ico="sair"></button>
       </div>
     </aside>
     <div id="overlay"></div>
     <div class="conteudo">
       <header>
-        <button id="btn-menu" aria-label="Abrir menu">☰</button>
+        <button id="btn-menu" aria-label="Abrir menu" data-ico="menu"></button>
         <div><h1 id="titulo"></h1><small id="data-hora"></small></div>
+        <select id="seletor-contexto" class="oculto seletor-contexto"></select>
         <span class="pill success">● Sistema operacional</span>
       </header>
       <main id="tela"></main>

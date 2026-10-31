@@ -13,5 +13,18 @@
     "encarregado_nome": "[Nome do encarregado de dados]",
     "encarregado_email": "[e-mail do encarregado]",
     "prazo_retencao": "[prazo definido pela escola]"
+  },
+  "seguranca": {
+    "exigir_senha_forte": true,
+    "exigir_2fa_gestao": true,
+    "atras_de_proxy": false,
+    "token_horas": 8
+  },
+  "backup": {
+    "pasta": "backups",
+    "manter": 14
+  },
+  "retencao": {
+    "logs_anos": 2
   }
 }

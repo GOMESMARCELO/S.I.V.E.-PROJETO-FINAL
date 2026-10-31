@@ -6,6 +6,8 @@ const path = require("path");
 const crypto = require("crypto");
 const util = require("util");
 const importador = require("./importar-alunos");
+const backup = require("./backup");
+const QRCode = require("qrcode");
 const config = require("./config.json");
 
 // ---------- Chaves de segurança, geradas sozinhas na primeira execução ----------
@@ -16,6 +18,13 @@ let gerouChaves = false;
 for (const nome of ["chave_arquivos", "segredo_token"]) {
   if (!/^[0-9a-f]{64}$/.test(config.seguranca[nome] || "")) { config.seguranca[nome] = crypto.randomBytes(32).toString("hex"); gerouChaves = true; }
 }
+// Par de chaves da assinatura digital (Ed25519). A privada assina; a pública confere. Trocar a chave invalida as assinaturas antigas.
+if (!config.seguranca.assinatura_privada || !config.seguranca.assinatura_publica) {
+  const par = crypto.generateKeyPairSync("ed25519");
+  config.seguranca.assinatura_privada = par.privateKey.export({ type: "pkcs8", format: "der" }).toString("base64");
+  config.seguranca.assinatura_publica = par.publicKey.export({ type: "spki", format: "der" }).toString("base64");
+  gerouChaves = true;
+}
 if (gerouChaves) {
   fs.writeFileSync(path.join(__dirname, "config.json"), JSON.stringify(config, null, 2) + "\n");
   console.log("🔐 Chaves de segurança criadas no config.json. Faça backup desse arquivo junto com a pasta uploads/.");
@@ -24,12 +33,21 @@ if (gerouChaves) {
 const app = express();
 const db = mysql.createPool(config.banco);
 
+// Opções de segurança (config.json → "seguranca"). Padrão: senha forte e duas etapas para a gestão ligadas.
+//   exigir_senha_forte: false  → volta a aceitar senhas curtas (só para demonstração)
+//   exigir_2fa_gestao: false   → a gestão não precisa da verificação em duas etapas
+//   atras_de_proxy: true       → publicado atrás de Nginx/servidor intermediário: usa o IP real de quem acessa
+const SEG = { senhaForte: config.seguranca.exigir_senha_forte !== false, doisFatoresGestao: config.seguranca.exigir_2fa_gestao !== false };
+if (config.seguranca.atras_de_proxy === true) app.set("trust proxy", 1);
+
 // Cabeçalhos de segurança em todas as respostas (a API nunca fica em cache do navegador)
 app.disable("x-powered-by");
 app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (req.secure) res.setHeader("Strict-Transport-Security", "max-age=31536000"); // só com HTTPS: o navegador passa a recusar HTTP
   res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
   if (req.path.startsWith("/api")) res.setHeader("Cache-Control", "no-store");
   next();
@@ -55,16 +73,49 @@ const SISTEMA = { id: null, nome: "Sistema", papel: "sistema" };
 // Envolve as rotas para tratar erros em um só lugar
 const rota = (fn) => async (req, res) => {
   try { await fn(req, res); }
-  catch (erro) { console.error(erro.message); res.status(500).json({ erro: "Erro no servidor: " + erro.message }); }
+  catch (erro) {
+    const id = crypto.randomBytes(4).toString("hex");
+    console.error(`[erro ${id}] ${req.method} ${req.path}:`, erro.message); // detalhes só no terminal do servidor
+    res.status(500).json({ erro: `Erro interno do servidor (código ${id}). Tente de novo; se continuar, avise a gestão.` });
+  }
 };
 
-// Grava uma linha no log de atividades (quem fez o quê, e quando)
-async function registrarLog(usuario, acao, detalhe) {
-  await db.query("INSERT INTO logs (usu_id, log_nome_usuario, log_papel, log_acao, log_detalhe) VALUES (?, ?, ?, ?, ?)",
-    [usuario ? usuario.id : null, usuario ? usuario.nome : "Desconhecido", usuario ? usuario.papel : "-", acao, detalhe || null]);
+// Grava uma linha no log de atividades (quem fez o quê, e quando).
+// Corrente de hashes: cada linha guarda SHA-256(hash da linha anterior + dados da linha). Apagar ou alterar um log no meio quebra a corrente.
+// A fila garante a ordem quando várias ações chegam ao mesmo tempo.
+const dataHoraLocal = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
+const hashLog = (anterior, l) => crypto.createHash("sha256").update([anterior || "", l.usu_id ?? "", l.nome, l.papel, l.acao, l.detalhe ?? "", l.em].join("|")).digest("hex");
+let filaLog = Promise.resolve();
+function registrarLog(usuario, acao, detalhe) {
+  const tarefa = filaLog.then(async () => {
+    const [[ultimo]] = await db.query("SELECT log_hash AS h FROM logs WHERE log_hash IS NOT NULL ORDER BY log_id DESC LIMIT 1");
+    const l = { usu_id: usuario ? usuario.id : null, nome: usuario ? usuario.nome : "Desconhecido", papel: usuario ? usuario.papel : "-", acao, detalhe: detalhe || null, em: dataHoraLocal() };
+    await db.query("INSERT INTO logs (usu_id, log_nome_usuario, log_papel, log_acao, log_detalhe, log_data_hora, log_hash) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [l.usu_id, l.nome, l.papel, l.acao, l.detalhe, l.em, hashLog(ultimo && ultimo.h, l)]);
+  });
+  filaLog = tarefa.catch(() => {});
+  return tarefa;
 }
 // Gera uma senha genérica simples, de 6 dígitos, para o admin entregar ao usuário novo
-const gerarSenhaGenerica = () => String(Math.floor(100000 + Math.random() * 900000));
+// Senha provisória: 10 caracteres, gerador criptográfico, sem letras parecidas (0/O, 1/l/I). Sempre tem letra e número.
+const ALFABETO_SENHA = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+function gerarSenhaGenerica() {
+  let s = "";
+  while (!/\d/.test(s) || !/[A-Za-z]/.test(s)) s = Array.from({ length: 10 }, () => ALFABETO_SENHA[crypto.randomInt(ALFABETO_SENHA.length)]).join("");
+  return s;
+}
+// 5) Regras de senha. Devolve o problema (texto) ou null se a senha serve.
+const SENHAS_OBVIAS = new Set(["12345678", "123456789", "1234567890", "87654321", "senha123", "senha1234", "password1", "abc12345", "qwerty123", "escola123"]);
+function problemaNaSenha(senha, login) {
+  if (typeof senha !== "string") return "Informe a senha";
+  if (!SEG.senhaForte) return senha.length >= 4 ? null : "A senha precisa ter pelo menos 4 caracteres";
+  if (senha.length < 8) return "A senha precisa ter pelo menos 8 caracteres";
+  if (senha.length > 128) return "A senha pode ter no máximo 128 caracteres";
+  if (!/\p{L}/u.test(senha) || !/\d/.test(senha)) return "Use letras e números na senha";
+  if (login && senha.toLowerCase().includes(String(login).toLowerCase())) return "A senha não pode conter o seu usuário";
+  if (SENHAS_OBVIAS.has(senha.toLowerCase()) || /^(.)\1+$/.test(senha)) return "Essa senha é fácil demais de adivinhar";
+  return null;
+}
 const dataValida = (t) => /^\d{4}-\d{2}-\d{2}$/.test(t || "");
 
 // ---------- Senhas: guardadas com hash (scrypt), nunca em texto puro ----------
@@ -90,7 +141,8 @@ const SEGREDO_TOKEN = config.seguranca.segredo_token;
 const TOKEN_HORAS = Number(config.seguranca.token_horas) || 8;
 const assinar = (corpo) => crypto.createHmac("sha256", SEGREDO_TOKEN).update(corpo).digest("base64url");
 const gerarToken = (usuario) => {
-  const corpo = Buffer.from(JSON.stringify({ id: usuario.id, exp: Date.now() + TOKEN_HORAS * 3600 * 1000 })).toString("base64url");
+  // v = versão da sessão do usuário: "Sair", trocar a senha ou ser desativado sobe a versão e derruba todos os logins antigos
+  const corpo = Buffer.from(JSON.stringify({ id: usuario.id, v: usuario.sessao || 0, exp: Date.now() + TOKEN_HORAS * 3600 * 1000 })).toString("base64url");
   return corpo + "." + assinar(corpo);
 };
 function lerToken(token) { // lança erro se a assinatura for falsa ou se a sessão expirou
@@ -103,20 +155,56 @@ function lerToken(token) { // lança erro se a assinatura for falsa ou se a sess
   return dados;
 }
 
-// Bloqueio temporário: 5 erros seguidos de senha bloqueiam aquele usuário (naquele computador) por 5 minutos
-const tentativas = new Map(), MAX_TENTATIVAS = 5, BLOQUEIO_MS = 5 * 60 * 1000;
+// Bloqueio temporário por erros de senha, em três níveis:
+//   par (computador + usuário): 5 erros → 5 min | conta (de qualquer lugar): 10 erros → 15 min | ip (vários usuários): 30 erros → 15 min
+// Assim, quem testa senhas de muitos usuários a partir de um computador, ou de uma conta a partir de vários, também é barrado.
+const tentativas = new Map();
+const LIMITES_TENTATIVA = { par: { max: 5, ms: 5 * 60 * 1000 }, conta: { max: 10, ms: 15 * 60 * 1000 }, ip: { max: 30, ms: 15 * 60 * 1000 } };
 function minutosBloqueado(chave) {
   const t = tentativas.get(chave);
   if (!t || !t.ate) return 0;
   if (t.ate <= Date.now()) { tentativas.delete(chave); return 0; }
   return Math.ceil((t.ate - Date.now()) / 60000);
 }
-function registrarFalha(chave) {
-  const t = tentativas.get(chave) || { n: 0 };
-  t.n++;
-  if (t.n >= MAX_TENTATIVAS) { t.ate = Date.now() + BLOQUEIO_MS; t.n = 0; }
+function registrarFalha(chave, nivel = "par") {
+  const lim = LIMITES_TENTATIVA[nivel], t = tentativas.get(chave) || { n: 0 };
+  t.n++; t.ultima = Date.now();
+  if (t.n >= lim.max) { t.ate = Date.now() + lim.ms; t.n = 0; }
   tentativas.set(chave, t);
 }
+// Limpa a lista a cada 10 minutos (não cresce sem fim, mesmo com milhares de tentativas com usuários inventados)
+setInterval(() => {
+  const agora = Date.now();
+  for (const [k, t] of tentativas) if ((t.ate && t.ate <= agora) || (!t.ate && agora - (t.ultima || 0) > 60 * 60 * 1000)) tentativas.delete(k);
+}, 10 * 60 * 1000).unref();
+// 11) Limite de pedidos por minuto por computador nas rotas abertas (login e verificação de assinatura)
+const contagemMinuto = new Map();
+const limitePorMinuto = (nome, max) => (req, res, next) => {
+  const chave = `${nome}|${req.ip}`, agora = Date.now(), c = contagemMinuto.get(chave);
+  if (!c || agora - c.inicio > 60000) { contagemMinuto.set(chave, { inicio: agora, n: 1 }); return next(); }
+  if (++c.n > max) return res.status(429).json({ erro: "Muitos pedidos em pouco tempo. Aguarde um minuto e tente de novo." });
+  next();
+};
+setInterval(() => { const agora = Date.now(); for (const [k, c] of contagemMinuto) if (agora - c.inicio > 60000) contagemMinuto.delete(k); }, 60 * 1000).unref();
+
+// ---------- Verificação em duas etapas (aplicativo autenticador: Google Authenticator, Microsoft Authenticator...) ----------
+// Padrão TOTP (RFC 6238): código de 6 números que muda a cada 30 segundos. O segredo fica no banco criptografado (AES-256-GCM).
+const BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const paraBase32 = (buf) => { let bits = "", s = ""; for (const b of buf) bits += b.toString(2).padStart(8, "0"); for (let i = 0; i < bits.length; i += 5) s += BASE32[parseInt(bits.slice(i, i + 5).padEnd(5, "0"), 2)]; return s; };
+const deBase32 = (txt) => { let bits = ""; for (const c of txt.replace(/=+$/, "")) bits += BASE32.indexOf(c).toString(2).padStart(5, "0"); const out = []; for (let i = 0; i + 8 <= bits.length; i += 8) out.push(parseInt(bits.slice(i, i + 8), 2)); return Buffer.from(out); };
+function codigoTotp(segredo, passo) {
+  const msg = Buffer.alloc(8); msg.writeBigUInt64BE(BigInt(passo));
+  const h = crypto.createHmac("sha1", segredo).update(msg).digest(), o = h[h.length - 1] & 15;
+  return String((h.readUInt32BE(o) & 0x7fffffff) % 1000000).padStart(6, "0");
+}
+function totpConfere(segredoBase32, codigo) {
+  const c = String(codigo || "").replace(/\D/g, "");
+  if (c.length !== 6) return false;
+  const segredo = deBase32(segredoBase32), passo = Math.floor(Date.now() / 30000);
+  return [-1, 0, 1].some((d) => crypto.timingSafeEqual(Buffer.from(codigoTotp(segredo, passo + d)), Buffer.from(c))); // tolera 30 s de diferença no relógio
+}
+const guardarSegredo2fa = (usuId, base32) => cifrarArquivo(Buffer.from(base32), `2fa|${usuId}`).toString("base64");
+const lerSegredo2fa = (usuId, guardado) => decifrarArquivo(Buffer.from(guardado, "base64"), `2fa|${usuId}`).toString();
 
 // ---------- Arquivos: criptografia AES-256-GCM em repouso ----------
 // Formato no disco: "SIVE1" + IV (12 bytes) + selo de autenticação (16 bytes) + conteúdo criptografado.
@@ -156,14 +244,15 @@ const escola = Object.assign({
   encarregado_email: "[e-mail do encarregado]", prazo_retencao: "[prazo definido pela escola]",
 }, config.escola || {});
 const POLITICA = {
-  versao: "1.1", atualizada_em: "15/10/2026",
+  versao: "1.2", atualizada_em: "26/10/2026",
   secoes: [
     { titulo: "1. Quem cuida dos seus dados", paragrafos: [`O controlador dos dados é ${escola.nome}.`,
       `Encarregado pelo tratamento de dados pessoais (art. 41 da LGPD): ${escola.encarregado_nome} — ${escola.encarregado_email}.`] },
     { titulo: "2. Quais dados são tratados", itens: [
       "Do aluno: nome, turma, matrícula, frequência, ocorrências, pendências e documentos anexados (que podem incluir dados de saúde e de identificação).",
-      "Do responsável: nome, telefone, foto, usuário de acesso e senha (guardada de forma protegida).",
-      "De quem usa o sistema: registros de acesso e das ações realizadas (quem fez o quê e quando)."] },
+      "Do responsável: nome, telefones, e-mail, forma de contato preferida, foto, usuário de acesso e senha (guardada de forma protegida).",
+      "De quem usa o sistema: registros de acesso e das ações realizadas (quem fez o quê e quando).",
+      "Entradas e saídas do aluno na escola (horário, portão e se foi pela portaria ou pelo reconhecimento facial)."] },
     { titulo: "3. Para que usamos", paragrafos: ["Gestão escolar, acompanhamento da frequência (incluindo a Busca Ativa de alunos com muitas faltas), comunicação com as famílias, autorizações e segurança dos alunos. Os dados não são usados para publicidade e este sistema não os compartilha com terceiros."] },
     { titulo: "4. Dados de crianças e adolescentes", paragrafos: [
       "O tratamento é feito no melhor interesse da criança e do adolescente (art. 14 da LGPD).",
@@ -182,8 +271,10 @@ const POLITICA = {
       "Cada perfil acessa só o que precisa: a gestão vê todos os alunos, o professor vê a sua turma e o responsável vê apenas o seu filho.",
       "Envios, downloads e exclusões de documentos ficam registrados (quem, o quê e quando), inclusive as tentativas de acesso negadas.",
       "As senhas são guardadas com hash, o login é assinado e expira, e há bloqueio temporário após várias tentativas erradas.",
-      "O sistema confere o formato e o tamanho dos arquivos enviados (PDF, PNG, JPG, DOC e DOCX, até 5 MB)."] },
-    { titulo: "7. Por quanto tempo guardamos", paragrafos: [`Os dados ficam guardados enquanto o aluno estiver matriculado e, depois, pelo prazo exigido pela legislação ou definido pela escola: ${escola.prazo_retencao}. A gestão pode excluir documentos que não forem mais necessários.`] },
+      "O sistema confere o formato e o tamanho dos arquivos enviados (PDF, PNG, JPG, DOC e DOCX, até 5 MB).",
+      "Reconhecimento facial: só funciona se a escola ativar, só para turmas a partir do Pré e só para alunos cujo responsável autorizou no Termo de Consentimento. Sem essa autorização, a câmera não identifica o aluno e a imagem é descartada. O sistema não guarda fotos nem dados biométricos, apenas o horário e o portão da passagem.",
+      "Câmeras só ficam em áreas comuns. As imagens das câmeras não aparecem para os responsáveis."] },
+    { titulo: "7. Por quanto tempo guardamos", paragrafos: [`Os dados ficam guardados enquanto o aluno estiver matriculado e, depois, pelo prazo exigido pela legislação ou definido pela escola: ${escola.prazo_retencao}. A gestão pode excluir documentos que não forem mais necessários. Os registros de passagem pelas câmeras são apagados automaticamente depois de 90 dias.`] },
     { titulo: "8. Seus direitos (art. 18 da LGPD)", paragrafos: [
       "Você pode pedir: confirmação de que tratamos seus dados, acesso, correção, anonimização, bloqueio ou eliminação de dados desnecessários, portabilidade, informação sobre compartilhamento e revogação do consentimento.",
       "Para acessar os dados do aluno, use o botão \"Baixar os dados do aluno\" na ficha dele. Os demais pedidos devem ser feitos ao encarregado, pelo contato do item 1."] },
@@ -194,63 +285,158 @@ const POLITICA = {
 
 app.get("/api/privacidade", (req, res) => res.json(POLITICA)); // pública: a política pode ser lida antes do login
 
-app.post("/api/login", rota(async (req, res) => {
-  const { usuario, senha } = req.body;
-  const chave = `${req.ip}|${String(usuario || "").toLowerCase()}`;
-  const minutos = minutosBloqueado(chave);
+app.post("/api/login", limitePorMinuto("login", 30), rota(async (req, res) => {
+  const { usuario, senha, codigo } = req.body;
+  const login = String(usuario || "").toLowerCase();
+  const chave = `par|${req.ip}|${login}`, chaveConta = `conta|${login}`, chaveIp = `ip|${req.ip}`;
+  const minutos = Math.max(minutosBloqueado(chave), minutosBloqueado(chaveConta), minutosBloqueado(chaveIp));
   if (minutos) {
     await registrarLog(null, "login_bloqueado", `Usuário "${usuario}" bloqueado por tentativas erradas`);
     return res.status(429).json({ erro: `Muitas tentativas erradas. Tente de novo em ${minutos} minuto(s).` });
   }
-  const [linhas] = await db.query("SELECT usu_id AS id, usu_papel AS papel, alu_id AS aluno_id, usu_sala AS sala, usu_nome AS nome, usu_senha_temporaria AS senha_temporaria, usu_senha AS senha, usu_aceite_versao AS aceite_versao FROM usuarios WHERE usu_usuario = ? AND usu_ativo = TRUE", [String(usuario || "")]);
+  await verificarInatividade(); // confere os 60 dias antes de deixar entrar
+  const [linhas] = await db.query("SELECT usu_id AS id, usu_papel AS papel, alu_id AS aluno_id, usu_sala AS sala, usu_nome AS nome, usu_senha_temporaria AS senha_temporaria, usu_senha AS senha, usu_aceite_versao AS aceite_versao, usu_ativo AS ativo, usu_inativado_motivo AS motivo, res_id AS res_id, usu_sessao_versao AS sessao, usu_2fa_ativo AS dois_ativo, usu_2fa_segredo AS dois_segredo FROM usuarios WHERE usu_usuario = ?", [String(usuario || "")]);
   const u = linhas[0];
   const senhaOk = await conferirSenha(senha, u ? u.senha : HASH_FALSO);
-  if (!u || !senhaOk) {
-    registrarFalha(chave);
+  if (u && senhaOk && !u.ativo && u.motivo === "inatividade") { // senha certa, mas o acesso foi suspenso por 60 dias sem uso
+    tentativas.delete(chave);
+    const [r] = await db.query("UPDATE usuarios SET usu_reativacao_pedida_em = NOW() WHERE usu_id = ? AND usu_reativacao_pedida_em IS NULL", [u.id]);
+    if (r.affectedRows) await registrarLog(u, "reativacao_solicitada", `${u.nome} (${u.sala || "-"})`);
+    return res.status(403).json({ codigo: "INATIVO_POR_INATIVIDADE", erro: `Seu acesso foi suspenso porque ficou mais de ${INATIVIDADE.dias} dias sem entrar no sistema. Já avisamos a gestão da escola: assim que ela reativar, você recebe uma senha provisória nova.` });
+  }
+  if (!u || !senhaOk || !u.ativo) {
+    registrarFalha(chave, "par"); registrarFalha(chaveConta, "conta"); registrarFalha(chaveIp, "ip");
     await registrarLog(null, "login_falha", `Tentativa com usuário "${usuario}"`);
     return res.status(401).json({ erro: "Usuário ou senha inválidos, ou cadastro inativo" });
   }
-  tentativas.delete(chave);
+  // Duas etapas: com a senha certa, pede o código do aplicativo (a senha é enviada de novo junto com o código)
+  if (u.dois_ativo) {
+    if (!codigo) return res.json({ precisa_codigo: true });
+    if (!totpConfere(lerSegredo2fa(u.id, u.dois_segredo), codigo)) {
+      registrarFalha(chave, "par"); registrarFalha(chaveConta, "conta");
+      await registrarLog(u, "login_codigo_errado", null);
+      return res.status(401).json({ erro: "Código do aplicativo inválido ou vencido. Confira e tente de novo." });
+    }
+  }
+  tentativas.delete(chave); tentativas.delete(chaveConta);
+  // Senha que não segue as regras (ex.: 123456): entra, mas é obrigado a trocar antes de usar o sistema
+  const senhaFraca = !u.senha_temporaria && !!problemaNaSenha(senha, login);
+  if (senhaFraca) await db.query("UPDATE usuarios SET usu_senha_temporaria = TRUE WHERE usu_id = ?", [u.id]);
   if (!u.senha.startsWith("scrypt$")) await db.query("UPDATE usuarios SET usu_senha = ? WHERE usu_id = ?", [await hashSenha(senha), u.id]);
   await db.query("UPDATE usuarios SET usu_ultimo_acesso = NOW() WHERE usu_id = ?", [u.id]);
   await registrarLog(u, "login_sucesso", null);
-  res.json({ token: gerarToken(u), papel: u.papel, nome: u.nome, aluno_id: u.aluno_id, sala: u.sala,
-    senha_temporaria: !!u.senha_temporaria, aceite_ok: u.aceite_versao === POLITICA.versao });
+  const ctx = await contextoDoUsuario(u);
+  res.json({ token: gerarToken(u), papel: u.papel, nome: u.nome, aluno_id: ctx.alunoPadrao, sala: ctx.salaPadrao, filhos: ctx.filhos, turmas: ctx.turmas,
+    senha_temporaria: !!u.senha_temporaria || senhaFraca, senha_fraca: senhaFraca, aceite_ok: u.aceite_versao === POLITICA.versao,
+    configurar_2fa: SEG.doisFatoresGestao && u.papel === "admin" && !u.dois_ativo });
 }));
 
 // Lê o token, confere no banco se o usuário continua ativo e diz quem está fazendo a requisição.
 // Quem ainda não aceitou a política de privacidade só consegue trocar a senha e aceitar o termo.
-const ROTAS_SEM_ACEITE = new Set(["PUT /api/minha-senha", "POST /api/aceite-privacidade"]);
+const ROTAS_SEM_ACEITE = new Set(["PUT /api/minha-senha", "POST /api/aceite-privacidade", "POST /api/sair"]);
+// Gestão sem as duas etapas configuradas só consegue configurar (e trocar a senha / aceitar o termo / sair)
+const ROTAS_SEM_2FA = new Set([...ROTAS_SEM_ACEITE, "POST /api/2fa/novo", "POST /api/2fa/ativar"]);
 async function autenticar(req, res, next) {
   let dados;
   try { dados = lerToken((req.headers.authorization || "").replace("Bearer ", "")); }
   catch { return res.status(401).json({ erro: "Não autenticado" }); }
   try {
-    const [[u]] = await db.query("SELECT usu_id AS id, usu_papel AS papel, alu_id AS aluno_id, usu_sala AS sala, usu_nome AS nome, usu_aceite_versao AS aceite_versao FROM usuarios WHERE usu_id = ? AND usu_ativo = TRUE", [dados.id]);
-    if (!u) return res.status(401).json({ erro: "Não autenticado" });
-    req.usuario = { id: u.id, papel: u.papel, aluno_id: u.aluno_id, sala: u.sala, nome: u.nome };
+    const [[u]] = await db.query("SELECT usu_id AS id, usu_papel AS papel, alu_id AS aluno_id, usu_sala AS sala, usu_nome AS nome, usu_aceite_versao AS aceite_versao, res_id AS res_id, usu_sessao_versao AS sessao, usu_2fa_ativo AS dois_ativo FROM usuarios WHERE usu_id = ? AND usu_ativo = TRUE", [dados.id]);
+    if (!u || (dados.v || 0) !== u.sessao) return res.status(401).json({ erro: "Não autenticado" }); // sessão encerrada (Sair, troca de senha...)
+    const ctx = await contextoDoUsuario(u);
+    const filhos = ctx.filhos.map((f) => f.id), pedido = Number(req.headers["x-aluno"]);
+    let turmaPedida = ""; try { turmaPedida = decodeURIComponent(req.headers["x-turma"] || ""); } catch { /* cabeçalho malformado: usa a turma principal */ }
+    req.usuario = { id: u.id, papel: u.papel, nome: u.nome, res_id: u.res_id, filhos, turmas: ctx.turmas,
+      aluno_id: filhos.includes(pedido) ? pedido : ctx.alunoPadrao, sala: ctx.turmas.includes(turmaPedida) ? turmaPedida : ctx.salaPadrao };
     if (u.aceite_versao !== POLITICA.versao && !ROTAS_SEM_ACEITE.has(`${req.method} ${req.path}`))
       return res.status(403).json({ erro: "Leia e aceite a política de privacidade para continuar", codigo: "ACEITE_PENDENTE" });
+    if (SEG.doisFatoresGestao && u.papel === "admin" && !u.dois_ativo && !ROTAS_SEM_2FA.has(`${req.method} ${req.path}`))
+      return res.status(403).json({ erro: "Configure a verificação em duas etapas para continuar", codigo: "2FA_PENDENTE" });
     next();
   } catch (erro) { console.error(erro); res.status(500).json({ erro: "Erro interno do servidor" }); }
+}
+// Quem está logado pode ter mais de um vínculo: o responsável, vários filhos (aluno_responsavel); o professor, várias turmas (professor_turma).
+// alunoPadrao / salaPadrao: o que abre primeiro (o filho do cadastro do login / a turma principal do professor).
+async function contextoDoUsuario(u) {
+  if (u.papel === "pai") {
+    const [filhos] = await db.query(`SELECT a.alu_id AS id, a.alu_nome AS nome, a.alu_sala AS sala FROM alunos a
+      WHERE a.alu_id = ? OR a.alu_id IN (SELECT ar.alu_id FROM aluno_responsavel ar WHERE ar.res_id = ?)
+      ORDER BY a.alu_id = ? DESC, a.alu_nome`, [u.aluno_id || 0, u.res_id || 0, u.aluno_id || 0]);
+    return { filhos, turmas: [], alunoPadrao: filhos.length ? filhos[0].id : null, salaPadrao: null };
+  }
+  if (u.papel === "professor") {
+    const [linhas] = await db.query(`SELECT t.tur_nome AS nome FROM professor_turma pt JOIN turmas t ON t.tur_id = pt.tur_id
+      WHERE pt.usu_id = ? AND t.tur_ativa = TRUE ORDER BY t.tur_nome = ? DESC, t.tur_nome`, [u.id, u.sala || ""]);
+    const turmas = linhas.map((l) => l.nome);
+    if (!turmas.length && u.sala) turmas.push(u.sala);
+    return { filhos: [], turmas, alunoPadrao: null, salaPadrao: turmas[0] || null };
+  }
+  return { filhos: [], turmas: [], alunoPadrao: null, salaPadrao: null };
+}
+const idsOuZero = (lista) => (lista.length ? lista : [0]); // "IN ()" vazio é erro no MySQL
+// A turma existe? (o banco também recusa, mas assim a mensagem é clara)
+async function turmaExiste(nome) {
+  const [[t]] = await db.query("SELECT tur_nome AS nome FROM turmas WHERE tur_nome = ?", [String(nome || "").trim()]);
+  return t ? t.nome : null;
 }
 const apenasAdmin = (req, res, next) => req.usuario.papel === "admin" ? next() : res.status(403).json({ erro: "Somente a administração pode acessar isso" });
 const apenasProfessor = (req, res, next) => req.usuario.papel === "professor" ? next() : res.status(403).json({ erro: "Somente professores podem acessar isso" });
 // Deixa passar administradores, ou o pai/mãe consultando o próprio filho
 function proprioAlunoOuAdmin(req, res, next) {
   const alunoId = Number(req.params.alunoId);
-  if (req.usuario.papel === "admin" || req.usuario.aluno_id === alunoId) return next();
+  if (req.usuario.papel === "admin" || req.usuario.filhos.includes(alunoId)) return next();
   res.status(403).json({ erro: "Você só pode consultar os dados do seu próprio filho" });
 }
 
 // ---------- Trocar a própria senha (qualquer papel) ----------
 app.put("/api/minha-senha", autenticar, rota(async (req, res) => {
   const { senha_atual, senha_nova } = req.body;
-  if (typeof senha_nova !== "string" || senha_nova.length < 4) return res.status(400).json({ erro: "A nova senha precisa ter pelo menos 4 caracteres" });
-  const [[u]] = await db.query("SELECT usu_senha AS senha FROM usuarios WHERE usu_id = ?", [req.usuario.id]);
-  if (!u || !(await conferirSenha(senha_atual, u.senha))) return res.status(400).json({ erro: "Senha atual incorreta" });
-  await db.query("UPDATE usuarios SET usu_senha = ?, usu_senha_temporaria = FALSE WHERE usu_id = ?", [await hashSenha(senha_nova), req.usuario.id]);
-  await registrarLog(req.usuario, "troca_senha", null);
+  const [[u]] = await db.query("SELECT usu_senha AS senha, usu_usuario AS login FROM usuarios WHERE usu_id = ?", [req.usuario.id]);
+  const problema = problemaNaSenha(senha_nova, u && u.login);
+  if (problema) return res.status(400).json({ erro: problema });
+  const chave = `assinatura|${req.usuario.id}`, minutos = minutosBloqueado(chave);
+  if (minutos) return res.status(429).json({ erro: `Muitas tentativas erradas. Tente de novo em ${minutos} minuto(s).` });
+  if (!u || !(await conferirSenha(senha_atual, u.senha))) { registrarFalha(chave); return res.status(400).json({ erro: "Senha atual incorreta" }); }
+  if (senha_atual === senha_nova) return res.status(400).json({ erro: "A nova senha precisa ser diferente da atual" });
+  await db.query("UPDATE usuarios SET usu_senha = ?, usu_senha_temporaria = FALSE, usu_sessao_versao = usu_sessao_versao + 1 WHERE usu_id = ?", [await hashSenha(senha_nova), req.usuario.id]);
+  await registrarLog(req.usuario, "troca_senha", "outras sessões encerradas");
+  const [[novo]] = await db.query("SELECT usu_id AS id, usu_sessao_versao AS sessao FROM usuarios WHERE usu_id = ?", [req.usuario.id]);
+  res.json({ ok: true, token: gerarToken(novo) }); // este navegador continua logado; os outros saem
+}));
+
+// "Sair": encerra o login em todos os aparelhos (o token antigo deixa de valer na hora)
+app.post("/api/sair", autenticar, rota(async (req, res) => {
+  await db.query("UPDATE usuarios SET usu_sessao_versao = usu_sessao_versao + 1 WHERE usu_id = ?", [req.usuario.id]);
+  await registrarLog(req.usuario, "logout", null);
+  res.json({ ok: true });
+}));
+
+// Duas etapas: gera um segredo novo (ainda desligado) e o QR code para o aplicativo autenticador
+app.post("/api/2fa/novo", autenticar, rota(async (req, res) => {
+  const [[u]] = await db.query("SELECT usu_usuario AS login, usu_2fa_ativo AS ativo FROM usuarios WHERE usu_id = ?", [req.usuario.id]);
+  if (u.ativo) return res.status(400).json({ erro: "A verificação em duas etapas já está ligada" });
+  const segredo = paraBase32(crypto.randomBytes(20));
+  await db.query("UPDATE usuarios SET usu_2fa_segredo = ? WHERE usu_id = ?", [guardarSegredo2fa(req.usuario.id, segredo), req.usuario.id]);
+  const url = `otpauth://totp/${encodeURIComponent("SIVE:" + u.login)}?secret=${segredo}&issuer=SIVE&digits=6&period=30`;
+  res.json({ segredo, qr: await QRCode.toString(url, { type: "svg", margin: 1 }) });
+}));
+// Liga as duas etapas depois que a pessoa digita um código certo do aplicativo (prova que configurou)
+app.post("/api/2fa/ativar", autenticar, rota(async (req, res) => {
+  const [[u]] = await db.query("SELECT usu_2fa_segredo AS segredo, usu_2fa_ativo AS ativo FROM usuarios WHERE usu_id = ?", [req.usuario.id]);
+  if (u.ativo) return res.status(400).json({ erro: "A verificação em duas etapas já está ligada" });
+  if (!u.segredo) return res.status(400).json({ erro: "Gere o QR code antes" });
+  if (!totpConfere(lerSegredo2fa(req.usuario.id, u.segredo), req.body.codigo)) return res.status(400).json({ erro: "Código inválido. Confira o horário do celular e digite o código que aparece agora." });
+  await db.query("UPDATE usuarios SET usu_2fa_ativo = TRUE WHERE usu_id = ?", [req.usuario.id]);
+  await registrarLog(req.usuario, "2fa_ativada", null);
+  res.json({ ok: true });
+}));
+// A gestão desliga as duas etapas de alguém que perdeu o celular (a pessoa configura de novo no próximo login)
+app.put("/api/usuarios/:id/2fa/zerar", autenticar, apenasAdmin, rota(async (req, res) => {
+  if (Number(req.params.id) === req.usuario.id) return res.status(400).json({ erro: "Peça a outra pessoa da gestão para zerar a sua verificação" });
+  const [[u]] = await db.query("SELECT usu_nome AS nome FROM usuarios WHERE usu_id = ?", [req.params.id]);
+  if (!u) return res.status(404).json({ erro: "Usuário não encontrado" });
+  await db.query("UPDATE usuarios SET usu_2fa_ativo = FALSE, usu_2fa_segredo = NULL, usu_sessao_versao = usu_sessao_versao + 1 WHERE usu_id = ?", [req.params.id]);
+  await registrarLog(req.usuario, "2fa_zerada", u.nome);
   res.json({ ok: true });
 }));
 
@@ -284,24 +470,49 @@ const percentual = (presentes, ausentes) => (presentes + ausentes) ? Math.round(
 // ---------- Quadros indicadores da Secretaria (só administração) ----------
 app.get("/api/resumo", autenticar, apenasAdmin, rota(async (req, res) => {
   await sincronizarBuscaAtiva();
+  await verificarInatividade();
   const ref = await dataReferencia();
-  const [[total]] = await db.query("SELECT COUNT(*) AS n FROM alunos");
+  const [[total]] = await db.query("SELECT COUNT(*) AS n FROM alunos WHERE alu_situacao = 'Ativo'");
+  const [[reat]] = await db.query("SELECT COUNT(*) AS inativos, COUNT(usu_reativacao_pedida_em) AS pedidos FROM usuarios WHERE usu_papel = 'professor' AND usu_ativo = FALSE AND usu_inativado_motivo = 'inatividade'");
   const [[dia]] = await db.query(`SELECT COUNT(CASE WHEN pre_status = 'Presente' THEN 1 END) AS presentes,
     COUNT(CASE WHEN pre_status = 'Ausente' THEN 1 END) AS ausentes FROM presencas WHERE pre_data = ?`, [ref.data]);
+  const [[ocor]] = await db.query(`SELECT COUNT(*) AS total, COUNT(CASE WHEN adv_tipo = 'Advertencia' THEN 1 END) AS advertencias,
+    COUNT(CASE WHEN adv_tipo = 'Acao' THEN 1 END) AS acoes FROM advertencias WHERE adv_data = ?`, [ref.data]);
   const [[busca]] = await db.query("SELECT COUNT(*) AS n FROM busca_ativa WHERE bua_status = 'Em acompanhamento'");
-  const [[aut]] = await db.query("SELECT COUNT(*) AS n FROM autorizacoes WHERE aut_assinada = FALSE");
-  const [[docs]] = await db.query("SELECT COUNT(*) AS n FROM pendencias WHERE pen_status = 'Aberta' AND pen_tipo = 'Documento'");
+  const [[aut]] = await db.query("SELECT COUNT(*) AS n FROM autorizacoes WHERE aut_assinada = TRUE AND aut_assinada_em >= NOW() - INTERVAL 24 HOUR");
+  const [[docs]] = await db.query(`SELECT COUNT(*) AS n FROM documentos d ${DOCS_RECENTES}`);
   const [[ctp]] = await db.query("SELECT COUNT(*) AS n FROM comunicacoes_conselho WHERE cct_comunicado_em IS NULL");
+  const [[oce]] = await db.query(`SELECT COUNT(*) AS n, COUNT(CASE WHEN oce_resp_assinada_em IS NULL THEN 1 END) AS sem_resp
+    FROM ocorrencias_escolares WHERE oce_ges_assinada_em IS NULL`);
   res.json({
     data: ref.data, eh_hoje: ref.data === ref.hoje, total_alunos: total.n,
     presentes: dia.presentes, ausentes: dia.ausentes, sem_registro: Math.max(0, total.n - dia.presentes - dia.ausentes),
-    percentual: percentual(dia.presentes, dia.ausentes), busca_ativa: busca.n, autorizacoes_pendentes: aut.n, documentos_aguardando: docs.n, comunicacoes_pendentes: ctp.n,
+    ocorrencias_dia: ocor.total, advertencias_dia: ocor.advertencias, acoes_dia: ocor.acoes,
+    ocorrencias_gestao: oce.n, ocorrencias_sem_resp: oce.sem_resp,
+    percentual: percentual(dia.presentes, dia.ausentes), busca_ativa: busca.n, autorizacoes_recentes: aut.n, documentos_recentes: docs.n, comunicacoes_pendentes: ctp.n,
+    professores_inativos: reat.inativos, reativacoes_pedidas: reat.pedidos, inatividade_dias: INATIVIDADE.dias,
   });
+}));
+
+// Pasta "Documentos recebidos recentemente": documentos que atenderam a uma pendência, enviados por responsáveis, nas últimas 24 horas.
+// Depois de 24 horas o documento sai da pasta, mas continua guardado na ficha do aluno.
+const DOCS_RECENTES_JOIN = "JOIN usuarios u ON u.usu_id = d.usu_id AND u.usu_papel = 'pai'";
+const DOCS_RECENTES_FILTRO = "WHERE d.pen_id IS NOT NULL AND d.doc_enviado_em >= NOW() - INTERVAL 24 HOUR";
+const DOCS_RECENTES = `${DOCS_RECENTES_JOIN} ${DOCS_RECENTES_FILTRO}`;
+app.get("/api/documentos-recentes", autenticar, apenasAdmin, rota(async (req, res) => {
+  const [linhas] = await db.query(`SELECT d.doc_id AS id, d.doc_titulo AS titulo, d.doc_categoria AS categoria, d.doc_nome_original AS nome_original, d.doc_tamanho AS tamanho,
+    d.doc_enviado_por_nome AS enviado_por, ar.alr_parentesco AS parentesco, DATE_FORMAT(d.doc_enviado_em, '%d/%m/%Y %H:%i') AS enviado_em,
+    GREATEST(1, CEIL(TIMESTAMPDIFF(MINUTE, NOW(), d.doc_enviado_em + INTERVAL 24 HOUR) / 60)) AS horas_restantes,
+    p.pen_descricao AS pendencia, a.alu_id AS aluno_id, a.alu_nome AS aluno_nome, a.alu_sala AS sala, a.alu_matricula AS matricula
+    FROM documentos d ${DOCS_RECENTES_JOIN} JOIN alunos a ON a.alu_id = d.alu_id JOIN pendencias p ON p.pen_id = d.pen_id
+    LEFT JOIN aluno_responsavel ar ON ar.alu_id = d.alu_id AND ar.res_id = u.res_id
+    ${DOCS_RECENTES_FILTRO} ORDER BY d.doc_enviado_em DESC`);
+  res.json(linhas);
 }));
 
 // ---------- Secretaria (só administração) ----------
 app.get("/api/alunos", autenticar, apenasAdmin, rota(async (req, res) => {
-  const [linhas] = await db.query("SELECT alu_id AS id, alu_nome AS nome, alu_sala AS sala FROM alunos ORDER BY alu_id");
+  const [linhas] = await db.query("SELECT alu_id AS id, alu_nome AS nome, alu_sala AS sala, alu_matricula AS matricula, alu_situacao AS situacao, DATE_FORMAT(alu_situacao_em, '%d/%m/%Y') AS situacao_em FROM alunos ORDER BY alu_id");
   res.json(linhas);
 }));
 
@@ -309,6 +520,7 @@ app.get("/api/alunos", autenticar, apenasAdmin, rota(async (req, res) => {
 app.post("/api/alunos", autenticar, apenasAdmin, rota(async (req, res) => {
   const { nome, sala, matricula, responsaveis } = req.body;
   if (!nome || !sala) return res.status(400).json({ erro: "Nome e sala são obrigatórios" });
+  if (!(await turmaExiste(sala))) return res.status(400).json({ erro: "Escolha uma turma cadastrada (cadastre a turma antes, em Cadastro de Aluno → Turmas)" });
   let resultado;
   try { [resultado] = await db.query("INSERT INTO alunos (alu_nome, alu_sala, alu_matricula) VALUES (?, ?, ?)", [nome, sala, matricula || null]); }
   catch (erro) {
@@ -349,6 +561,7 @@ app.post("/api/alunos/importar", autenticar, apenasAdmin, rota(async (req, res) 
   try {
     await conexao.beginTransaction();
     for (const l of prontas) {
+      await conexao.query("INSERT IGNORE INTO turmas (tur_nome, tur_ano_letivo) VALUES (?, YEAR(CURDATE()))", [l.sala]);
       const [r] = await conexao.query("INSERT INTO alunos (alu_nome, alu_sala, alu_matricula) VALUES (?, ?, ?)", [l.nome, l.sala, l.matricula || null]);
       for (const resp of l.responsaveis) { // mesmo responsável (nome + telefone) de irmãos é reaproveitado, como no cadastro individual
         const [[existe]] = await conexao.query("SELECT res_id AS id FROM responsaveis WHERE res_nome = ? AND res_telefone <=> ?", [resp.nome, resp.telefone || null]);
@@ -370,9 +583,18 @@ app.post("/api/alunos/importar", autenticar, apenasAdmin, rota(async (req, res) 
 
 // ---------- Cadastro de usuários (gestão, pais e professores) — só administração ----------
 app.get("/api/usuarios", autenticar, apenasAdmin, rota(async (req, res) => {
-  const [linhas] = await db.query(`SELECT u.usu_id AS id, u.usu_usuario AS usuario, u.usu_nome AS nome, u.usu_papel AS papel, u.usu_sala AS sala, u.usu_ativo AS ativo, u.usu_senha_temporaria AS senha_temporaria, u.usu_ultimo_acesso AS ultimo_acesso,
-    a.alu_nome AS aluno_nome FROM usuarios u LEFT JOIN alunos a ON a.alu_id = u.alu_id ORDER BY u.usu_id DESC`);
-  res.json(linhas);
+  await verificarInatividade();
+  const [linhas] = await db.query(`SELECT u.usu_id AS id, u.usu_usuario AS usuario, u.usu_nome AS nome, u.usu_papel AS papel, u.usu_sala AS sala, u.usu_ativo AS ativo, u.usu_senha_temporaria AS senha_temporaria,
+    DATE_FORMAT(u.usu_ultimo_acesso, '%d/%m/%Y %H:%i') AS ultimo_acesso, u.usu_inativado_motivo AS inativado_motivo, DATE_FORMAT(u.usu_inativado_em, '%d/%m/%Y') AS inativado_em,
+    DATE_FORMAT(u.usu_reativacao_pedida_em, '%d/%m/%Y %H:%i') AS reativacao_pedida_em, ${SQL_DIAS_SEM_ACESSO} AS dias_sem_acesso,
+    a.alu_nome AS aluno_nome, u.alu_id AS aluno_id, u.usu_2fa_ativo AS dois_fatores,
+    (SELECT GROUP_CONCAT(CONCAT(a2.alu_id, ':', a2.alu_nome) ORDER BY a2.alu_nome SEPARATOR '|') FROM aluno_responsavel ar2 JOIN alunos a2 ON a2.alu_id = ar2.alu_id WHERE ar2.res_id = u.res_id) AS filhos_txt,
+    (SELECT GROUP_CONCAT(t.tur_nome ORDER BY t.tur_nome SEPARATOR '|') FROM professor_turma pt JOIN turmas t ON t.tur_id = pt.tur_id WHERE pt.usu_id = u.usu_id) AS turmas_txt
+    FROM usuarios u LEFT JOIN alunos a ON a.alu_id = u.alu_id ORDER BY u.usu_id DESC`);
+  // filhos (responsável) e turmas (professor) vêm do banco como texto "id:nome|id:nome" e "turma|turma"
+  res.json(linhas.map(({ filhos_txt, turmas_txt, ...l }) => ({ ...l,
+    filhos: (filhos_txt || "").split("|").filter(Boolean).map((x) => ({ id: Number(x.split(":")[0]), nome: x.slice(x.indexOf(":") + 1) })),
+    turmas: (turmas_txt || "").split("|").filter(Boolean) })));
 }));
 
 app.post("/api/usuarios", autenticar, apenasAdmin, rota(async (req, res) => {
@@ -380,21 +602,127 @@ app.post("/api/usuarios", autenticar, apenasAdmin, rota(async (req, res) => {
   if (!usuario || !nome || !papel) return res.status(400).json({ erro: "Usuário, nome e papel são obrigatórios" });
   if (papel === "pai" && !aluno_id) return res.status(400).json({ erro: "Selecione a qual aluno este responsável pertence" });
   if (papel === "professor" && !sala) return res.status(400).json({ erro: "Informe a turma (sala) do professor" });
+  if (papel === "professor" && !(await turmaExiste(sala))) return res.status(400).json({ erro: "Escolha uma turma cadastrada" });
   const senhaGerada = gerarSenhaGenerica();
+  let novo;
   try {
-    await db.query("INSERT INTO usuarios (usu_usuario, usu_senha, usu_papel, usu_nome, alu_id, usu_sala, usu_senha_temporaria) VALUES (?, ?, ?, ?, ?, ?, TRUE)",
+    [novo] = await db.query("INSERT INTO usuarios (usu_usuario, usu_senha, usu_papel, usu_nome, alu_id, usu_sala, usu_senha_temporaria) VALUES (?, ?, ?, ?, ?, ?, TRUE)",
       [usuario, await hashSenha(senhaGerada), papel, nome, papel === "pai" ? aluno_id : null, papel === "professor" ? sala : null]);
   } catch (erro) {
     if (erro.code === "ER_DUP_ENTRY") return res.status(409).json({ erro: "Já existe um usuário com esse nome de login" });
     throw erro;
   }
+  if (papel === "pai") await responsavelDoUsuario({ id: novo.insertId, nome, aluno_id: Number(aluno_id) }); // liga o login ao cadastro do responsável (perfil)
+  if (papel === "professor") await db.query("INSERT IGNORE INTO professor_turma (usu_id, tur_id) SELECT ?, tur_id FROM turmas WHERE tur_nome = ?", [novo.insertId, sala]);
   await registrarLog(req.usuario, "cadastro_usuario", `${usuario} (${papel})`);
   res.status(201).json({ ok: true, senha_genercada: senhaGerada }); // devolve a senha gerada só nesta resposta, para o admin entregar ao usuário
 }));
 
 app.put("/api/usuarios/:id/ativo", autenticar, apenasAdmin, rota(async (req, res) => {
-  await db.query("UPDATE usuarios SET usu_ativo = ? WHERE usu_id = ?", [!!req.body.ativo, req.params.id]);
+  if (Number(req.params.id) === req.usuario.id && !req.body.ativo) return res.status(400).json({ erro: "Você não pode desativar o seu próprio acesso" });
+  if (req.body.ativo) await db.query("UPDATE usuarios SET usu_ativo = TRUE, usu_inativado_motivo = NULL, usu_inativado_em = NULL, usu_reativado_em = NOW(), usu_reativacao_pedida_em = NULL WHERE usu_id = ?", [req.params.id]);
+  else await db.query("UPDATE usuarios SET usu_ativo = FALSE, usu_inativado_motivo = 'manual', usu_inativado_em = NOW(), usu_sessao_versao = usu_sessao_versao + 1 WHERE usu_id = ?", [req.params.id]);
   await registrarLog(req.usuario, req.body.ativo ? "reativar_usuario" : "desativar_usuario", `usuário id ${req.params.id}`);
+  res.json({ ok: true });
+}));
+
+// Responsável com mais de um filho: a gestão liga o login a outro aluno (pelo cadastro do responsável, em aluno_responsavel)
+app.post("/api/usuarios/:id/filhos", autenticar, apenasAdmin, rota(async (req, res) => {
+  const [[u]] = await db.query("SELECT usu_id AS id, usu_nome AS nome, usu_papel AS papel, alu_id AS aluno_id FROM usuarios WHERE usu_id = ?", [req.params.id]);
+  if (!u || u.papel !== "pai") return res.status(404).json({ erro: "Responsável não encontrado" });
+  const [[aluno]] = await db.query("SELECT alu_id AS id, alu_nome AS nome FROM alunos WHERE alu_id = ?", [Number(req.body.aluno_id)]);
+  if (!aluno) return res.status(400).json({ erro: "Escolha o aluno" });
+  const parentesco = String(req.body.parentesco || "Responsável").trim().slice(0, 20) || "Responsável";
+  const resId = await responsavelDoUsuario(u);
+  if (!resId) return res.status(400).json({ erro: "Este login ainda não tem cadastro de responsável" });
+  const [r] = await db.query("INSERT IGNORE INTO aluno_responsavel (alu_id, res_id, alr_parentesco) VALUES (?, ?, ?)", [aluno.id, resId, parentesco]);
+  if (!r.affectedRows) return res.status(409).json({ erro: "Este aluno já está ligado a este responsável" });
+  await registrarLog(req.usuario, "responsavel_vinculado", `${u.nome} → ${aluno.nome} (${parentesco})`);
+  res.status(201).json({ ok: true });
+}));
+app.delete("/api/usuarios/:id/filhos/:alunoId", autenticar, apenasAdmin, rota(async (req, res) => {
+  const [[u]] = await db.query("SELECT usu_nome AS nome, alu_id AS aluno_id, res_id AS res_id FROM usuarios WHERE usu_id = ? AND usu_papel = 'pai'", [req.params.id]);
+  if (!u) return res.status(404).json({ erro: "Responsável não encontrado" });
+  if (u.aluno_id === Number(req.params.alunoId)) return res.status(400).json({ erro: "Este é o aluno principal do login e não pode ser desligado" });
+  const [r] = await db.query("DELETE FROM aluno_responsavel WHERE alu_id = ? AND res_id = ?", [req.params.alunoId, u.res_id || 0]);
+  if (!r.affectedRows) return res.status(404).json({ erro: "Vínculo não encontrado" });
+  await registrarLog(req.usuario, "responsavel_desvinculado", `${u.nome} — aluno id ${req.params.alunoId}`);
+  res.json({ ok: true });
+}));
+// Professor com mais de uma turma: a gestão marca as turmas. A primeira da lista vira a turma principal (a que abre primeiro).
+app.put("/api/usuarios/:id/turmas", autenticar, apenasAdmin, rota(async (req, res) => {
+  const [[u]] = await db.query("SELECT usu_id AS id, usu_nome AS nome, usu_sala AS sala FROM usuarios WHERE usu_id = ? AND usu_papel = 'professor'", [req.params.id]);
+  if (!u) return res.status(404).json({ erro: "Professor não encontrado" });
+  const nomes = [...new Set((Array.isArray(req.body.turmas) ? req.body.turmas : []).map((n) => String(n).trim()).filter(Boolean))];
+  if (!nomes.length) return res.status(400).json({ erro: "Marque pelo menos uma turma" });
+  const [turmas] = await db.query("SELECT tur_id AS id, tur_nome AS nome FROM turmas WHERE tur_nome IN (?)", [nomes]);
+  if (turmas.length !== nomes.length) return res.status(400).json({ erro: "Alguma turma não foi encontrada" });
+  const principal = nomes.includes(u.sala) ? u.sala : nomes[0];
+  const conexao = await db.getConnection();
+  try {
+    await conexao.beginTransaction();
+    await conexao.query("DELETE FROM professor_turma WHERE usu_id = ?", [u.id]);
+    await conexao.query("INSERT INTO professor_turma (usu_id, tur_id) VALUES ?", [turmas.map((t) => [u.id, t.id])]);
+    await conexao.query("UPDATE usuarios SET usu_sala = ? WHERE usu_id = ?", [principal, u.id]);
+    await conexao.commit();
+  } catch (erro) { await conexao.rollback(); throw erro; } finally { conexao.release(); }
+  await registrarLog(req.usuario, "professor_turmas", `${u.nome}: ${nomes.join(", ")}`);
+  res.json({ ok: true });
+}));
+
+// O que abre para quem está logado: os filhos (responsável) ou as turmas (professor). Usado no seletor do topo da tela.
+app.get("/api/meu-contexto", autenticar, rota(async (req, res) => {
+  const [[u]] = await db.query("SELECT usu_id AS id, usu_papel AS papel, alu_id AS aluno_id, usu_sala AS sala, res_id AS res_id FROM usuarios WHERE usu_id = ?", [req.usuario.id]);
+  const ctx = await contextoDoUsuario(u);
+  res.json({ filhos: ctx.filhos, turmas: ctx.turmas, aluno_id: req.usuario.aluno_id, sala: req.usuario.sala });
+}));
+
+// ---------- Turmas (só administração) ----------
+// Renomear uma turma atualiza alunos, professores, comunicados e eventos (ON UPDATE CASCADE no banco).
+const TURNOS = ["Manhã", "Tarde", "Integral", "Noite"];
+function lerTurma(b) {
+  const nome = String(b.nome || "").trim().replace(/\s+/g, " "), ano = Number(b.ano_letivo), turno = b.turno ? String(b.turno) : null;
+  if (!nome || nome.length > 40) return { erro: "Informe o nome da turma (até 40 caracteres)" };
+  if (!Number.isInteger(ano) || ano < 2000 || ano > 2100) return { erro: "Informe o ano letivo (ex.: 2026)" };
+  if (turno && !TURNOS.includes(turno)) return { erro: "Turno inválido" };
+  return { nome, ano, turno };
+}
+app.get("/api/turmas", autenticar, apenasAdmin, rota(async (req, res) => {
+  const [linhas] = await db.query(`SELECT t.tur_id AS id, t.tur_nome AS nome, t.tur_ano_letivo AS ano_letivo, t.tur_turno AS turno, t.tur_ativa AS ativa,
+    (SELECT COUNT(*) FROM alunos a WHERE a.alu_sala = t.tur_nome AND a.alu_situacao = 'Ativo') AS alunos,
+    (SELECT GROUP_CONCAT(u.usu_nome ORDER BY u.usu_nome SEPARATOR ', ') FROM professor_turma pt JOIN usuarios u ON u.usu_id = pt.usu_id WHERE pt.tur_id = t.tur_id) AS professores
+    FROM turmas t ORDER BY t.tur_ativa DESC, t.tur_ano_letivo DESC, t.tur_nome`);
+  res.json(linhas.map((l) => ({ ...l, ativa: !!l.ativa })));
+}));
+app.post("/api/turmas", autenticar, apenasAdmin, rota(async (req, res) => {
+  const t = lerTurma(req.body);
+  if (t.erro) return res.status(400).json({ erro: t.erro });
+  try { await db.query("INSERT INTO turmas (tur_nome, tur_ano_letivo, tur_turno) VALUES (?, ?, ?)", [t.nome, t.ano, t.turno]); }
+  catch (erro) { if (erro.code === "ER_DUP_ENTRY") return res.status(409).json({ erro: "Já existe uma turma com esse nome" }); throw erro; }
+  await registrarLog(req.usuario, "turma_criada", `${t.nome} (${t.ano})`);
+  res.status(201).json({ ok: true });
+}));
+app.put("/api/turmas/:id", autenticar, apenasAdmin, rota(async (req, res) => {
+  const t = lerTurma(req.body);
+  if (t.erro) return res.status(400).json({ erro: t.erro });
+  const [[antes]] = await db.query("SELECT tur_nome AS nome FROM turmas WHERE tur_id = ?", [req.params.id]);
+  if (!antes) return res.status(404).json({ erro: "Turma não encontrada" });
+  try { await db.query("UPDATE turmas SET tur_nome = ?, tur_ano_letivo = ?, tur_turno = ?, tur_ativa = ? WHERE tur_id = ?", [t.nome, t.ano, t.turno, req.body.ativa !== false, req.params.id]); }
+  catch (erro) { if (erro.code === "ER_DUP_ENTRY") return res.status(409).json({ erro: "Já existe uma turma com esse nome" }); throw erro; }
+  await registrarLog(req.usuario, "turma_alterada", antes.nome === t.nome ? t.nome : `${antes.nome} → ${t.nome}`);
+  res.json({ ok: true });
+}));
+
+// ---------- Situação do aluno (só administração): quem sai da escola não é apagado, só sai das listas do dia a dia ----------
+const SITUACOES = ["Ativo", "Transferido", "Concluiu", "Desistente"];
+app.put("/api/alunos/:alunoId/situacao", autenticar, apenasAdmin, rota(async (req, res) => {
+  const situacao = String(req.body.situacao || ""), motivo = String(req.body.motivo || "").trim().slice(0, 200);
+  if (!SITUACOES.includes(situacao)) return res.status(400).json({ erro: "Situação inválida" });
+  const [[a]] = await db.query("SELECT alu_nome AS nome FROM alunos WHERE alu_id = ?", [req.params.alunoId]);
+  if (!a) return res.status(404).json({ erro: "Aluno não encontrado" });
+  await db.query("UPDATE alunos SET alu_situacao = ?, alu_situacao_em = IF(? = 'Ativo', NULL, CURDATE()), alu_situacao_motivo = ? WHERE alu_id = ?",
+    [situacao, situacao, situacao === "Ativo" ? null : motivo || null, req.params.alunoId]);
+  await registrarLog(req.usuario, "aluno_situacao", `${a.nome}: ${situacao}`);
   res.json({ ok: true });
 }));
 
@@ -405,6 +733,18 @@ app.get("/api/logs", autenticar, apenasAdmin, rota(async (req, res) => {
   res.json(linhas);
 }));
 
+// Confere a corrente de hashes dos logs: aponta o primeiro registro apagado ou alterado
+app.get("/api/logs/integridade", autenticar, apenasAdmin, rota(async (req, res) => {
+  const [linhas] = await db.query(`SELECT log_id AS id, usu_id, log_nome_usuario AS nome, log_papel AS papel, log_acao AS acao, log_detalhe AS detalhe,
+    DATE_FORMAT(log_data_hora, '%Y-%m-%d %H:%i:%s') AS em, log_hash AS hash FROM logs WHERE log_hash IS NOT NULL ORDER BY log_id`);
+  // O primeiro da corrente não tem como conferir o anterior (os mais antigos saem pelo prazo de guarda): confere-se do segundo em diante
+  for (let i = 1; i < linhas.length; i++) {
+    if (hashLog(linhas[i - 1].hash, linhas[i]) !== linhas[i].hash)
+      return res.json({ ok: false, conferidos: i, problema_em: { id: linhas[i].id, quando: linhas[i].em, acao: linhas[i].acao } });
+  }
+  res.json({ ok: true, conferidos: linhas.length });
+}));
+
 // ---------- Controle de frequência (só administração): todos os alunos em um dia ----------
 app.get("/api/frequencia", autenticar, apenasAdmin, rota(async (req, res) => {
   const ref = await dataReferencia();
@@ -412,7 +752,7 @@ app.get("/api/frequencia", autenticar, apenasAdmin, rota(async (req, res) => {
   const [alunos] = await db.query(`SELECT a.alu_id AS id, a.alu_nome AS nome, a.alu_sala AS sala, p.pre_status AS status, p.pre_observacao AS observacao,
     (SELECT COUNT(*) FROM presencas f WHERE f.alu_id = a.alu_id AND f.pre_status = 'Ausente'
        AND f.pre_data > DATE_SUB(?, INTERVAL ? DAY) AND f.pre_data <= ?) AS faltas
-    FROM alunos a LEFT JOIN presencas p ON p.alu_id = a.alu_id AND p.pre_data = ? ORDER BY a.alu_nome`,
+    FROM alunos a LEFT JOIN presencas p ON p.alu_id = a.alu_id AND p.pre_data = ? WHERE a.alu_situacao = 'Ativo' ORDER BY a.alu_nome`,
     [data, BUSCA_ATIVA.dias, data, data]);
   const presentes = alunos.filter((a) => a.status === "Presente").length;
   const ausentes = alunos.filter((a) => a.status === "Ausente").length;
@@ -471,6 +811,7 @@ app.get("/api/relatorio-mensal", autenticar, apenasAdmin, rota(async (req, res) 
   const [alunos] = await db.query(`SELECT a.alu_id AS id, a.alu_nome AS nome, a.alu_sala AS sala,
     COUNT(CASE WHEN p.pre_status = 'Presente' THEN 1 END) AS presencas, COUNT(CASE WHEN p.pre_status = 'Ausente' THEN 1 END) AS faltas
     FROM alunos a LEFT JOIN presencas p ON p.alu_id = a.alu_id AND p.pre_data >= ? AND p.pre_data < DATE_ADD(?, INTERVAL 1 MONTH)
+    WHERE a.alu_situacao = 'Ativo' OR p.pre_id IS NOT NULL
     GROUP BY a.alu_id, a.alu_nome, a.alu_sala ORDER BY faltas DESC, a.alu_nome`, [inicio, inicio]);
   const [casos] = await db.query(`SELECT b.bua_id AS id, a.alu_nome AS nome, a.alu_sala AS sala, b.bua_status AS status, b.bua_faltas_ao_abrir AS faltas_ao_abrir,
     DATE_FORMAT(b.bua_aberta_em, '%d/%m/%Y') AS aberta_em, DATE_FORMAT(b.bua_encerrada_em, '%d/%m/%Y') AS encerrada_em,
@@ -498,28 +839,36 @@ app.get("/api/relatorio-mensal", autenticar, apenasAdmin, rota(async (req, res) 
 
 // ---------- Segurança (só administração) ----------
 app.get("/api/acessos", autenticar, apenasAdmin, rota(async (req, res) => {
-  const [linhas] = await db.query(`SELECT a.alu_nome AS nome, ac.ace_sala AS sala, DATE_FORMAT(ac.ace_data_hora, '%H:%i:%s') AS hora
+  const [linhas] = await db.query(`SELECT a.alu_nome AS nome, ac.ace_sala AS sala, ac.ace_metodo AS metodo, DATE_FORMAT(ac.ace_data_hora, '%H:%i:%s') AS hora
     FROM acessos ac JOIN alunos a ON a.alu_id = ac.alu_id
     ORDER BY ac.ace_id DESC LIMIT 4`);
   res.json(linhas);
 }));
 
+// Entrada registrada à mão pela portaria (aluno sem cadastro facial, câmera desligada etc.)
 app.post("/api/acessos", autenticar, apenasAdmin, rota(async (req, res) => {
-  const { aluno_id, sala } = req.body;
-  await db.query("INSERT INTO acessos (alu_id, ace_sala) VALUES (?, ?)", [aluno_id, sala]);
+  const [[aluno]] = await db.query("SELECT alu_id AS id, alu_nome AS nome FROM alunos WHERE alu_id = ?", [Number(req.body.aluno_id)]);
+  if (!aluno) return res.status(404).json({ erro: "Aluno não encontrado" });
+  const [[cam]] = await db.query("SELECT cam_id AS id, cam_nome AS nome FROM cameras WHERE cam_id = ? AND cam_tipo = 'Entrada'", [Number(req.body.cam_id) || 0]);
+  await db.query("INSERT INTO acessos (alu_id, ace_sala, cam_id, ace_metodo) VALUES (?, ?, ?, 'Manual')", [aluno.id, cam ? cam.nome : "Portaria", cam ? cam.id : null]);
+  await marcarPresencaPelaEntrada(aluno.id, "registro da portaria");
+  await registrarLog(req.usuario, "entrada_manual", `aluno id ${aluno.id}${cam ? " — " + cam.nome : ""}`);
   res.status(201).json({ ok: true });
 }));
 
 app.get("/api/saida", autenticar, apenasAdmin, rota(async (req, res) => {
-  const [alunos] = await db.query("SELECT alu_id AS id, alu_nome AS nome, alu_sala AS sala, alu_matricula AS matricula FROM alunos WHERE alu_nome LIKE ? LIMIT 1", [`%${req.query.nome || ""}%`]);
+  const [alunos] = await db.query("SELECT alu_id AS id, alu_nome AS nome, alu_sala AS sala, alu_matricula AS matricula FROM alunos WHERE alu_situacao = 'Ativo' AND alu_nome LIKE ? LIMIT 1", [`%${req.query.nome || ""}%`]);
   if (!alunos.length) return res.json(null);
   const [responsaveis] = await db.query(`SELECT r.res_nome AS nome, ar.alr_parentesco AS parentesco, r.res_telefone AS telefone, r.res_foto AS foto
     FROM aluno_responsavel ar JOIN responsaveis r ON r.res_id = ar.res_id WHERE ar.alu_id = ?`, [alunos[0].id]);
-  res.json({ aluno: alunos[0], responsaveis });
+  const [status] = await statusAoVivo({ alunoId: alunos[0].id });
+  res.json({ aluno: alunos[0], responsaveis, status });
 }));
 
 app.post("/api/saidas", autenticar, apenasAdmin, rota(async (req, res) => {
-  await db.query("INSERT INTO saidas (alu_id) VALUES (?)", [req.body.aluno_id]);
+  const [[aluno]] = await db.query("SELECT alu_id AS id FROM alunos WHERE alu_id = ?", [Number(req.body.aluno_id)]);
+  if (!aluno) return res.status(404).json({ erro: "Aluno não encontrado" });
+  await db.query("INSERT INTO saidas (alu_id, sai_metodo, sai_liberado_por_nome) VALUES (?, 'Liberação', ?)", [aluno.id, req.usuario.nome]);
   await registrarLog(req.usuario, "liberacao_saida", `aluno id ${req.body.aluno_id}`);
   res.status(201).json({ ok: true });
 }));
@@ -534,15 +883,16 @@ app.get("/api/minha-turma", autenticar, apenasProfessor, rota(async (req, res) =
     GROUP_CONCAT(DISTINCT CONCAT(r.res_nome, ' (', ar.alr_parentesco, ') ', IFNULL(r.res_telefone,'')) SEPARATOR ' • ') AS responsaveis
     FROM alunos a LEFT JOIN presencas p ON p.alu_id = a.alu_id AND p.pre_data = CURDATE()
     LEFT JOIN aluno_responsavel ar ON ar.alu_id = a.alu_id LEFT JOIN responsaveis r ON r.res_id = ar.res_id
-    WHERE a.alu_sala = ? GROUP BY a.alu_id, a.alu_nome, p.pre_status ORDER BY a.alu_nome`, [BUSCA_ATIVA.dias, req.usuario.sala]);
-  res.json({ dias_faltas: BUSCA_ATIVA.dias, alunos: linhas });
+    WHERE a.alu_sala = ? AND a.alu_situacao = 'Ativo' GROUP BY a.alu_id, a.alu_nome, p.pre_status ORDER BY a.alu_nome`, [BUSCA_ATIVA.dias, req.usuario.sala]);
+  const aoVivo = new Map((await statusAoVivo({ sala: req.usuario.sala })).map((s) => [s.id, s]));
+  res.json({ dias_faltas: BUSCA_ATIVA.dias, alunos: linhas.map((l) => ({ ...l, agora: aoVivo.get(l.id) || null })) });
 }));
 
 // Chamada de hoje: o professor marca Presente/Ausente só para os alunos da própria turma
 app.post("/api/chamada", autenticar, apenasProfessor, rota(async (req, res) => {
   const registros = req.body.registros;
   if (!Array.isArray(registros) || !registros.length) return res.status(400).json({ erro: "Nenhum aluno na chamada" });
-  const [daTurma] = await db.query("SELECT alu_id AS id FROM alunos WHERE alu_sala = ?", [req.usuario.sala]);
+  const [daTurma] = await db.query("SELECT alu_id AS id FROM alunos WHERE alu_sala = ? AND alu_situacao = 'Ativo'", [req.usuario.sala]);
   const permitidos = new Set(daTurma.map((a) => a.id));
   for (const r of registros) {
     if (!permitidos.has(Number(r.aluno_id))) return res.status(403).json({ erro: "Esse aluno não é da sua turma" });
@@ -596,11 +946,11 @@ const normalizar = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u03
 
 // Quem pode mexer na ficha de um aluno: gestão (todos), professor (só a própria turma), responsável (só o próprio filho)
 async function alunoPermitido(usuario, alunoId) {
-  const [[aluno]] = await db.query("SELECT alu_id AS id, alu_nome AS nome, alu_sala AS sala, alu_matricula AS matricula FROM alunos WHERE alu_id = ?", [alunoId]);
+  const [[aluno]] = await db.query("SELECT alu_id AS id, alu_nome AS nome, alu_sala AS sala, alu_matricula AS matricula, alu_situacao AS situacao, DATE_FORMAT(alu_situacao_em, '%d/%m/%Y') AS situacao_em, alu_situacao_motivo AS situacao_motivo FROM alunos WHERE alu_id = ?", [alunoId]);
   if (!aluno) return null;
   if (usuario.papel === "admin") return aluno;
-  if (usuario.papel === "professor" && usuario.sala === aluno.sala) return aluno;
-  if (usuario.papel === "pai" && usuario.aluno_id === aluno.id) return aluno;
+  if (usuario.papel === "professor" && usuario.turmas.includes(aluno.sala)) return aluno;
+  if (usuario.papel === "pai" && usuario.filhos.includes(aluno.id)) return aluno;
   return null;
 }
 const semPermissao = (res) => res.status(403).json({ erro: "Você não tem permissão para este aluno" });
@@ -615,9 +965,9 @@ app.get("/api/gestao-alunos", autenticar, apenasAdmin, rota(async (req, res) => 
     (SELECT COUNT(*) FROM autorizacoes z WHERE z.alu_id = a.alu_id AND z.aut_assinada = FALSE) AS aut_pendentes,
     (SELECT COUNT(*) FROM pendencias p WHERE p.alu_id = a.alu_id AND p.pen_status = 'Aberta') AS pend_abertas,
     (SELECT GROUP_CONCAT(DISTINCT p.pen_tipo SEPARATOR ',') FROM pendencias p WHERE p.alu_id = a.alu_id AND p.pen_status = 'Aberta') AS pend_tipos,
-    (SELECT COUNT(*) FROM ocorrencias o WHERE o.alu_id = a.alu_id AND o.oco_tipo = 'Advertencia') AS advertencias,
-    (SELECT COUNT(*) FROM ocorrencias o WHERE o.alu_id = a.alu_id AND o.oco_tipo = 'Acao') AS acoes
-    FROM alunos a ORDER BY a.alu_nome`);
+    (SELECT COUNT(*) FROM advertencias o WHERE o.alu_id = a.alu_id AND o.adv_tipo = 'Advertencia') AS advertencias,
+    (SELECT COUNT(*) FROM advertencias o WHERE o.alu_id = a.alu_id AND o.adv_tipo = 'Acao') AS acoes
+    FROM alunos a WHERE a.alu_situacao = 'Ativo' ORDER BY a.alu_nome`);
   res.json(linhas);
 }));
 
@@ -625,8 +975,8 @@ app.get("/api/gestao-alunos", autenticar, apenasAdmin, rota(async (req, res) => 
 app.get("/api/alunos/:alunoId/ficha", autenticar, rota(async (req, res) => {
   const aluno = await alunoPermitido(req.usuario, Number(req.params.alunoId));
   if (!aluno) return semPermissao(res);
-  const [responsaveis] = await db.query(`SELECT r.res_nome AS nome, ar.alr_parentesco AS parentesco, r.res_telefone AS telefone FROM aluno_responsavel ar
-    JOIN responsaveis r ON r.res_id = ar.res_id WHERE ar.alu_id = ?`, [aluno.id]);
+  const [responsaveis] = await db.query(`SELECT r.res_nome AS nome, ar.alr_parentesco AS parentesco, r.res_telefone AS telefone, r.res_telefone2 AS telefone2, r.res_email AS email, r.res_contato_preferido AS contato_preferido
+    FROM aluno_responsavel ar JOIN responsaveis r ON r.res_id = ar.res_id WHERE ar.alu_id = ?`, [aluno.id]);
   const [comunicados] = await db.query(`SELECT c.com_id AS id, c.com_titulo AS titulo, c.com_texto AS texto, c.com_sala AS sala, c.com_criado_por_nome AS criado_por_nome, DATE_FORMAT(c.com_criado_em, '%d/%m/%Y') AS data,
     (l.col_lido_em IS NOT NULL) AS lido, DATE_FORMAT(l.col_lido_em, '%d/%m/%Y %H:%i') AS lido_em
     FROM comunicados c LEFT JOIN comunicado_leituras l ON l.com_id = c.com_id AND l.alu_id = ?
@@ -638,14 +988,15 @@ app.get("/api/alunos/:alunoId/ficha", autenticar, rota(async (req, res) => {
   const [pendencias] = await db.query(`SELECT pen_id AS id, pen_tipo AS tipo, pen_descricao AS descricao, pen_status AS status, pen_criada_por_nome AS criada_por_nome, DATE_FORMAT(pen_criada_em, '%d/%m/%Y') AS criada_em,
     DATE_FORMAT(pen_resolvida_em, '%d/%m/%Y') AS resolvida_em, pen_resolvida_por_nome AS resolvida_por_nome FROM pendencias WHERE alu_id = ?
     ORDER BY (pen_status = 'Aberta') DESC, pen_id DESC`, [aluno.id]);
-  const [ocorrencias] = await db.query(`SELECT oco_id AS id, oco_tipo AS tipo, oco_descricao AS descricao, DATE_FORMAT(oco_data_ocorrencia, '%d/%m/%Y') AS data, oco_registrada_por_nome AS registrada_por_nome
-    FROM ocorrencias WHERE alu_id = ? ORDER BY oco_data_ocorrencia DESC, oco_id DESC`, [aluno.id]);
+  const [ocorrencias] = await db.query(`SELECT adv_id AS id, adv_tipo AS tipo, adv_descricao AS descricao, DATE_FORMAT(adv_data, '%d/%m/%Y') AS data, adv_registrada_por_nome AS registrada_por_nome
+    FROM advertencias WHERE alu_id = ? ORDER BY adv_data DESC, adv_id DESC`, [aluno.id]);
   res.json({
     aluno, responsaveis, categorias: DOCUMENTO_CATEGORIAS,
     comunicados: comunicados.map((c) => ({ ...c, lido: !!c.lido })),
     autorizacoes: autorizacoes.map((a) => ({ ...a, assinada: !!a.assinada })),
     documentos, pendencias, ocorrencias,
     consentimento: await consentimentoDoAluno(aluno.id, req.usuario.papel !== "professor"),
+    agora: (await statusAoVivo({ alunoId: aluno.id }))[0] || null,
   });
 }));
 
@@ -653,7 +1004,7 @@ app.get("/api/alunos/:alunoId/ficha", autenticar, rota(async (req, res) => {
 app.get("/api/comunicados", autenticar, adminOuProfessor, rota(async (req, res) => {
   const sala = req.usuario.papel === "professor" ? req.usuario.sala : null;
   const [linhas] = await db.query(`SELECT c.com_id AS id, c.com_titulo AS titulo, c.com_texto AS texto, c.com_sala AS sala, c.com_criado_por_nome AS criado_por_nome, DATE_FORMAT(c.com_criado_em, '%d/%m/%Y %H:%i') AS criado_em,
-    (SELECT COUNT(*) FROM alunos a WHERE (c.com_sala IS NULL OR a.alu_sala = c.com_sala) AND (? IS NULL OR a.alu_sala = ?)) AS destinatarios,
+    (SELECT COUNT(*) FROM alunos a WHERE a.alu_situacao = 'Ativo' AND (c.com_sala IS NULL OR a.alu_sala = c.com_sala) AND (? IS NULL OR a.alu_sala = ?)) AS destinatarios,
     (SELECT COUNT(*) FROM comunicado_leituras l JOIN alunos a ON a.alu_id = l.alu_id WHERE l.com_id = c.com_id AND (? IS NULL OR a.alu_sala = ?)) AS lidos
     FROM comunicados c WHERE (? IS NULL OR c.com_sala IS NULL OR c.com_sala = ?) ORDER BY c.com_id DESC LIMIT 50`, [sala, sala, sala, sala, sala, sala]);
   res.json(linhas);
@@ -672,6 +1023,7 @@ app.post("/api/comunicados", autenticar, adminOuProfessor, rota(async (req, res)
     return res.status(409).json({ erro: "Este comunicado cita o nome de aluno(s). Todas as famílias que recebem o aviso vão ler. Confirme só se for necessário e se as famílias autorizaram.", codigo: "NOME_DE_ALUNO", alunos: citados });
   // Professor só publica para a própria turma; a gestão escolhe uma turma ou a escola toda
   const sala = req.usuario.papel === "professor" ? req.usuario.sala : ((req.body.sala || "").trim() || null);
+  if (sala && !(await turmaExiste(sala))) return res.status(400).json({ erro: "Turma não encontrada" });
   await db.query("INSERT INTO comunicados (com_titulo, com_texto, com_sala, com_criado_por_nome) VALUES (?, ?, ?, ?)", [titulo, texto, sala, req.usuario.nome]);
   await registrarLog(req.usuario, "comunicado_criado", `${titulo} (${sala || "escola toda"})`);
   if (citados.length) await registrarLog(req.usuario, "comunicado_com_nome_de_aluno", `${citados.length} aluno(s) citado(s) no comunicado "${titulo}"`);
@@ -685,7 +1037,7 @@ app.get("/api/comunicados/:id/leituras", autenticar, adminOuProfessor, rota(asyn
   if (salaProf && c.sala && c.sala !== salaProf) return res.status(403).json({ erro: "Comunicado de outra turma" });
   const [linhas] = await db.query(`SELECT a.alu_id AS id, a.alu_nome AS nome, a.alu_sala AS sala, (l.col_lido_em IS NOT NULL) AS lido, DATE_FORMAT(l.col_lido_em, '%d/%m/%Y %H:%i') AS lido_em
     FROM alunos a LEFT JOIN comunicado_leituras l ON l.alu_id = a.alu_id AND l.com_id = ?
-    WHERE (? IS NULL OR a.alu_sala = ?) AND (? IS NULL OR a.alu_sala = ?) ORDER BY lido, a.alu_nome`, [req.params.id, c.sala, c.sala, salaProf, salaProf]);
+    WHERE a.alu_situacao = 'Ativo' AND (? IS NULL OR a.alu_sala = ?) AND (? IS NULL OR a.alu_sala = ?) ORDER BY lido, a.alu_nome`, [req.params.id, c.sala, c.sala, salaProf, salaProf]);
   res.json(linhas.map((l) => ({ ...l, lido: !!l.lido })));
 }));
 
@@ -705,10 +1057,11 @@ app.post("/api/comunicados/:id/ler", autenticar, rota(async (req, res) => {
 app.post("/api/autorizacoes", autenticar, apenasAdmin, rota(async (req, res) => {
   const titulo = (req.body.titulo || "").trim(), detalhe = (req.body.detalhe || "").trim().slice(0, 250), validade = (req.body.validade || "").trim().slice(0, 50);
   const sala = (req.body.sala || "").trim() || null;
+  if (sala && !(await turmaExiste(sala))) return res.status(400).json({ erro: "Turma não encontrada" });
   if (!titulo || titulo.length > 100) return res.status(400).json({ erro: "Informe o título (até 100 caracteres)" });
   const grupo = crypto.randomBytes(6).toString("hex");
   const [r] = await db.query(`INSERT INTO autorizacoes (aut_grupo, alu_id, aut_titulo, aut_validade, aut_detalhe, aut_criada_por_nome)
-    SELECT ?, alu_id, ?, ?, ?, ? FROM alunos WHERE (? IS NULL OR alu_sala = ?)`, [grupo, titulo, validade || null, detalhe || null, req.usuario.nome, sala, sala]);
+    SELECT ?, alu_id, ?, ?, ?, ? FROM alunos WHERE alu_situacao = 'Ativo' AND (? IS NULL OR alu_sala = ?)`, [grupo, titulo, validade || null, detalhe || null, req.usuario.nome, sala, sala]);
   if (!r.affectedRows) return res.status(400).json({ erro: "Nenhum aluno encontrado para esse destino" });
   await registrarLog(req.usuario, "autorizacao_criada", `${titulo} (${r.affectedRows} alunos)`);
   res.status(201).json({ ok: true, alunos: r.affectedRows });
@@ -734,15 +1087,15 @@ app.post("/api/autorizacoes/:id/assinar", autenticar, rota(async (req, res) => {
   if (req.usuario.papel !== "pai") return res.status(403).json({ erro: "Somente o responsável pode assinar" });
   const [[aut]] = await db.query("SELECT aut_id AS id, alu_id AS aluno_id, aut_titulo AS titulo, aut_assinada AS assinada FROM autorizacoes WHERE aut_id = ?", [req.params.id]);
   if (!aut) return res.status(404).json({ erro: "Autorização não encontrada" });
-  if (aut.aluno_id !== req.usuario.aluno_id) return res.status(403).json({ erro: "Você só pode assinar autorizações do seu próprio filho" });
+  if (!req.usuario.filhos.includes(aut.aluno_id)) return res.status(403).json({ erro: "Você só pode assinar autorizações do seu próprio filho" });
   if (aut.assinada) return res.status(400).json({ erro: "Esta autorização já foi assinada" });
   const [[u]] = await db.query("SELECT usu_nome AS nome, usu_senha AS senha FROM usuarios WHERE usu_id = ?", [req.usuario.id]);
   if (!(await conferirSenha(req.body.senha, u.senha))) return res.status(400).json({ erro: "Senha incorreta" });
   if (normalizar(req.body.nome) !== normalizar(u.nome)) return res.status(400).json({ erro: "Digite seu nome completo exatamente como está cadastrado" });
-  const agora = new Date();
-  const codigo = crypto.createHash("sha256").update(`${aut.id}|${aut.aluno_id}|${req.usuario.id}|${agora.toISOString()}|${u.nome}`).digest("hex").slice(0, 16).toUpperCase();
-  await db.query("UPDATE autorizacoes SET aut_assinada = TRUE, aut_assinada_por = ?, aut_assinada_nome = ?, aut_assinada_em = NOW(), aut_codigo = ? WHERE aut_id = ?",
+  const codigo = novoCodigo();
+  await db.query("UPDATE autorizacoes SET aut_assinada_por = ?, aut_assinada_nome = ?, aut_assinada_em = NOW(), aut_codigo = ? WHERE aut_id = ?",
     [req.usuario.id, u.nome, codigo, aut.id]);
+  await registrarAssinatura({ codigo, documento: "autorizacao", documentoId: aut.id, papel: "responsavel", usuario: req.usuario, nome: u.nome, req });
   await registrarLog(req.usuario, "autorizacao_assinada", `${aut.titulo} (código ${codigo})`);
   res.json({ ok: true, codigo });
 }));
@@ -765,13 +1118,14 @@ app.post("/api/documentos", autenticar, rota(async (req, res) => {
   if (!ASSINATURAS_ARQUIVO[ext].every((b, i) => arquivo[i] === b)) return res.status(400).json({ erro: "O conteúdo do arquivo não corresponde ao formato " + ext.toUpperCase() });
   const nomeGuardado = crypto.randomBytes(16).toString("hex") + ".enc"; // nome aleatório: ninguém adivinha o caminho
   fs.writeFileSync(path.join(PASTA_UPLOADS, nomeGuardado), cifrarArquivo(arquivo, nomeGuardado)); // vai para o disco criptografado
-  await db.query(`INSERT INTO documentos (alu_id, doc_categoria, doc_titulo, doc_nome_original, doc_arquivo, doc_tipo_mime, doc_tamanho, doc_enviado_por_nome)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [aluno.id, categoria, titulo, nomeOriginal, nomeGuardado, TIPOS_DOCUMENTO[ext], arquivo.length, req.usuario.nome]);
+  const [novo] = await db.query(`INSERT INTO documentos (alu_id, doc_categoria, doc_titulo, doc_nome_original, doc_arquivo, doc_tipo_mime, doc_tamanho, doc_enviado_por_nome, usu_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [aluno.id, categoria, titulo, nomeOriginal, nomeGuardado, TIPOS_DOCUMENTO[ext], arquivo.length, req.usuario.nome, req.usuario.id]);
   let atendeu = false;
   if (pendencia_id) { // se o documento atende a uma pendência do tipo Documento, ela é resolvida junto
     const [r] = await db.query(`UPDATE pendencias SET pen_status = 'Resolvida', pen_resolvida_em = NOW(), pen_resolvida_por_nome = ?
       WHERE pen_id = ? AND alu_id = ? AND pen_tipo = 'Documento' AND pen_status = 'Aberta'`, [req.usuario.nome, pendencia_id, aluno.id]);
     atendeu = r.affectedRows > 0;
+    if (atendeu) await db.query("UPDATE documentos SET pen_id = ? WHERE doc_id = ?", [pendencia_id, novo.insertId]);
   }
   await registrarLog(req.usuario, "documento_enviado", `${titulo} — ${aluno.nome}`);
   res.status(201).json({ ok: true, pendencia_resolvida: atendeu });
@@ -828,16 +1182,177 @@ app.put("/api/pendencias/:id/resolver", autenticar, apenasAdmin, rota(async (req
 }));
 
 // ---------- Ações e advertências ----------
-app.post("/api/ocorrencias", autenticar, adminOuProfessor, rota(async (req, res) => {
+app.post("/api/advertencias", autenticar, adminOuProfessor, rota(async (req, res) => {
   const aluno = await alunoPermitido(req.usuario, Number(req.body.aluno_id));
   if (!aluno) return semPermissao(res);
   const descricao = (req.body.descricao || "").trim();
   if (!["Advertencia", "Acao"].includes(req.body.tipo)) return res.status(400).json({ erro: "Tipo inválido" });
   if (!descricao || descricao.length > 500) return res.status(400).json({ erro: "Descreva o ocorrido (até 500 caracteres)" });
-  await db.query("INSERT INTO ocorrencias (alu_id, oco_tipo, oco_descricao, oco_data_ocorrencia, oco_registrada_por_nome) VALUES (?, ?, ?, COALESCE(?, CURDATE()), ?)",
+  await db.query("INSERT INTO advertencias (alu_id, adv_tipo, adv_descricao, adv_data, adv_registrada_por_nome) VALUES (?, ?, ?, COALESCE(?, CURDATE()), ?)",
     [aluno.id, req.body.tipo, descricao, dataValida(req.body.data) ? req.body.data : null, req.usuario.nome]);
   await registrarLog(req.usuario, "ocorrencia_registrada", `${req.body.tipo === "Acao" ? "Ação" : "Advertência"} — ${aluno.nome}`);
   res.status(201).json({ ok: true });
+}));
+
+// ---------- Assinatura digital do sistema ----------
+// Quem assina confirma com a própria senha. O servidor grava em "assinaturas":
+//  - o hash SHA-256 do conteúdo exato assinado (se o documento mudar depois, a verificação acusa);
+//  - um selo Ed25519 do servidor sobre todos os dados da assinatura (se alguém mexer na linha do banco, a verificação acusa);
+//  - data e hora, IP e navegador. O código é público: qualquer pessoa confere em "Verificar assinatura" (ou pelo QR code).
+// Base legal: assinatura eletrônica entre a escola e a família (Lei 14.063/2020, art. 4º; MP 2.200-2/2001, art. 10, §2º).
+const CHAVE_ASSINATURA = crypto.createPrivateKey({ key: Buffer.from(config.seguranca.assinatura_privada, "base64"), format: "der", type: "pkcs8" });
+const CHAVE_VERIFICACAO = crypto.createPublicKey({ key: Buffer.from(config.seguranca.assinatura_publica, "base64"), format: "der", type: "spki" });
+const novoCodigo = () => crypto.randomBytes(8).toString("hex").toUpperCase();
+const hashConteudo = (obj) => crypto.createHash("sha256").update(JSON.stringify(obj)).digest("hex");
+const agoraLocal = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
+// O que é assinado em cada documento: só os campos do próprio documento (corrigir o nome do aluno no cadastro não invalida a assinatura)
+async function conteudoAssinado(documento, id) {
+  if (documento === "ocorrencia") {
+    const [[o]] = await db.query(`SELECT alu_id AS aluno_id, oce_turma AS turma, DATE_FORMAT(oce_data, '%Y-%m-%d') AS data, TIME_FORMAT(oce_horario, '%H:%i') AS horario,
+      DATE_FORMAT(oce_notificado_em, '%Y-%m-%d %H:%i') AS notificado_em, oce_descricao AS descricao, oce_buscado_por AS buscado_por, oce_professor_nome AS professor
+      FROM ocorrencias_escolares WHERE oce_id = ?`, [id]);
+    return o ? { documento, id: Number(id), ...o } : null;
+  }
+  if (documento === "autorizacao") {
+    const [[a]] = await db.query("SELECT alu_id AS aluno_id, aut_grupo AS grupo, aut_titulo AS titulo, aut_validade AS validade, aut_detalhe AS detalhe FROM autorizacoes WHERE aut_id = ?", [id]);
+    return a ? { documento, id: Number(id), ...a } : null;
+  }
+  const [[c]] = await db.query("SELECT alu_id AS aluno_id, con_versao AS versao, con_informacoes AS informacoes, con_imagem AS imagem, con_monitoramento AS monitoramento FROM consentimentos WHERE con_id = ?", [id]);
+  return c ? { documento, id: Number(id), aluno_id: c.aluno_id, versao: c.versao, informacoes: !!c.informacoes, imagem: !!c.imagem, monitoramento: !!c.monitoramento } : null;
+}
+const cargaAssinatura = (r) => ["SIVE-ASSINATURA-1", r.codigo, r.documento, r.documento_id, r.papel, r.usu_id, r.nome, r.hash, r.ip || "", r.navegador || "", r.em].join("|");
+async function registrarAssinatura({ codigo, documento, documentoId, papel, usuario, nome, req }) {
+  const r = { codigo, documento, documento_id: Number(documentoId), papel, usu_id: usuario.id, nome, hash: hashConteudo(await conteudoAssinado(documento, documentoId)),
+    ip: String(req.ip || "").slice(0, 45), navegador: String(req.headers["user-agent"] || "").slice(0, 255), em: agoraLocal() };
+  const selo = crypto.sign(null, Buffer.from(cargaAssinatura(r)), CHAVE_ASSINATURA).toString("base64");
+  await db.query(`INSERT INTO assinaturas (ass_codigo, ass_documento, ass_documento_id, ass_papel, usu_id, ass_nome, ass_conteudo_hash, ass_ip, ass_navegador, ass_assinada_em, ass_selo)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [r.codigo, r.documento, r.documento_id, r.papel, r.usu_id, r.nome, r.hash, r.ip, r.navegador, r.em, selo]);
+  return r;
+}
+// Confere a senha de quem vai assinar (com o mesmo bloqueio do login). Devolve o nome cadastrado, ou null depois de já responder o erro.
+async function senhaParaAssinar(req, res) {
+  const chave = `assinatura|${req.usuario.id}`, minutos = minutosBloqueado(chave);
+  if (minutos) { res.status(429).json({ erro: `Muitas tentativas erradas. Tente de novo em ${minutos} minuto(s).` }); return null; }
+  const [[u]] = await db.query("SELECT usu_nome AS nome, usu_senha AS senha FROM usuarios WHERE usu_id = ?", [req.usuario.id]);
+  if (!(await conferirSenha(req.body.senha, u.senha))) { registrarFalha(chave); res.status(400).json({ erro: "Senha incorreta. Para assinar, confirme com a sua senha do sistema." }); return null; }
+  tentativas.delete(chave);
+  return u.nome;
+}
+// Verificação pública (sem login): mostra só o necessário para conferir. O nome de quem assinou aparece abreviado (LGPD).
+const ROTULO_DOCUMENTO = { ocorrencia: "Ocorrência escolar", autorizacao: "Autorização", consentimento: "Termo de consentimento" };
+const ROTULO_PAPEL = { professor: "Professor(a)", responsavel: "Responsável pelo aluno", gestao: "Gestão da escola" };
+const nomeAbreviado = (nome) => { const p = String(nome).trim().split(/\s+/); return [p[0], ...p.slice(1).map((x) => x[0].toUpperCase() + ".")].join(" "); };
+const limparCodigo = (c) => String(c || "").toUpperCase().replace(/[^0-9A-F]/g, "");
+app.get("/api/verificar/:codigo", limitePorMinuto("verificar", 60), rota(async (req, res) => {
+  const codigo = limparCodigo(req.params.codigo);
+  if (codigo.length !== 16) return res.status(400).json({ erro: "O código tem 16 letras e números (ex.: 3F9A0C7E12B45D68)" });
+  const [[a]] = await db.query(`SELECT ass_codigo AS codigo, ass_documento AS documento, ass_documento_id AS documento_id, ass_papel AS papel, usu_id, ass_nome AS nome,
+    ass_conteudo_hash AS hash, ass_ip AS ip, ass_navegador AS navegador, DATE_FORMAT(ass_assinada_em, '%Y-%m-%d %H:%i:%s') AS em, ass_selo AS selo FROM assinaturas WHERE ass_codigo = ?`, [codigo]);
+  if (!a) {
+    // Assinaturas feitas antes da assinatura digital: o código existe, mas não há selo criptográfico para conferir
+    const [[antiga]] = await db.query(`SELECT 1 AS ok FROM ocorrencias_escolares WHERE ? IN (oce_codigo, oce_resp_codigo, oce_ges_codigo)
+      UNION SELECT 1 FROM autorizacoes WHERE aut_codigo = ? UNION SELECT 1 FROM consentimentos WHERE con_codigo = ? LIMIT 1`, [codigo, codigo, codigo]);
+    return res.json({ status: antiga ? "anterior" : "nao_encontrada", codigo });
+  }
+  let seloOk = false;
+  try { seloOk = crypto.verify(null, Buffer.from(cargaAssinatura(a)), CHAVE_VERIFICACAO, Buffer.from(a.selo, "base64")); } catch { seloOk = false; }
+  const atual = await conteudoAssinado(a.documento, a.documento_id);
+  const conteudoOk = !!atual && hashConteudo(atual) === a.hash;
+  const [d, h] = a.em.split(" ");
+  res.json({ status: seloOk && conteudoOk ? "valida" : "alterada", selo_ok: seloOk, conteudo_ok: conteudoOk, codigo: a.codigo,
+    documento: ROTULO_DOCUMENTO[a.documento], papel: ROTULO_PAPEL[a.papel], assinante: nomeAbreviado(a.nome),
+    assinada_em: `${d.split("-").reverse().join("/")} às ${h}`, hash: a.hash, metodo: "Login e senha do sistema + selo Ed25519 do servidor" });
+}));
+// QR code que abre a verificação (vai nos comprovantes)
+app.get("/api/verificar/:codigo/qr.svg", limitePorMinuto("qr", 60), rota(async (req, res) => {
+  const codigo = limparCodigo(req.params.codigo);
+  if (codigo.length !== 16) return res.status(400).end();
+  const svg = await QRCode.toString(`${req.protocol}://${req.get("host")}/?verificar=${codigo}`, { type: "svg", margin: 1, color: { dark: "#140040", light: "#FFFFFF" } });
+  res.type("image/svg+xml").send(svg);
+}));
+// ---------- Ocorrências do professor (registro do dia, com assinatura digital do professor) ----------
+// O professor registra e consulta só a própria turma. A turma gravada é a do aluno no dia do registro.
+// O responsável vê as ocorrências do filho e assina que tomou ciência; enquanto não assina, a ocorrência conta como "nova".
+const CONSULTA_OCORRENCIAS = `SELECT oce.oce_id AS id, oce.alu_id AS aluno_id, a.alu_nome AS aluno_nome, oce.oce_turma AS turma,
+    DATE_FORMAT(oce.oce_data, '%Y-%m-%d') AS data, TIME_FORMAT(oce.oce_horario, '%H:%i') AS horario,
+    DATE_FORMAT(oce.oce_notificado_em, '%d/%m/%Y %H:%i') AS notificado_em, oce.oce_descricao AS descricao,
+    oce.oce_buscado_por AS buscado_por, oce.oce_professor_nome AS professor_nome, oce.oce_codigo AS codigo,
+    DATE_FORMAT(oce.oce_assinada_em, '%d/%m/%Y %H:%i') AS assinada_em,
+    oce.oce_resp_nome AS resp_nome, DATE_FORMAT(oce.oce_resp_assinada_em, '%d/%m/%Y %H:%i') AS resp_assinada_em, oce.oce_resp_codigo AS resp_codigo,
+    oce.oce_ges_nome AS ges_nome, DATE_FORMAT(oce.oce_ges_assinada_em, '%d/%m/%Y %H:%i') AS ges_assinada_em, oce.oce_ges_codigo AS ges_codigo
+    FROM ocorrencias_escolares oce JOIN alunos a ON a.alu_id = oce.alu_id`;
+const ORDEM_OCORRENCIAS = "ORDER BY oce.oce_data DESC, oce.oce_horario DESC, oce.oce_id DESC";
+app.get("/api/ocorrencias-escolares", autenticar, apenasProfessor, rota(async (req, res) => {
+  const [linhas] = await db.query(`${CONSULTA_OCORRENCIAS} WHERE oce.oce_turma = ? ${ORDEM_OCORRENCIAS}`, [req.usuario.sala]);
+  res.json(linhas);
+}));
+
+const apenasPai = (req, res, next) => req.usuario.papel === "pai" ? next() : res.status(403).json({ erro: "Somente o responsável pelo aluno pode acessar isso" });
+app.get("/api/minhas-ocorrencias", autenticar, apenasPai, rota(async (req, res) => {
+  const [linhas] = await db.query(`${CONSULTA_OCORRENCIAS} WHERE oce.alu_id IN (?) ${ORDEM_OCORRENCIAS}`, [idsOuZero(req.usuario.filhos)]);
+  res.json(linhas);
+}));
+// Quantas ocorrências o responsável ainda não assinou (número ao lado de "Ocorrências" no menu)
+app.get("/api/minhas-ocorrencias/novas", autenticar, apenasPai, rota(async (req, res) => {
+  const [[r]] = await db.query("SELECT COUNT(*) AS n FROM ocorrencias_escolares WHERE alu_id IN (?) AND oce_resp_assinada_em IS NULL", [idsOuZero(req.usuario.filhos)]);
+  res.json({ novas: r.n });
+}));
+// Assinatura de ciência do responsável: o botão insere o nome de quem está logado e o servidor confere com o cadastro
+app.post("/api/minhas-ocorrencias/:id/assinar", autenticar, apenasPai, rota(async (req, res) => {
+  const [[o]] = await db.query("SELECT oce_id AS id, alu_id AS aluno_id, oce_resp_assinada_em AS assinada_em FROM ocorrencias_escolares WHERE oce_id = ?", [req.params.id]);
+  if (!o || !req.usuario.filhos.includes(o.aluno_id)) return res.status(404).json({ erro: "Ocorrência não encontrada" });
+  if (o.assinada_em) return res.status(400).json({ erro: "Esta ocorrência já foi assinada" });
+  const nome = await senhaParaAssinar(req, res);
+  if (!nome) return;
+  const u = { nome }, codigo = novoCodigo();
+  const [r] = await db.query(`UPDATE ocorrencias_escolares SET oce_resp_usu_id = ?, oce_resp_nome = ?, oce_resp_assinada_em = NOW(), oce_resp_codigo = ?
+    WHERE oce_id = ? AND oce_resp_assinada_em IS NULL`, [req.usuario.id, u.nome, codigo, o.id]);
+  if (!r.affectedRows) return res.status(400).json({ erro: "Esta ocorrência já foi assinada" });
+  await registrarAssinatura({ codigo, documento: "ocorrencia", documentoId: o.id, papel: "responsavel", usuario: req.usuario, nome, req });
+  await registrarLog(req.usuario, "ocorrencia_escolar_assinada", `ocorrência id ${o.id} (código ${codigo})`);
+  res.json({ ok: true, codigo });
+}));
+
+// Pasta de ocorrências da gestão (Central do Dia): todas as ocorrências registradas pelos professores.
+// Sem a assinatura da gestão, a ocorrência conta no quadro "Ocorrências"; depois de assinada vai para "Ocorrências registradas".
+app.get("/api/ocorrencias-gestao", autenticar, apenasAdmin, rota(async (req, res) => {
+  const [linhas] = await db.query(`${CONSULTA_OCORRENCIAS} ${ORDEM_OCORRENCIAS}`);
+  res.json(linhas);
+}));
+app.post("/api/ocorrencias-gestao/:id/assinar", autenticar, apenasAdmin, rota(async (req, res) => {
+  const [[o]] = await db.query("SELECT oce_id AS id, alu_id AS aluno_id, oce_ges_assinada_em AS assinada_em FROM ocorrencias_escolares WHERE oce_id = ?", [req.params.id]);
+  if (!o) return res.status(404).json({ erro: "Ocorrência não encontrada" });
+  if (o.assinada_em) return res.status(400).json({ erro: "Esta ocorrência já foi assinada pela gestão" });
+  const nome = await senhaParaAssinar(req, res);
+  if (!nome) return;
+  const u = { nome }, codigo = novoCodigo();
+  const [r] = await db.query(`UPDATE ocorrencias_escolares SET oce_ges_usu_id = ?, oce_ges_nome = ?, oce_ges_assinada_em = NOW(), oce_ges_codigo = ?
+    WHERE oce_id = ? AND oce_ges_assinada_em IS NULL`, [req.usuario.id, u.nome, codigo, o.id]);
+  if (!r.affectedRows) return res.status(400).json({ erro: "Esta ocorrência já foi assinada pela gestão" });
+  await registrarAssinatura({ codigo, documento: "ocorrencia", documentoId: o.id, papel: "gestao", usuario: req.usuario, nome, req });
+  await registrarLog(req.usuario, "ocorrencia_escolar_gestao", `ocorrência id ${o.id} (código ${codigo})`);
+  res.json({ ok: true, codigo });
+}));
+
+app.post("/api/ocorrencias-escolares", autenticar, apenasProfessor, rota(async (req, res) => {
+  const b = req.body;
+  const aluno = await alunoPermitido(req.usuario, Number(b.aluno_id));
+  if (!aluno) return semPermissao(res);
+  const descricao = (b.descricao || "").trim(), buscadoPor = (b.buscado_por || "").trim();
+  if (!dataValida(b.data)) return res.status(400).json({ erro: "Informe a data da ocorrência" });
+  if (!/^\d{2}:\d{2}$/.test(b.horario || "")) return res.status(400).json({ erro: "Informe o horário da ocorrência" });
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(b.notificado_em || "")) return res.status(400).json({ erro: "Informe quando o responsável foi notificado" });
+  if (!descricao || descricao.length > 1000) return res.status(400).json({ erro: "Descreva a ocorrência (até 1000 caracteres)" });
+  if (!buscadoPor || buscadoPor.length > 100) return res.status(400).json({ erro: "Informe quem foi buscar o aluno (até 100 caracteres)" });
+  // Assinatura digital: o professor confirma com a própria senha
+  const nome = await senhaParaAssinar(req, res);
+  if (!nome) return;
+  const u = { nome }, codigo = novoCodigo();
+  const [novo] = await db.query(`INSERT INTO ocorrencias_escolares (alu_id, oce_turma, oce_data, oce_horario, oce_notificado_em, oce_descricao, oce_buscado_por, usu_id, oce_professor_nome, oce_codigo)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [aluno.id, aluno.sala, b.data, b.horario, b.notificado_em.replace("T", " ") + ":00", descricao, buscadoPor, req.usuario.id, u.nome, codigo]);
+  await registrarAssinatura({ codigo, documento: "ocorrencia", documentoId: novo.insertId, papel: "professor", usuario: req.usuario, nome, req });
+  await registrarLog(req.usuario, "ocorrencia_escolar_registrada", `${aluno.nome} (código ${codigo})`);
+  res.status(201).json({ ok: true, codigo });
 }));
 
 // ---------- Termo de consentimento dos responsáveis: uso de imagem e informações do aluno (LGPD, art. 14, §1º) ----------
@@ -904,7 +1419,7 @@ app.get("/api/alunos/:alunoId/consentimento", autenticar, rota(async (req, res) 
 app.post("/api/alunos/:alunoId/consentimento", autenticar, rota(async (req, res) => {
   if (req.usuario.papel !== "pai") return res.status(403).json({ erro: "Somente o responsável pelo aluno pode assinar o termo" });
   const alunoId = Number(req.params.alunoId);
-  if (req.usuario.aluno_id !== alunoId) return res.status(403).json({ erro: "Você só pode assinar o termo do seu próprio filho" });
+  if (!req.usuario.filhos.includes(alunoId)) return res.status(403).json({ erro: "Você só pode assinar o termo do seu próprio filho" });
   const escolhas = {};
   for (const id of OPCOES_CONSENTIMENTO) {
     if (typeof req.body[id] !== "boolean") return res.status(400).json({ erro: "Responda todas as opções (autorizo ou não autorizo)" });
@@ -916,10 +1431,10 @@ app.post("/api/alunos/:alunoId/consentimento", autenticar, rota(async (req, res)
   if (!(await conferirSenha(req.body.senha, u.senha))) { registrarFalha(chave); return res.status(400).json({ erro: "Senha incorreta" }); }
   if (normalizar(req.body.nome) !== normalizar(u.nome)) return res.status(400).json({ erro: "Digite seu nome completo exatamente como está cadastrado" });
   tentativas.delete(chave);
-  const agora = new Date();
-  const codigo = crypto.createHash("sha256").update(`${alunoId}|${req.usuario.id}|${CONSENTIMENTO.versao}|${OPCOES_CONSENTIMENTO.map((id) => (escolhas[id] ? 1 : 0)).join("")}|${agora.toISOString()}|${u.nome}`).digest("hex").slice(0, 16).toUpperCase();
-  await db.query("INSERT INTO consentimentos (alu_id, usu_id, con_versao, con_informacoes, con_imagem, con_monitoramento, con_assinado_nome, con_codigo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+  const codigo = novoCodigo();
+  const [novoCon] = await db.query("INSERT INTO consentimentos (alu_id, usu_id, con_versao, con_informacoes, con_imagem, con_monitoramento, con_assinado_nome, con_codigo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     [alunoId, req.usuario.id, CONSENTIMENTO.versao, escolhas.informacoes, escolhas.imagem, escolhas.monitoramento, u.nome, codigo]);
+  await registrarAssinatura({ codigo, documento: "consentimento", documentoId: novoCon.insertId, papel: "responsavel", usuario: req.usuario, nome: u.nome, req });
   const sn = (v) => (v ? "sim" : "não");
   await registrarLog(req.usuario, "consentimento_registrado", `Aluno id ${alunoId} — informações: ${sn(escolhas.informacoes)}, imagem: ${sn(escolhas.imagem)}, câmeras: ${sn(escolhas.monitoramento)} (código ${codigo})`);
   res.status(201).json({ ok: true, codigo, status: statusConsentimento(escolhas) });
@@ -930,7 +1445,7 @@ app.get("/api/consentimentos", autenticar, apenasAdmin, rota(async (req, res) =>
   const [linhas] = await db.query(`SELECT a.alu_id AS id, a.alu_nome AS nome, a.alu_sala AS sala, c.con_informacoes AS informacoes, c.con_imagem AS imagem, c.con_monitoramento AS monitoramento,
     c.con_assinado_nome AS assinado_nome, DATE_FORMAT(c.con_assinado_em, '%d/%m/%Y %H:%i') AS assinado_em
     FROM alunos a LEFT JOIN consentimentos c ON c.alu_id = a.alu_id AND c.con_id = (SELECT MAX(x.con_id) FROM consentimentos x WHERE x.alu_id = a.alu_id AND x.con_versao = ?)
-    ORDER BY a.alu_nome`, [CONSENTIMENTO.versao]);
+    WHERE a.alu_situacao = 'Ativo' ORDER BY a.alu_nome`, [CONSENTIMENTO.versao]);
   const alunos = linhas.map((l) => {
     const assinado = l.assinado_nome !== null;
     const c = assinado ? { informacoes: !!l.informacoes, imagem: !!l.imagem, monitoramento: !!l.monitoramento } : null;
@@ -1012,11 +1527,389 @@ app.get("/api/protecao/faltas-limite", autenticar, apenasAdmin, rota(async (req,
   const [linhas] = await db.query(`SELECT a.alu_id AS id, a.alu_nome AS nome, a.alu_sala AS sala, COUNT(p.pre_id) AS dias,
     COUNT(CASE WHEN p.pre_status = 'Ausente' THEN 1 END) AS faltas,
     EXISTS(SELECT 1 FROM comunicacoes_conselho c WHERE c.alu_id = a.alu_id AND c.cct_motivo = 'Faltas') AS comunicado
-    FROM alunos a JOIN presencas p ON p.alu_id = a.alu_id GROUP BY a.alu_id, a.alu_nome, a.alu_sala
+    FROM alunos a JOIN presencas p ON p.alu_id = a.alu_id WHERE a.alu_situacao = 'Ativo' GROUP BY a.alu_id, a.alu_nome, a.alu_sala
     HAVING COUNT(p.pre_id) > 0 AND COUNT(CASE WHEN p.pre_status = 'Ausente' THEN 1 END) * 100 > COUNT(p.pre_id) * ?
     ORDER BY COUNT(CASE WHEN p.pre_status = 'Ausente' THEN 1 END) / COUNT(p.pre_id) DESC, a.alu_nome`, [LIMITE_FALTAS_CT]);
   res.json({ percentual: LIMITE_FALTAS_CT, alunos: linhas.map((l) => ({ ...l, percentual: Math.round((l.faltas * 1000) / l.dias) / 10, comunicado: !!l.comunicado })) });
 }));
+
+// =====================================================================
+// FASE 4 — calendário de eventos com banners, perfil do responsável e reativação de professores
+// =====================================================================
+
+// ---------- Reativação de professores: 60 dias sem acessar o sistema (AVA) ----------
+// O prazo conta a partir do último acesso (ou do cadastro, se nunca entrou) e recomeça quando a gestão reativa.
+// Para mudar a regra, altere estes números. "aviso" = a partir de quantos dias o professor aparece como "perto do limite".
+const INATIVIDADE = { dias: 60, aviso: 50 };
+const SQL_DIAS_SEM_ACESSO = "DATEDIFF(NOW(), GREATEST(COALESCE(u.usu_ultimo_acesso, u.usu_criado_em), COALESCE(u.usu_reativado_em, u.usu_criado_em)))";
+
+async function verificarInatividade() {
+  const [vencidos] = await db.query(`SELECT u.usu_id AS id, u.usu_nome AS nome, u.usu_sala AS sala, ${SQL_DIAS_SEM_ACESSO} AS dias FROM usuarios u
+    WHERE u.usu_papel = 'professor' AND u.usu_ativo = TRUE AND ${SQL_DIAS_SEM_ACESSO} >= ?`, [INATIVIDADE.dias]);
+  for (const v of vencidos) {
+    const [r] = await db.query("UPDATE usuarios SET usu_ativo = FALSE, usu_inativado_motivo = 'inatividade', usu_inativado_em = NOW(), usu_reativacao_pedida_em = NULL WHERE usu_id = ? AND usu_ativo = TRUE", [v.id]);
+    if (r.affectedRows) await registrarLog(SISTEMA, "inativado_por_inatividade", `${v.nome} (${v.sala || "-"}): ${v.dias} dias sem acessar`);
+  }
+}
+
+app.get("/api/reativacao", autenticar, apenasAdmin, rota(async (req, res) => {
+  await verificarInatividade();
+  const [linhas] = await db.query(`SELECT u.usu_id AS id, u.usu_nome AS nome, u.usu_usuario AS usuario, u.usu_sala AS sala, u.usu_ativo AS ativo,
+    DATE_FORMAT(u.usu_ultimo_acesso, '%d/%m/%Y') AS ultimo_acesso, DATE_FORMAT(u.usu_inativado_em, '%d/%m/%Y') AS inativado_em,
+    DATE_FORMAT(u.usu_reativacao_pedida_em, '%d/%m/%Y %H:%i') AS pedido_em, ${SQL_DIAS_SEM_ACESSO} AS dias_sem_acesso
+    FROM usuarios u WHERE u.usu_papel = 'professor' AND ((u.usu_ativo = FALSE AND u.usu_inativado_motivo = 'inatividade') OR (u.usu_ativo = TRUE AND ${SQL_DIAS_SEM_ACESSO} >= ?))
+    ORDER BY u.usu_ativo, u.usu_reativacao_pedida_em IS NULL, dias_sem_acesso DESC`, [INATIVIDADE.aviso]);
+  res.json({ ...INATIVIDADE, inativos: linhas.filter((l) => !l.ativo), perto: linhas.filter((l) => l.ativo).map((l) => ({ ...l, faltam: INATIVIDADE.dias - l.dias_sem_acesso })) });
+}));
+
+// A gestão reativa: o acesso volta, o prazo recomeça e uma senha provisória nova é gerada (troca obrigatória no próximo login)
+app.put("/api/usuarios/:id/reativar", autenticar, apenasAdmin, rota(async (req, res) => {
+  const [[u]] = await db.query("SELECT usu_id AS id, usu_nome AS nome, usu_ativo AS ativo FROM usuarios WHERE usu_id = ?", [req.params.id]);
+  if (!u) return res.status(404).json({ erro: "Usuário não encontrado" });
+  if (u.ativo) return res.status(400).json({ erro: "Este usuário já está ativo" });
+  const senha = gerarSenhaGenerica();
+  await db.query(`UPDATE usuarios SET usu_ativo = TRUE, usu_inativado_motivo = NULL, usu_inativado_em = NULL, usu_reativado_em = NOW(), usu_reativacao_pedida_em = NULL,
+    usu_senha = ?, usu_senha_temporaria = TRUE, usu_sessao_versao = usu_sessao_versao + 1 WHERE usu_id = ?`, [await hashSenha(senha), u.id]);
+  await registrarLog(req.usuario, "reativar_usuario", `${u.nome} (nova senha provisória gerada)`);
+  res.json({ ok: true, senha_provisoria: senha });
+}));
+
+// ---------- Perfil do responsável ----------
+// Liga o login do responsável ao cadastro dele em "responsaveis" (procura pelo nome entre os responsáveis do filho; se não achar, cria).
+async function responsavelDoUsuario(usuario) {
+  const [[u]] = await db.query("SELECT res_id AS res_id FROM usuarios WHERE usu_id = ?", [usuario.id]);
+  if (u && u.res_id) return u.res_id;
+  if (!usuario.aluno_id) return null;
+  const [doFilho] = await db.query("SELECT r.res_id AS id, r.res_nome AS nome FROM aluno_responsavel ar JOIN responsaveis r ON r.res_id = ar.res_id WHERE ar.alu_id = ?", [usuario.aluno_id]);
+  let resId = (doFilho.find((r) => normalizar(r.nome) === normalizar(usuario.nome)) || {}).id;
+  if (!resId) {
+    resId = (await db.query("INSERT INTO responsaveis (res_nome) VALUES (?)", [usuario.nome]))[0].insertId;
+    await db.query("INSERT IGNORE INTO aluno_responsavel (alu_id, res_id, alr_parentesco) VALUES (?, ?, 'Responsável')", [usuario.aluno_id, resId]);
+  }
+  await db.query("UPDATE usuarios SET res_id = ? WHERE usu_id = ?", [resId, usuario.id]);
+  return resId;
+}
+const CONTATOS = ["WhatsApp", "Ligação", "E-mail"];
+const apenasResponsavel = (req, res, next) => req.usuario.papel === "pai" ? next() : res.status(403).json({ erro: "Somente o responsável tem perfil" });
+
+app.get("/api/meu-perfil", autenticar, apenasResponsavel, rota(async (req, res) => {
+  const resId = await responsavelDoUsuario(req.usuario);
+  const [[conta]] = await db.query(`SELECT usu_usuario AS login, usu_nome AS nome, DATE_FORMAT(usu_ultimo_acesso, '%d/%m/%Y %H:%i') AS ultimo_acesso,
+    DATE_FORMAT(usu_criado_em, '%d/%m/%Y') AS criado_em, DATE_FORMAT(usu_aceite_em, '%d/%m/%Y %H:%i') AS aceite_em, usu_aceite_versao AS aceite_versao FROM usuarios WHERE usu_id = ?`, [req.usuario.id]);
+  const [[resp]] = await db.query(`SELECT res_id AS id, res_nome AS nome, res_telefone AS telefone, res_telefone2 AS telefone2, res_email AS email, res_contato_preferido AS contato_preferido,
+    DATE_FORMAT(res_atualizado_em, '%d/%m/%Y %H:%i') AS atualizado_em FROM responsaveis WHERE res_id = ?`, [resId]);
+  const [[filho]] = await db.query(`SELECT a.alu_id AS id, a.alu_nome AS nome, a.alu_sala AS sala, a.alu_matricula AS matricula, ar.alr_parentesco AS parentesco
+    FROM alunos a LEFT JOIN aluno_responsavel ar ON ar.alu_id = a.alu_id AND ar.res_id = ? WHERE a.alu_id = ?`, [resId, req.usuario.aluno_id]);
+  const [outros] = await db.query(`SELECT r.res_nome AS nome, ar.alr_parentesco AS parentesco FROM aluno_responsavel ar JOIN responsaveis r ON r.res_id = ar.res_id
+    WHERE ar.alu_id = ? AND ar.res_id <> ?`, [req.usuario.aluno_id, resId]);
+  const [acessos] = await db.query(`SELECT DATE_FORMAT(log_data_hora, '%d/%m/%Y %H:%i') AS quando FROM logs WHERE usu_id = ? AND log_acao = 'login_sucesso' ORDER BY log_id DESC LIMIT 5`, [req.usuario.id]);
+  const consentimento = await consentimentoDoAluno(req.usuario.aluno_id, true);
+  res.json({ conta, responsavel: resp, filho, outros_responsaveis: outros, ultimos_acessos: acessos, contatos: CONTATOS,
+    consentimento: { status: consentimento.status, assinado_em: consentimento.atual ? consentimento.atual.assinado_em : null } });
+}));
+
+app.put("/api/meu-perfil", autenticar, apenasResponsavel, rota(async (req, res) => {
+  const limpa = (v) => String(v ?? "").trim();
+  const telefone = limpa(req.body.telefone), telefone2 = limpa(req.body.telefone2), email = limpa(req.body.email).toLowerCase(), contato = limpa(req.body.contato_preferido);
+  const telOk = (t) => /^[\d\s()+-]{8,20}$/.test(t) && t.replace(/\D/g, "").length >= 8;
+  if (!telOk(telefone)) return res.status(400).json({ erro: "Informe um telefone principal válido, com DDD. Ex.: (11) 98765-4321" });
+  if (telefone2 && !telOk(telefone2)) return res.status(400).json({ erro: "O telefone para recados não parece válido" });
+  if (email && (email.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email))) return res.status(400).json({ erro: "O e-mail não parece válido" });
+  if (!CONTATOS.includes(contato)) return res.status(400).json({ erro: "Escolha como prefere ser contatado" });
+  if (contato === "E-mail" && !email) return res.status(400).json({ erro: "Para receber contato por e-mail, informe o seu e-mail" });
+  const resId = await responsavelDoUsuario(req.usuario);
+  await db.query("UPDATE responsaveis SET res_telefone = ?, res_telefone2 = ?, res_email = ?, res_contato_preferido = ?, res_atualizado_em = NOW() WHERE res_id = ?",
+    [telefone, telefone2 || null, email || null, contato, resId]);
+  await registrarLog(req.usuario, "perfil_atualizado", "Contatos do responsável"); // os dados em si não vão para o log
+  res.json({ ok: true });
+}));
+
+// ---------- Calendário de eventos e banners ----------
+const TIPOS_EVENTO = ["Evento", "Reunião", "Passeio", "Feriado", "Prazo"];
+const TIPOS_BANNER = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg" };
+const BANNER_MAXIMO = 2 * 1024 * 1024;
+// Quem vê o quê: gestão vê tudo; professor vê os da escola toda e da própria turma; responsável, os da escola toda e da turma do filho.
+async function filtroEventos(usuario) {
+  if (usuario.papel === "admin") return { sql: "1 = 1", params: [] };
+  let sala = usuario.sala;
+  if (usuario.papel === "pai") sala = ((await db.query("SELECT alu_sala AS sala FROM alunos WHERE alu_id = ?", [usuario.aluno_id]))[0][0] || {}).sala;
+  return { sql: "(e.eve_sala IS NULL OR e.eve_sala = ?)", params: [sala || ""] };
+}
+const CAMPOS_EVENTO = `e.eve_id AS id, e.eve_titulo AS titulo, e.eve_descricao AS descricao, e.eve_tipo AS tipo, DATE_FORMAT(e.eve_data, '%Y-%m-%d') AS data,
+  DATE_FORMAT(e.eve_data_fim, '%Y-%m-%d') AS data_fim, TIME_FORMAT(e.eve_hora, '%H:%i') AS hora, e.eve_local AS local, e.eve_sala AS sala, e.eve_destaque AS destaque,
+  (e.eve_banner_arquivo IS NOT NULL) AS tem_banner, e.eve_criado_por_nome AS criado_por_nome, e.usu_id AS criado_por_id`;
+const formatarEvento = (usuario) => (e) => ({ ...e, destaque: !!e.destaque, tem_banner: !!e.tem_banner, pode_excluir: usuario.papel === "admin" || e.criado_por_id === usuario.id, criado_por_id: undefined });
+
+app.get("/api/eventos", autenticar, rota(async (req, res) => {
+  const hoje = (await dataReferencia()).hoje;
+  const mes = /^\d{4}-\d{2}$/.test(req.query.mes || "") ? req.query.mes : hoje.slice(0, 7);
+  const inicio = `${mes}-01`, f = await filtroEventos(req.usuario);
+  const [doMes] = await db.query(`SELECT ${CAMPOS_EVENTO} FROM eventos e WHERE e.eve_data < DATE_ADD(?, INTERVAL 1 MONTH) AND COALESCE(e.eve_data_fim, e.eve_data) >= ? AND ${f.sql}
+    ORDER BY e.eve_data, e.eve_hora`, [inicio, inicio, ...f.params]);
+  const [proximos] = await db.query(`SELECT ${CAMPOS_EVENTO} FROM eventos e WHERE COALESCE(e.eve_data_fim, e.eve_data) >= CURDATE() AND ${f.sql}
+    ORDER BY e.eve_data, e.eve_hora LIMIT 8`, f.params);
+  res.json({ mes, hoje, tipos: TIPOS_EVENTO, eventos: doMes.map(formatarEvento(req.usuario)), proximos: proximos.map(formatarEvento(req.usuario)) });
+}));
+
+// Banners: eventos marcados como destaque que ainda não passaram (até 5)
+app.get("/api/eventos/banners", autenticar, rota(async (req, res) => {
+  const f = await filtroEventos(req.usuario);
+  const [linhas] = await db.query(`SELECT ${CAMPOS_EVENTO} FROM eventos e WHERE e.eve_destaque = TRUE AND COALESCE(e.eve_data_fim, e.eve_data) >= CURDATE() AND ${f.sql}
+    ORDER BY e.eve_data, e.eve_hora LIMIT 5`, f.params);
+  res.json(linhas.map(formatarEvento(req.usuario)));
+}));
+
+app.post("/api/eventos", autenticar, adminOuProfessor, rota(async (req, res) => {
+  const b = req.body, texto = (v, max) => String(v ?? "").trim().slice(0, max);
+  const titulo = texto(b.titulo, 200), descricao = texto(b.descricao, 600), local = texto(b.local, 200);
+  if (titulo.length < 3 || titulo.length > 100) return res.status(400).json({ erro: "Informe o título do evento (de 3 a 100 caracteres)" });
+  if (!TIPOS_EVENTO.includes(b.tipo)) return res.status(400).json({ erro: "Escolha o tipo do evento" });
+  if (!dataValida(b.data) || Number.isNaN(new Date(b.data + "T12:00:00").getTime())) return res.status(400).json({ erro: "Informe a data do evento" });
+  const dataFim = b.data_fim ? String(b.data_fim) : null;
+  if (dataFim && (!dataValida(dataFim) || dataFim < b.data)) return res.status(400).json({ erro: "A data de término precisa ser igual ou depois da data de início" });
+  const hora = b.hora ? String(b.hora).slice(0, 5) : null;
+  if (hora && !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) return res.status(400).json({ erro: "Hora inválida" });
+  if (descricao.length > 500) return res.status(400).json({ erro: "A descrição passa de 500 caracteres" });
+  if (local.length > 100) return res.status(400).json({ erro: "O local passa de 100 caracteres" });
+  // professor só cria evento para a própria turma; a gestão escolhe uma turma ou a escola toda
+  const sala = req.usuario.papel === "professor" ? req.usuario.sala : (texto(b.sala, 40) || null);
+  if (sala && !(await turmaExiste(sala))) return res.status(400).json({ erro: "Turma não encontrada" });
+  let arquivo = null, mime = null, bytes = null;
+  if (b.banner && b.banner.conteudo) {
+    const ext = path.extname(path.basename(String(b.banner.nome_arquivo || ""))).slice(1).toLowerCase();
+    if (!TIPOS_BANNER[ext]) return res.status(400).json({ erro: "A imagem do banner precisa ser PNG ou JPG" });
+    bytes = Buffer.from(String(b.banner.conteudo), "base64");
+    if (!bytes.length || bytes.length > BANNER_MAXIMO) return res.status(400).json({ erro: "A imagem do banner precisa ter até 2 MB" });
+    if (!ASSINATURAS_ARQUIVO[ext].every((x, i) => bytes[i] === x)) return res.status(400).json({ erro: "O conteúdo da imagem não corresponde ao formato " + ext.toUpperCase() });
+    // ECA, arts. 17 e 100, V, e LGPD, art. 14: o banner é visto por várias famílias
+    if (b.imagem_sem_alunos !== true) return res.status(400).json({ erro: "Confirme que a imagem não mostra alunos, ou que todos os alunos que aparecem têm autorização de uso de imagem" });
+    arquivo = "ban-" + crypto.randomBytes(16).toString("hex") + ".enc"; mime = TIPOS_BANNER[ext];
+  }
+  if (arquivo) fs.writeFileSync(path.join(PASTA_UPLOADS, arquivo), cifrarArquivo(bytes, arquivo));
+  const [r] = await db.query(`INSERT INTO eventos (eve_titulo, eve_descricao, eve_tipo, eve_data, eve_data_fim, eve_hora, eve_local, eve_sala, eve_destaque, eve_banner_arquivo, eve_banner_mime, usu_id, eve_criado_por_nome)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [titulo, descricao || null, b.tipo, b.data, dataFim, hora, local || null, sala, b.destaque === true, arquivo, mime, req.usuario.id, req.usuario.nome]);
+  await registrarLog(req.usuario, "evento_criado", `${titulo} (${b.data}, ${sala || "escola toda"})${arquivo ? " com banner" : ""}`);
+  res.status(201).json({ ok: true, id: r.insertId });
+}));
+
+app.delete("/api/eventos/:id", autenticar, adminOuProfessor, rota(async (req, res) => {
+  const [[e]] = await db.query("SELECT eve_id AS id, eve_titulo AS titulo, eve_banner_arquivo AS arquivo, usu_id AS criador FROM eventos WHERE eve_id = ?", [req.params.id]);
+  if (!e) return res.status(404).json({ erro: "Evento não encontrado" });
+  if (req.usuario.papel !== "admin" && e.criador !== req.usuario.id) return res.status(403).json({ erro: "Você só pode excluir os eventos que criou" });
+  await db.query("DELETE FROM eventos WHERE eve_id = ?", [e.id]);
+  if (e.arquivo) fs.rmSync(path.join(PASTA_UPLOADS, path.basename(e.arquivo)), { force: true });
+  await registrarLog(req.usuario, "evento_excluido", e.titulo);
+  res.json({ ok: true });
+}));
+
+// A imagem do banner (criptografada no disco). Só para quem pode ver o evento.
+app.get("/api/eventos/:id/banner", autenticar, rota(async (req, res) => {
+  const f = await filtroEventos(req.usuario);
+  const [[e]] = await db.query(`SELECT e.eve_banner_arquivo AS arquivo, e.eve_banner_mime AS mime FROM eventos e WHERE e.eve_id = ? AND ${f.sql}`, [req.params.id, ...f.params]);
+  if (!e || !e.arquivo) return res.status(404).json({ erro: "Banner não encontrado" });
+  const nome = path.basename(e.arquivo), caminho = path.join(PASTA_UPLOADS, nome);
+  if (!fs.existsSync(caminho)) return res.status(404).json({ erro: "Arquivo do banner não encontrado" });
+  let conteudo;
+  try { conteudo = decifrarArquivo(fs.readFileSync(caminho), nome); }
+  catch { return res.status(500).json({ erro: "Não foi possível abrir o banner: o arquivo foi alterado ou a chave de segurança é outra." }); }
+  res.setHeader("Content-Type", e.mime);
+  res.send(conteudo);
+}));
+
+// =====================================================================
+// FASE 5 — câmeras e reconhecimento facial (SIMULADOS) e situação do aluno ao vivo
+// =====================================================================
+// Regras do reconhecimento facial (dado biométrico = dado pessoal sensível, LGPD art. 11):
+//   1. só funciona se a gestão ligar o recurso;  2. só em câmeras de portão (entrada/saída);
+//   3. só para turmas a partir do Pré (berçário e maternal ficam de fora);
+//   4. só para alunos cujo responsável marcou "câmeras e reconhecimento facial" no Termo de Consentimento.
+// Quem não cumpre as regras NÃO tem cadastro facial: a câmera não o identifica e a imagem é descartada.
+// O sistema não guarda foto nem dado biométrico, só a passagem (horário, câmera e confiança).
+const TURMAS_ANTES_DO_PRE = /bercario|maternal|creche/;
+const RETENCAO_RECONHECIMENTOS_DIAS = 90;
+// Logs de atividade guardam dados pessoais (quem fez o quê): apagados depois deste prazo (config.json → logs_anos). Backups: quantos manter (config.json → backup.manter).
+const RETENCAO_LOGS_ANOS = Number((config.retencao || {}).logs_anos) || 2;
+const BACKUPS_MANTER = Number((config.backup || {}).manter) || 14;
+const PASTA_BACKUPS = backup.pastaDosBackups(config);
+const LOCAIS_PROIBIDOS = /banheir|sanitari|vestiar|trocador|fraldari|chuveir|lavabo|\bwc\b/; // ECA, art. 17: nunca em espaços de intimidade
+
+async function facialLigado() {
+  const [[c]] = await db.query("SELECT cfg_valor AS valor FROM configuracoes WHERE cfg_chave = 'reconhecimento_facial'");
+  return !!c && c.valor === "ligado";
+}
+// Situação do cadastro facial de um aluno (calculada na hora: se o responsável revogar, deixa de valer no mesmo instante)
+async function cadastroFacial(aluno, ligado) {
+  if (!ligado) return { ok: false, motivo: "Reconhecimento facial desligado pela escola" };
+  if (TURMAS_ANTES_DO_PRE.test(normalizar(aluno.sala))) return { ok: false, motivo: "Turma antes do Pré (sem reconhecimento facial)" };
+  const c = await consentimentoDoAluno(aluno.id, false);
+  if (c.status === "pendente") return { ok: false, motivo: "Termo de consentimento pendente" };
+  if (!c.atual.monitoramento) return { ok: false, motivo: "Responsável não autorizou" };
+  return { ok: true, motivo: "Autorizado pelo responsável" };
+}
+// Primeira entrada do dia também marca a presença (se o professor ainda não fez a chamada)
+async function marcarPresencaPelaEntrada(alunoId, origem) {
+  await db.query("INSERT IGNORE INTO presencas (alu_id, pre_data, pre_status, pre_observacao) VALUES (?, CURDATE(), 'Presente', CONCAT('Entrada ', DATE_FORMAT(NOW(), '%H:%i'), ' — ', ?))", [alunoId, origem]);
+}
+
+// Situação AO VIVO de hoje: na escola, saiu, ainda não chegou ou ausente. filtro: { alunoId } ou { sala } ou {} (todos)
+async function statusAoVivo(filtro = {}) {
+  const cond = filtro.alunoId ? "a.alu_id = ?" : filtro.sala ? "a.alu_sala = ? AND a.alu_situacao = 'Ativo'" : "a.alu_situacao = 'Ativo'";
+  const param = filtro.alunoId ? [filtro.alunoId] : filtro.sala ? [filtro.sala] : [];
+  const [alunos] = await db.query(`SELECT a.alu_id AS id, a.alu_nome AS nome, a.alu_sala AS sala, p.pre_status AS chamada FROM alunos a
+    LEFT JOIN presencas p ON p.alu_id = a.alu_id AND p.pre_data = CURDATE() WHERE ${cond} ORDER BY a.alu_nome`, param);
+  if (!alunos.length) return [];
+  const ids = alunos.map((a) => a.id);
+  const [movs] = await db.query(`SELECT * FROM (
+      SELECT 'Entrada' AS sentido, ac.alu_id AS aluno_id, ac.ace_data_hora AS quando, ac.ace_metodo AS metodo, COALESCE(c.cam_nome, ac.ace_sala, 'Portaria') AS local, NULL AS por
+      FROM acessos ac LEFT JOIN cameras c ON c.cam_id = ac.cam_id WHERE ac.ace_data_hora >= CURDATE() AND ac.alu_id IN (?)
+      UNION ALL
+      SELECT 'Saída', s.alu_id, s.sai_data_hora, s.sai_metodo, COALESCE(c.cam_nome, 'Secretaria'), s.sai_liberado_por_nome
+      FROM saidas s LEFT JOIN cameras c ON c.cam_id = s.cam_id WHERE s.sai_data_hora >= CURDATE() AND s.alu_id IN (?)
+    ) m ORDER BY quando`, [ids, ids]);
+  const hora = (d) => new Date(d).toTimeString().slice(0, 5);
+  const comoFoi = (m) => m.metodo === "Facial" ? "reconhecimento facial" : m.metodo === "Liberação" ? `liberação na secretaria${m.por ? " por " + m.por : ""}` : "registro da portaria";
+  return alunos.map((a) => {
+    const meus = movs.filter((m) => m.aluno_id === a.id), ultimo = meus[meus.length - 1];
+    let situacao, texto, detalhe = "";
+    if (ultimo && ultimo.sentido === "Entrada") { situacao = "na_escola"; texto = `Na escola desde ${hora(ultimo.quando)}`; detalhe = `Entrada pelo ${ultimo.local} (${comoFoi(ultimo)})`; }
+    else if (ultimo) { situacao = "saiu"; texto = `Saiu às ${hora(ultimo.quando)}`; detalhe = `Saída: ${ultimo.local} (${comoFoi(ultimo)})`; }
+    else if (a.chamada === "Presente") { situacao = "na_escola"; texto = "Presente na chamada"; detalhe = "Sem registro de entrada no portão"; }
+    else if (a.chamada === "Ausente") { situacao = "ausente"; texto = "Ausente hoje"; detalhe = "Falta registrada na chamada"; }
+    else { situacao = "nao_chegou"; texto = "Ainda não chegou"; detalhe = "Nenhuma entrada registrada hoje"; }
+    return { id: a.id, nome: a.nome, sala: a.sala, situacao, texto, detalhe,
+      movimentos: meus.map((m) => ({ sentido: m.sentido, hora: hora(m.quando), local: m.local, como: comoFoi(m) })) };
+  });
+}
+function resumoAoVivo(lista) {
+  const r = { total: lista.length, na_escola: 0, saiu: 0, nao_chegou: 0, ausente: 0 };
+  lista.forEach((s) => r[s.situacao]++);
+  return r;
+}
+
+app.get("/api/alunos/:alunoId/agora", autenticar, rota(async (req, res) => {
+  const aluno = await alunoPermitido(req.usuario, Number(req.params.alunoId));
+  if (!aluno) return semPermissao(res);
+  res.json((await statusAoVivo({ alunoId: aluno.id }))[0]);
+}));
+
+// Painel de monitoramento (só gestão): câmeras, regra do reconhecimento facial, situação ao vivo e últimas passagens
+app.get("/api/monitoramento", autenticar, apenasAdmin, rota(async (req, res) => {
+  const ligado = await facialLigado();
+  const [[cfg]] = await db.query("SELECT cfg_atualizado_por_nome AS por, DATE_FORMAT(cfg_atualizado_em, '%d/%m/%Y %H:%i') AS em FROM configuracoes WHERE cfg_chave = 'reconhecimento_facial'");
+  const [cameras] = await db.query(`SELECT c.cam_id AS id, c.cam_nome AS nome, c.cam_local AS local, c.cam_tipo AS tipo, c.cam_reconhecimento AS reconhecimento, c.cam_ativa AS ativa,
+    (SELECT COUNT(*) FROM reconhecimentos r WHERE r.cam_id = c.cam_id AND r.rec_data_hora >= CURDATE()) AS passagens_hoje FROM cameras c ORDER BY c.cam_id`);
+  const [eventos] = await db.query(`SELECT r.rec_id AS id, DATE_FORMAT(r.rec_data_hora, '%H:%i:%s') AS hora, r.rec_sentido AS sentido, r.rec_resultado AS resultado, r.rec_motivo AS motivo, r.rec_confianca AS confianca,
+    c.cam_nome AS camera, a.alu_nome AS aluno, a.alu_sala AS sala FROM reconhecimentos r JOIN cameras c ON c.cam_id = r.cam_id LEFT JOIN alunos a ON a.alu_id = r.alu_id
+    WHERE r.rec_data_hora >= CURDATE() ORDER BY r.rec_id DESC LIMIT 20`);
+  const aoVivo = await statusAoVivo();
+  const alunos = [];
+  for (const s of aoVivo) alunos.push({ ...s, facial: await cadastroFacial(s, ligado) });
+  const [[hoje]] = await db.query("SELECT COUNT(CASE WHEN rec_resultado = 'Reconhecido' THEN 1 END) AS reconhecidos, COUNT(CASE WHEN rec_resultado <> 'Reconhecido' THEN 1 END) AS sem_cadastro FROM reconhecimentos WHERE rec_data_hora >= CURDATE()");
+  res.json({ facial: { ligado, alterado_por: cfg ? cfg.por : null, alterado_em: cfg ? cfg.em : null, retencao_dias: RETENCAO_RECONHECIMENTOS_DIAS },
+    cameras: cameras.map((c) => ({ ...c, reconhecimento: !!c.reconhecimento, ativa: !!c.ativa })), eventos: eventos.map((e) => ({ ...e, confianca: e.confianca == null ? null : Number(e.confianca) })),
+    resumo: { ...resumoAoVivo(aoVivo), reconhecidos_hoje: hoje.reconhecidos, sem_cadastro_hoje: hoje.sem_cadastro, com_cadastro_facial: alunos.filter((a) => a.facial.ok).length }, alunos });
+}));
+
+app.put("/api/configuracoes/reconhecimento-facial", autenticar, apenasAdmin, rota(async (req, res) => {
+  const ligado = req.body.ligado === true;
+  await db.query(`INSERT INTO configuracoes (cfg_chave, cfg_valor, cfg_atualizado_por_nome, cfg_atualizado_em) VALUES ('reconhecimento_facial', ?, ?, NOW())
+    ON DUPLICATE KEY UPDATE cfg_valor = VALUES(cfg_valor), cfg_atualizado_por_nome = VALUES(cfg_atualizado_por_nome), cfg_atualizado_em = NOW()`, [ligado ? "ligado" : "desligado", req.usuario.nome]);
+  await registrarLog(req.usuario, ligado ? "facial_ligado" : "facial_desligado", null);
+  res.json({ ok: true, ligado });
+}));
+
+app.post("/api/cameras", autenticar, apenasAdmin, rota(async (req, res) => {
+  const nome = String(req.body.nome || "").trim(), local = String(req.body.local || "").trim(), tipo = req.body.tipo;
+  if (nome.length < 2 || nome.length > 60) return res.status(400).json({ erro: "Dê um nome à câmera (até 60 caracteres)" });
+  if (local.length < 2 || local.length > 60) return res.status(400).json({ erro: "Informe onde a câmera fica (até 60 caracteres)" });
+  if (!["Entrada", "Saída", "Área comum"].includes(tipo)) return res.status(400).json({ erro: "Escolha o tipo da câmera" });
+  if (LOCAIS_PROIBIDOS.test(normalizar(`${nome} ${local}`))) return res.status(400).json({ erro: "Câmeras não podem ficar em banheiros, vestiários, trocadores ou outros espaços de intimidade (ECA, art. 17, e política de privacidade da escola)" });
+  const reconhecimento = req.body.reconhecimento === true;
+  if (reconhecimento && tipo === "Área comum") return res.status(400).json({ erro: "O reconhecimento facial só é usado nos portões de entrada e de saída. Câmeras de área comum só gravam." });
+  await db.query("INSERT INTO cameras (cam_nome, cam_local, cam_tipo, cam_reconhecimento) VALUES (?, ?, ?, ?)", [nome, local, tipo, reconhecimento]);
+  await registrarLog(req.usuario, "camera_cadastrada", `${nome} — ${local} (${tipo}${reconhecimento ? ", reconhecimento facial" : ""})`);
+  res.status(201).json({ ok: true });
+}));
+
+app.put("/api/cameras/:id/ativa", autenticar, apenasAdmin, rota(async (req, res) => {
+  const [r] = await db.query("UPDATE cameras SET cam_ativa = ? WHERE cam_id = ?", [req.body.ativa === true, req.params.id]);
+  if (!r.affectedRows) return res.status(404).json({ erro: "Câmera não encontrada" });
+  await registrarLog(req.usuario, req.body.ativa === true ? "camera_ligada" : "camera_desligada", `câmera id ${req.params.id}`);
+  res.json({ ok: true });
+}));
+
+// SIMULAÇÃO de uma passagem diante de uma câmera com reconhecimento facial.
+// aluno_id: quem "passou" (vazio = o sistema escolhe). desconhecido: true = um rosto que não é de aluno (visitante).
+app.post("/api/reconhecimento/simular", autenticar, apenasAdmin, rota(async (req, res) => {
+  const [[cam]] = await db.query("SELECT cam_id AS id, cam_nome AS nome, cam_tipo AS tipo, cam_reconhecimento AS reconhecimento, cam_ativa AS ativa FROM cameras WHERE cam_id = ?", [Number(req.body.cam_id)]);
+  if (!cam) return res.status(404).json({ erro: "Câmera não encontrada" });
+  if (!cam.ativa) return res.status(400).json({ erro: "Esta câmera está desligada" });
+  if (!cam.reconhecimento) return res.status(400).json({ erro: "Esta câmera é de área comum: ela só grava, não faz reconhecimento facial" });
+  const ligado = await facialLigado();
+  if (!ligado) return res.status(409).json({ erro: "O reconhecimento facial está desligado. Ligue o recurso no topo da tela para simular." });
+  const sentido = cam.tipo === "Saída" ? "Saída" : "Entrada";
+  const registrar = (alunoId, resultado, motivo, confianca) => db.query("INSERT INTO reconhecimentos (cam_id, alu_id, rec_sentido, rec_resultado, rec_motivo, rec_confianca) VALUES (?, ?, ?, ?, ?, ?)",
+    [cam.id, alunoId, sentido, resultado, motivo, confianca]);
+
+  if (req.body.desconhecido === true) {
+    await registrar(null, "Sem cadastro facial", "Rosto sem cadastro: imagem descartada", null);
+    await registrarLog(req.usuario, "reconhecimento_simulado", `${cam.nome}: rosto sem cadastro`);
+    return res.json({ resultado: "Sem cadastro facial", camera: cam.nome, sentido, mensagem: "Rosto sem cadastro facial (pode ser um visitante). A imagem foi descartada e nada foi identificado." });
+  }
+  let aluno;
+  if (req.body.aluno_id) aluno = (await statusAoVivo({ alunoId: Number(req.body.aluno_id) }))[0];
+  else { // escolhe alguém que faça sentido: na entrada, quem ainda não chegou; na saída, quem está na escola
+    const candidatos = (await statusAoVivo()).filter((s) => sentido === "Entrada" ? s.situacao === "nao_chegou" : s.situacao === "na_escola");
+    aluno = candidatos[Math.floor(Math.random() * candidatos.length)];
+    if (!aluno) return res.status(400).json({ erro: sentido === "Entrada" ? "Todos os alunos já chegaram ou estão ausentes hoje" : "Nenhum aluno na escola para sair" });
+  }
+  if (!aluno) return res.status(404).json({ erro: "Aluno não encontrado" });
+  const cad = await cadastroFacial(aluno, ligado);
+  if (!cad.ok) { // sem cadastro facial: a câmera não reconhece ninguém, a imagem é descartada e o aluno NÃO é identificado no registro
+    await registrar(null, "Sem cadastro facial", "Rosto sem cadastro: imagem descartada", null);
+    await registrarLog(req.usuario, "reconhecimento_simulado", `${cam.nome}: rosto sem cadastro`);
+    return res.json({ resultado: "Sem cadastro facial", camera: cam.nome, sentido, aluno: { id: aluno.id, nome: aluno.nome, sala: aluno.sala }, motivo: cad.motivo,
+      mensagem: `Simulação: ${aluno.nome} passou pela câmera, mas não tem cadastro facial (${cad.motivo.charAt(0).toLowerCase() + cad.motivo.slice(1)}). A câmera não o identificou e a imagem foi descartada. Registre a ${sentido === "Entrada" ? "entrada" : "saída"} pela portaria.` });
+  }
+  const confianca = Math.round((92 + Math.random() * 7.6) * 10) / 10;
+  await registrar(aluno.id, "Reconhecido", null, confianca);
+  if (sentido === "Entrada") {
+    await db.query("INSERT INTO acessos (alu_id, ace_sala, cam_id, ace_metodo) VALUES (?, ?, ?, 'Facial')", [aluno.id, cam.nome, cam.id]);
+    await marcarPresencaPelaEntrada(aluno.id, "reconhecimento facial");
+  } else await db.query("INSERT INTO saidas (alu_id, cam_id, sai_metodo) VALUES (?, ?, 'Facial')", [aluno.id, cam.id]);
+  await registrarLog(req.usuario, "reconhecimento_simulado", `${cam.nome}: aluno id ${aluno.id} reconhecido (${String(confianca).replace(".", ",")}%)`);
+  res.json({ resultado: "Reconhecido", camera: cam.nome, sentido, aluno: { id: aluno.id, nome: aluno.nome, sala: aluno.sala }, confianca,
+    mensagem: `${aluno.nome} reconhecido(a) no ${cam.nome} com ${String(confianca).replace(".", ",")}% de confiança. ${sentido} registrada.` });
+}));
+
+// Saída registrada à mão pela portaria (aluno sem cadastro facial no portão de saída)
+app.post("/api/saidas/manual", autenticar, apenasAdmin, rota(async (req, res) => {
+  const [[aluno]] = await db.query("SELECT alu_id AS id FROM alunos WHERE alu_id = ?", [Number(req.body.aluno_id)]);
+  if (!aluno) return res.status(404).json({ erro: "Aluno não encontrado" });
+  const [[cam]] = await db.query("SELECT cam_id AS id, cam_nome AS nome FROM cameras WHERE cam_id = ? AND cam_tipo = 'Saída'", [Number(req.body.cam_id) || 0]);
+  await db.query("INSERT INTO saidas (alu_id, cam_id, sai_metodo, sai_liberado_por_nome) VALUES (?, ?, 'Manual', ?)", [aluno.id, cam ? cam.id : null, req.usuario.nome]);
+  await registrarLog(req.usuario, "saida_manual", `aluno id ${aluno.id}${cam ? " — " + cam.nome : ""}`);
+  res.status(201).json({ ok: true });
+}));
+
+// Rotina de 1 em 1 hora (e ao ligar o servidor): inativa professores parados há 60 dias e apaga passagens antigas das câmeras
+async function rotinaPeriodica() {
+  await verificarInatividade();
+  const [r] = await db.query("DELETE FROM reconhecimentos WHERE rec_data_hora < DATE_SUB(NOW(), INTERVAL ? DAY)", [RETENCAO_RECONHECIMENTOS_DIAS]);
+  if (r.affectedRows) await registrarLog(SISTEMA, "reconhecimentos_apagados", `${r.affectedRows} registro(s) com mais de ${RETENCAO_RECONHECIMENTOS_DIAS} dias`);
+  const [l] = await db.query("DELETE FROM logs WHERE log_data_hora < DATE_SUB(NOW(), INTERVAL ? YEAR)", [RETENCAO_LOGS_ANOS]);
+  if (l.affectedRows) await registrarLog(SISTEMA, "logs_apagados", `${l.affectedRows} registro(s) com mais de ${RETENCAO_LOGS_ANOS} ano(s)`);
+  // Um backup por dia (banco + uploads/), na primeira volta da rotina do dia
+  if (!backup.temBackupDeHoje(PASTA_BACKUPS)) {
+    try {
+      const pasta = await backup.gerarBackup(db, { pastaUploads: PASTA_UPLOADS, manter: BACKUPS_MANTER, chave: CHAVE_ARQUIVOS, pasta: PASTA_BACKUPS });
+      await registrarLog(SISTEMA, "backup_feito", path.basename(pasta));
+    } catch (erro) {
+      console.error("Falha no backup automático:", erro.message);
+      await registrarLog(SISTEMA, "backup_falhou", erro.message.slice(0, 200));
+    }
+  }
+}
 
 app.post("/api/aceite-privacidade", autenticar, rota(async (req, res) => {
   await db.query("UPDATE usuarios SET usu_aceite_em = NOW(), usu_aceite_versao = ? WHERE usu_id = ?", [POLITICA.versao, req.usuario.id]);
@@ -1031,28 +1924,50 @@ app.get("/api/alunos/:alunoId/meus-dados", autenticar, proprioAlunoOuAdmin, rota
   if (!aluno) return res.status(404).json({ erro: "Aluno não encontrado" });
   const [responsaveis] = await db.query("SELECT r.res_nome AS nome, ar.alr_parentesco AS parentesco, r.res_telefone AS telefone FROM aluno_responsavel ar JOIN responsaveis r ON r.res_id = ar.res_id WHERE ar.alu_id = ?", [id]);
   const [presencas] = await db.query("SELECT DATE_FORMAT(pre_data, '%Y-%m-%d') AS data, pre_status AS status, pre_observacao AS observacao FROM presencas WHERE alu_id = ? ORDER BY pre_data", [id]);
-  const [ocorrencias] = await db.query("SELECT oco_tipo AS tipo, oco_descricao AS descricao, DATE_FORMAT(oco_data_ocorrencia, '%Y-%m-%d') AS data, oco_registrada_por_nome AS registrada_por FROM ocorrencias WHERE alu_id = ? ORDER BY oco_data_ocorrencia", [id]);
+  const [advertencias] = await db.query("SELECT adv_tipo AS tipo, adv_descricao AS descricao, DATE_FORMAT(adv_data, '%Y-%m-%d') AS data, adv_registrada_por_nome AS registrada_por FROM advertencias WHERE alu_id = ? ORDER BY adv_data", [id]);
+  const [ocorrenciasEscolares] = await db.query("SELECT DATE_FORMAT(oce_data, '%Y-%m-%d') AS data, TIME_FORMAT(oce_horario, '%H:%i') AS horario, oce_descricao AS descricao, oce_buscado_por AS buscado_por, oce_professor_nome AS professor, oce_resp_nome AS ciencia_responsavel, DATE_FORMAT(oce_resp_assinada_em, '%Y-%m-%d %H:%i') AS ciencia_em FROM ocorrencias_escolares WHERE alu_id = ? ORDER BY oce_data", [id]);
   const [pendencias] = await db.query("SELECT pen_tipo AS tipo, pen_descricao AS descricao, pen_status AS status, DATE_FORMAT(pen_criada_em, '%Y-%m-%d %H:%i') AS criada_em FROM pendencias WHERE alu_id = ? ORDER BY pen_id", [id]);
   const [autorizacoes] = await db.query("SELECT aut_titulo AS titulo, aut_validade AS validade, aut_assinada AS assinada, aut_assinada_nome AS assinada_por, DATE_FORMAT(aut_assinada_em, '%Y-%m-%d %H:%i') AS assinada_em, aut_codigo AS codigo FROM autorizacoes WHERE alu_id = ? ORDER BY aut_id", [id]);
   const [comunicadosLidos] = await db.query("SELECT c.com_titulo AS titulo, DATE_FORMAT(l.col_lido_em, '%Y-%m-%d %H:%i') AS lido_em FROM comunicado_leituras l JOIN comunicados c ON c.com_id = l.com_id WHERE l.alu_id = ? ORDER BY l.col_lido_em", [id]);
   const [documentos] = await db.query("SELECT doc_categoria AS categoria, doc_titulo AS titulo, doc_nome_original AS nome_original, doc_tamanho AS tamanho_bytes, doc_enviado_por_nome AS enviado_por, DATE_FORMAT(doc_enviado_em, '%Y-%m-%d') AS enviado_em FROM documentos WHERE alu_id = ? ORDER BY doc_id", [id]);
+  const [entradas] = await db.query("SELECT DATE_FORMAT(ace_data_hora, '%Y-%m-%d %H:%i:%s') AS quando, ace_sala AS local, ace_metodo AS metodo FROM acessos WHERE alu_id = ? ORDER BY ace_data_hora", [id]);
+  const [saidas] = await db.query("SELECT DATE_FORMAT(sai_data_hora, '%Y-%m-%d %H:%i:%s') AS quando, sai_metodo AS metodo, sai_liberado_por_nome AS liberado_por FROM saidas WHERE alu_id = ? ORDER BY sai_data_hora", [id]);
+  const [reconhecimentos] = await db.query("SELECT DATE_FORMAT(r.rec_data_hora, '%Y-%m-%d %H:%i:%s') AS quando, c.cam_nome AS camera, r.rec_sentido AS sentido, r.rec_confianca AS confianca FROM reconhecimentos r JOIN cameras c ON c.cam_id = r.cam_id WHERE r.alu_id = ? ORDER BY r.rec_data_hora", [id]);
   await registrarLog(req.usuario, "exportacao_dados_aluno", `${aluno.nome} — aluno id ${id}`);
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="dados-aluno-${id}.json"`);
   res.send(JSON.stringify({ gerado_em: new Date().toISOString(), base: "LGPD, art. 18 — direito de acesso aos dados",
-    aluno, responsaveis, presencas, ocorrencias, pendencias, autorizacoes, comunicados_lidos: comunicadosLidos,
-    documentos_anexados: documentos, consentimentos: (await consentimentoDoAluno(id, true)).historico, observacao: "Os arquivos dos documentos não vão neste arquivo; peça à gestão da escola se precisar deles. Registros sigilosos de proteção da criança (comunicações ao Conselho Tutelar, ECA arts. 13 e 56) não fazem parte deste arquivo." }, null, 2));
+    aluno, responsaveis, presencas, advertencias, ocorrencias_do_professor: ocorrenciasEscolares, pendencias, autorizacoes, comunicados_lidos: comunicadosLidos,
+    documentos_anexados: documentos, consentimentos: (await consentimentoDoAluno(id, true)).historico,
+    entradas, saidas, reconhecimento_facial: { passagens: reconhecimentos, observacao: "O sistema não guarda fotos nem dados biométricos: só o horário, a câmera e o grau de confiança de cada reconhecimento. Os registros são apagados depois de " + RETENCAO_RECONHECIMENTOS_DIAS + " dias." },
+    observacao: "Os arquivos dos documentos não vão neste arquivo; peça à gestão da escola se precisar deles. Registros sigilosos de proteção da criança (comunicações ao Conselho Tutelar, ECA arts. 13 e 56) não fazem parte deste arquivo." }, null, 2));
 }));
 
-app.listen(config.porta, async () => {
-  console.log(`S.I.V.E. rodando em http://localhost:${config.porta}`);
+// HTTPS: com "https": { "certificado": "caminho/cert.pem", "chave": "caminho/chave.pem" } no config.json, o sistema já sobe em HTTPS.
+// Na publicação, o mais comum é o HTTPS ficar no Nginx, na frente do sistema; aí use "seguranca": { "atras_de_proxy": true }.
+const httpsCfg = config.https || {};
+const protocolo = httpsCfg.certificado && httpsCfg.chave ? "https" : "http";
+const servidor = protocolo === "https"
+  ? require("https").createServer({ cert: fs.readFileSync(httpsCfg.certificado), key: fs.readFileSync(httpsCfg.chave) }, app)
+  : app;
+servidor.listen(config.porta, async () => {
+  console.log(`S.I.V.E. rodando em ${protocolo}://localhost:${config.porta}`);
+  // Dados pessoais e chaves em pasta sincronizada com a nuvem (OneDrive, Google Drive, Dropbox): avisa
+  if (/onedrive|google drive|dropbox|icloud/i.test(__dirname + "|" + PASTA_BACKUPS)) {
+    console.log("\n⚠️  ATENÇÃO: o sistema ou a pasta de backups está numa pasta sincronizada com a nuvem (ex.: OneDrive).");
+    console.log("   O config.json (chaves), os documentos e os backups vão para a nuvem juntos. Mova o projeto para fora dela");
+    console.log('   (ex.: C:\\SIVE) ou, pelo menos, aponte os backups para outra pasta no config.json: "backup": { "pasta": "D:\\\\backups-sive" }\n');
+  }
   try { protegerArquivosAntigos(); } catch (erro) { console.log("⚠️  Não foi possível criptografar arquivos antigos: " + erro.message); }
   // Confere se o banco está na versão atual (evita erros de "Unknown column / table" nas telas)
   try {
-    const [colunas] = await db.query("SHOW COLUMNS FROM usuarios LIKE 'usu_aceite_em'");
-    const [tabelas] = await db.query("SHOW TABLES LIKE 'consentimentos'");
+    const [colunas] = await db.query("SHOW COLUMNS FROM usuarios LIKE 'usu_inativado_motivo'");
+    const [tabelas] = await db.query("SHOW TABLES LIKE 'reconhecimentos'");
     if (!colunas.length || !tabelas.length) {
       console.log("\n⚠️  BANCO DESATUALIZADO: rode o arquivo database/sive.sql no MySQL de novo e reinicie o servidor.\n");
+    } else {
+      await rotinaPeriodica();
+      setInterval(() => rotinaPeriodica().catch((e) => console.error(e.message)), 60 * 60 * 1000); // a cada 1 hora
     }
   } catch (erro) {
     console.log("\n⚠️  Não foi possível ler o banco: " + erro.message + "\n   Confira o config.json e se o MySQL está ligado.\n");

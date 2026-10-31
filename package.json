@@ -4,11 +4,13 @@
   "description": "S.I.V.E. - Vigilância Escolar Inteligente",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "backup": "node backup.js"
   },
   "dependencies": {
     "express": "^4.21.2",
     "mysql2": "^3.11.0",
+    "qrcode": "^1.5.4",
     "read-excel-file": "^9.3.12"
   }
 }

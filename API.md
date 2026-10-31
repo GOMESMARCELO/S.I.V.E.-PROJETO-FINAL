@@ -32,13 +32,21 @@ Usuários de teste (cadastrados em `database/sive.sql`):
 | GET    | /api/usuarios                      | Lista os usuários do sistema                       |
 | POST   | /api/usuarios                      | Cria um usuário (gera senha provisória automática) |
 | PUT    | /api/usuarios/:id/ativo            | Ativa ou desativa um usuário                       |
+| POST   | /api/usuarios/:id/filhos           | Liga o login de um responsável a outro aluno `{ aluno_id, parentesco }` (responsável com mais de um filho) |
+| DELETE | /api/usuarios/:id/filhos/:alunoId  | Desliga um aluno do responsável (o aluno principal do login não pode ser desligado) |
+| PUT    | /api/usuarios/:id/turmas           | Turmas do professor `{ turmas: ["2º Ano B", ...] }`. A turma principal continua a mesma se estiver na lista |
+| GET    | /api/turmas                        | Turmas com ano letivo, turno, nº de alunos ativos e professores |
+| POST   | /api/turmas                        | Cria turma `{ nome, ano_letivo, turno? }` |
+| PUT    | /api/turmas/:id                    | Altera ou renomeia `{ nome, ano_letivo, turno?, ativa }`. Renomear atualiza alunos, professores, comunicados e eventos |
+| PUT    | /api/alunos/:alunoId/situacao      | `{ situacao, motivo? }` (Ativo, Transferido, Concluiu ou Desistente). Quem sai não é apagado, só sai das listas do dia a dia |
 | GET    | /api/logs                          | Lista as últimas 50 ações registradas              |
 
 ## Frequência, Busca Ativa e relatório (só administração)
 
 | Método | Rota                                       | O que faz                                                   |
 |--------|----------------------------------------------|----------------------------------------------------------------|
-| GET    | /api/resumo                                | Quadros da Central do Dia (total, presentes, ausentes...)       |
+| GET    | /api/resumo                                | Quadros da Central do Dia (total, presentes, ausentes...). `documentos_recentes` e `autorizacoes_recentes` contam as últimas 24 horas. `ocorrencias_gestao` = ocorrências dos professores sem a assinatura da gestão (`ocorrencias_sem_resp` = destas, quantas o responsável ainda não assinou) |
+| GET    | /api/documentos-recentes                   | Pasta "Documentos recebidos recentemente" (só gestão): documentos que atenderam a uma pendência, enviados por responsáveis nas últimas 24 horas, com nome, turma e matrícula do aluno |
 | GET    | /api/frequencia?data=AAAA-MM-DD            | Situação de todos os alunos em um dia (sem `data`: último dia)  |
 | GET    | /api/busca-ativa                           | Casos de Busca Ativa (abre os novos automaticamente)           |
 | POST   | /api/busca-ativa/:id/acompanhamento        | Anota um acompanhamento `{ texto }`                             |
@@ -64,7 +72,14 @@ Usuários de teste (cadastrados em `database/sive.sql`):
 | DELETE | /api/documentos/:id                        | gestão           | Exclui o documento e o arquivo                                     |
 | POST   | /api/pendencias                            | gestão, professor (da turma) | Abre pendência `{ aluno_id, tipo, descricao }`        |
 | PUT    | /api/pendencias/:id/resolver               | gestão           | Marca como resolvida                                               |
-| POST   | /api/ocorrencias                           | gestão, professor (da turma) | Registra ação/advertência `{ aluno_id, tipo, descricao, data? }` |
+| POST   | /api/advertencias                          | gestão, professor (da turma) | Registra ação/advertência (tabela `advertencias`) `{ aluno_id, tipo, descricao, data? }` |
+| GET    | /api/ocorrencias-escolares                 | professor        | Ocorrências da própria turma (arquivo), da mais recente para a mais antiga |
+| POST   | /api/ocorrencias-escolares                 | professor (da turma) | Registra a ocorrência do dia `{ aluno_id, data, horario, notificado_em, descricao, buscado_por, senha }`; a senha de quem está logado assina digitalmente. Devolve o código de verificação |
+| GET    | /api/minhas-ocorrencias                    | responsável      | Ocorrências do filho, com a assinatura do professor e a do responsável (`resp_*`, vazio = ainda não assinou) |
+| GET    | /api/minhas-ocorrencias/novas              | responsável      | `{ novas }`: quantas ainda não foram assinadas (número ao lado de "Ocorrências" no menu) |
+| POST   | /api/minhas-ocorrencias/:id/assinar        | responsável (do aluno) | Assinatura de ciência `{ senha }` (a senha de quem está logado). Devolve o código de verificação |
+| GET    | /api/ocorrencias-gestao                    | administração | Pasta de ocorrências da Central do Dia: todas as ocorrências dos professores, com as assinaturas do responsável (`resp_*`) e da gestão (`ges_*`) |
+| POST   | /api/ocorrencias-gestao/:id/assinar        | administração | Assinatura da gestão `{ senha }` (a senha de quem está logado). A ocorrência passa para "Ocorrências registradas". Devolve o código de verificação |
 
 Regras dos documentos: PDF, PNG, JPG, DOC ou DOCX, até 5 MB. O servidor confere se o conteúdo bate com a extensão
 e guarda o arquivo com nome aleatório na pasta `uploads/`, que não é pública.
@@ -144,6 +159,58 @@ Aceita CSV (`;`, `,` ou tabulação; UTF-8 ou Windows-1252) e Excel `.xlsx` (pri
 
 Os registros são sigilosos e nunca saem em `ficha`, `meus-dados` ou nos logs (os logs guardam só o motivo e o id do aluno). `/api/resumo` ganhou `comunicacoes_pendentes`, e os casos de `/api/busca-ativa` ganharam `comunicacao_id` e `comunicacao_feita`.
 `POST /api/comunicados` responde `409` com `codigo: "NOME_DE_ALUNO"` quando o texto cita o nome completo de um aluno; reenviar com `confirmar_nomes: true` publica.
+
+## Fase 4 — reativação de professores (só gestão)
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET    | /api/reativacao                | Professores inativados por 60 dias sem acesso (com pedido de reativação) e os "perto do limite" (50+ dias) |
+| PUT    | /api/usuarios/:id/reativar     | Reativa, gera uma senha provisória nova (devolvida só nesta resposta) e reinicia o prazo |
+
+O login de um professor inativado por inatividade, com a senha certa, responde `403` com `codigo: "INATIVO_POR_INATIVIDADE"` e registra o pedido de reativação.
+
+## Fase 4 — perfil do responsável (só responsável)
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET    | /api/meu-perfil  | Conta, contatos, filho, outros responsáveis, últimos acessos e situação do consentimento |
+| PUT    | /api/meu-perfil  | Atualiza `{ telefone, telefone2?, email?, contato_preferido }` (WhatsApp, Ligação ou E-mail) |
+
+## Fase 4 — calendário e banners
+| Método | Rota | Quem | Descrição |
+|--------|------|------|-----------|
+| GET    | /api/eventos?mes=AAAA-MM   | todos | Eventos do mês e próximos eventos (gestão: todos; professor: escola + turma; responsável: escola + turma do filho) |
+| GET    | /api/eventos/banners       | todos | Até 5 eventos em destaque que ainda não passaram |
+| POST   | /api/eventos               | gestão, professor | Cria `{ titulo, tipo, data, data_fim?, hora?, local?, sala?, descricao?, destaque, banner?: { nome_arquivo, conteudo (base64) }, imagem_sem_alunos }` |
+| DELETE | /api/eventos/:id           | gestão ou quem criou | Exclui o evento e a imagem |
+| GET    | /api/eventos/:id/banner    | quem pode ver o evento | Imagem do banner (guardada criptografada) |
+
+## Fase 5 — monitoramento, câmeras e reconhecimento facial (SIMULADOS)
+| Método | Rota | Quem | Descrição |
+|--------|------|------|-----------|
+| GET    | /api/monitoramento                      | gestão | Câmeras, regra do facial, passagens de hoje, situação ao vivo e cadastro facial de cada aluno |
+| PUT    | /api/configuracoes/reconhecimento-facial | gestão | Liga ou desliga `{ ligado: true/false }` |
+| POST   | /api/cameras                            | gestão | Cadastra `{ nome, local, tipo: Entrada/Saída/Área comum, reconhecimento }` (recusa banheiros e vestiários) |
+| PUT    | /api/cameras/:id/ativa                  | gestão | Liga ou desliga `{ ativa }` |
+| POST   | /api/reconhecimento/simular             | gestão | Simula uma passagem `{ cam_id, aluno_id?, desconhecido? }`. Resultado: `Reconhecido` ou `Sem cadastro facial` |
+| POST   | /api/acessos                            | gestão | Entrada pela portaria `{ aluno_id, cam_id? }` |
+| POST   | /api/saidas/manual                      | gestão | Saída pela portaria `{ aluno_id, cam_id? }` |
+| GET    | /api/alunos/:alunoId/agora              | gestão, professor (da turma), responsável (do filho) | Situação ao vivo: `na_escola`, `saiu`, `nao_chegou` ou `ausente`, com os movimentos de hoje |
+
+## Responsável com vários filhos e professor com várias turmas
+
+- `GET /api/meu-contexto` (responsável ou professor): `{ filhos: [{ id, nome, sala }], turmas: ["..."], aluno_id, sala }`. O login também devolve `filhos` e `turmas`.
+- O navegador diz qual filho ou turma está aberto nos cabeçalhos `X-Aluno: <id>` ou `X-Turma: <nome codificado com encodeURIComponent>`.
+  O servidor só aceita um filho ou turma que seja do usuário; se não for, usa o principal. As rotas do responsável e do professor passam a valer para o escolhido.
+- `GET /api/minhas-ocorrencias` e `/novas` contam as ocorrências de **todos** os filhos.
+
+## Assinatura digital (pública: verificar sem login)
+
+Toda assinatura (ocorrência: professor, responsável e gestão; autorização; termo de consentimento) é confirmada com a senha de quem assina
+e gera uma linha na tabela `assinaturas`: hash SHA-256 do conteúdo assinado + selo Ed25519 do servidor (chaves `assinatura_privada` / `assinatura_publica` no `config.json`).
+
+| Método | Rota | O que faz |
+|--------|------|-----------|
+| GET | /api/verificar/:codigo | `status`: `valida`, `alterada` (conteúdo ou registro mudou depois da assinatura), `anterior` (assinada antes do selo digital) ou `nao_encontrada`. Mostra o documento, o papel, o nome abreviado de quem assinou, data e hora e o hash |
+| GET | /api/verificar/:codigo/qr.svg | QR code que abre `/?verificar=CÓDIGO` (vai nos comprovantes) |
 
 ## Sobre o token e a segurança
 
