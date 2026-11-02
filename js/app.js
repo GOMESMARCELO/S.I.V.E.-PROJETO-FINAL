@@ -4,6 +4,9 @@ let tela = "";
 let liberada = false;
 let timerTela = null;   // atualização automática da tela aberta (monitoramento, status ao vivo)
 let timerBanner = null; // troca automática dos banners
+let timerAvisos = null; // confere os avisos (sino) do responsável de tempos em tempos
+let avisosConhecidos = -1; // quantos avisos novos havia na última conferência (para avisar no navegador só quando aumentar)
+let buscaAlunos = null; // alunos da busca rápida do topo (carregados na primeira busca)
 let usuarioLogado = null; // { token, papel, nome, aluno_id, sala, senha_temporaria }
 let forcarTrocaSenha = false;
 let origemTermo = "login"; // de onde a pessoa abriu a política, para o botão "Voltar"
@@ -21,10 +24,17 @@ function cabecalhoContexto() {
   return {};
 }
 async function api(url, opcoes = {}) {
-  const resposta = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...(usuarioLogado ? { Authorization: "Bearer " + usuarioLogado.token, ...cabecalhoContexto() } : {}) },
-    ...opcoes,
-  });
+  let resposta;
+  try {
+    resposta = await fetch(url, {
+      headers: { "Content-Type": "application/json", ...(usuarioLogado ? { Authorization: "Bearer " + usuarioLogado.token, ...cabecalhoContexto() } : {}) },
+      ...opcoes,
+    });
+  } catch {
+    marcarConexao(false); // o servidor não respondeu (sem internet ou servidor desligado)
+    throw new Error("Sem conexão com o sistema. Confira a internet e tente de novo.");
+  }
+  marcarConexao(true);
   if (resposta.status === 401 || resposta.status === 403) {
     const corpo = await resposta.json().catch(() => ({}));
     if (resposta.status === 401) { sair(); throw new Error("Sessão expirada"); }
@@ -37,24 +47,86 @@ async function api(url, opcoes = {}) {
 }
 // Usado nos botões: se a API der erro, avisa na tela em vez de falhar em silêncio
 const seguro = (fn) => async (...args) => {
-  try { await fn(...args); } catch (e) { if (e.message !== "Sessão expirada" && e.message !== "Aceite pendente") alert(e.message); }
+  try { await fn(...args); } catch (e) { if (e.message !== "Sessão expirada" && e.message !== "Aceite pendente") avisar(e.message, "danger"); }
 };
 
+// ---------- Avisos rápidos (no canto da tela) e janela de confirmação ----------
+// Substituem as caixas do navegador (alert/confirm/prompt), que assustam, não seguem a identidade visual e não explicam a consequência.
+function avisar(texto, tom = "success", ms = 5000) {
+  const caixa = document.getElementById("toasts"), t = document.createElement("div");
+  t.className = `toast ${tom}`; t.setAttribute("role", tom === "danger" ? "alert" : "status");
+  const msg = document.createElement("span"); msg.textContent = texto;
+  const fechar = document.createElement("button"); fechar.type = "button"; fechar.className = "toast-fechar"; fechar.setAttribute("aria-label", "Fechar aviso"); fechar.textContent = "✕";
+  const some = () => { t.classList.add("saindo"); setTimeout(() => t.remove(), 250); };
+  fechar.onclick = some; t.append(msg, fechar); caixa.append(t);
+  setTimeout(some, tom === "danger" ? ms * 1.6 : ms);
+}
+// confirmar({ titulo, texto, botao, perigo, campo: { rotulo, tipo: "texto"|"select", opcoes, valor, placeholder } }) -> Promise<false | { valor }>
+function confirmar({ titulo, texto = "", botao = "Confirmar", perigo = false, campo = null }) {
+  const $ = (id) => document.getElementById(id), modal = $("dialogo"), ok = $("dialogo-ok"), cancelar = $("dialogo-cancelar");
+  $("dialogo-titulo").textContent = titulo; $("dialogo-texto").textContent = texto;
+  const campos = $("dialogo-campos"); campos.replaceChildren();
+  let entrada = null;
+  if (campo) {
+    const rotulo = document.createElement("small"); rotulo.textContent = campo.rotulo; campos.append(rotulo);
+    if (campo.tipo === "select") {
+      entrada = document.createElement("select");
+      for (const o of campo.opcoes) { const op = document.createElement("option"); op.textContent = o; op.selected = o === campo.valor; entrada.append(op); }
+    } else { entrada = document.createElement("textarea"); entrada.rows = 2; entrada.maxLength = 200; entrada.placeholder = campo.placeholder || ""; entrada.value = campo.valor || ""; }
+    campos.append(entrada);
+  }
+  ok.textContent = botao; ok.classList.toggle("perigo", perigo);
+  const voltarFoco = document.activeElement;
+  modal.classList.remove("oculto"); (entrada || (perigo ? cancelar : ok)).focus();
+  return new Promise((resolver) => {
+    const fim = (r) => { modal.classList.add("oculto"); ok.onclick = cancelar.onclick = modal.onclick = modal.onkeydown = null; if (voltarFoco && voltarFoco.focus) voltarFoco.focus(); resolver(r); };
+    ok.onclick = () => fim({ valor: entrada ? entrada.value : true });
+    cancelar.onclick = () => fim(false);
+    modal.onclick = (e) => { if (e.target === modal) fim(false); };
+    modal.onkeydown = (e) => { if (e.key === "Escape") fim(false); };
+  });
+}
+// ---------- Menus "⋯" (ações sensíveis): a lista flutua por cima da tela, para a tabela (que rola de lado) não cortar ----------
+document.addEventListener("toggle", (e) => {
+  const d = e.target;
+  if (!d.matches || !d.matches("details.menu-acoes") || !d.open) return;
+  document.querySelectorAll("details.menu-acoes[open]").forEach((outro) => { if (outro !== d) outro.open = false; }); // um aberto por vez
+  const lista = d.querySelector(".menu-acoes-lista"), r = d.querySelector("summary").getBoundingClientRect();
+  lista.style.position = "fixed"; lista.style.right = `${Math.max(8, innerWidth - r.right)}px`; lista.style.left = "auto";
+  const altura = lista.offsetHeight, cabeEmbaixo = r.bottom + altura + 8 < innerHeight;
+  lista.style.top = `${cabeEmbaixo ? r.bottom + 4 : Math.max(8, r.top - altura - 4)}px`;
+}, true);
+const fecharMenusAcoes = () => document.querySelectorAll("details.menu-acoes[open]").forEach((d) => { d.open = false; });
+document.addEventListener("click", (e) => { if (!e.target.closest("details.menu-acoes")) fecharMenusAcoes(); });
+addEventListener("scroll", fecharMenusAcoes, { passive: true });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") fecharMenusAcoes(); });
+
+// ---------- Indicador de conexão (no lugar do antigo "Sistema operacional", que ficava sempre verde) ----------
+function marcarConexao(ok) {
+  const el = document.getElementById("status-conexao"); if (!el) return;
+  el.className = `pill ${ok ? "success" : "danger"}`;
+  el.textContent = ok ? "● Conectado" : "● Sem conexão";
+  el.title = ok ? `O sistema respondeu às ${new Date().toLocaleTimeString("pt-BR").slice(0, 5)}` : "O sistema não está respondendo. Os dados da tela podem estar desatualizados.";
+}
+addEventListener("offline", () => marcarConexao(false));
+addEventListener("online", () => marcarConexao(true));
+
 const menusPorPapel = {
+  // A gestão tem muitas telas: o menu é dividido em grupos (o título do grupo aparece antes do primeiro item)
   admin: [
-    { id: "secretaria", nome: "Central do Dia", dica: "Secretaria", icone: "casa" },
-    { id: "cadastro", nome: "Cadastro de Aluno", dica: "Novo aluno", icone: "novoAluno" },
-    { id: "frequencia", nome: "Frequência", dica: "Presença e faltas", icone: "presenca" },
-    { id: "seguranca", nome: "Monitoramento", dica: "Segurança", icone: "olho" },
-    { id: "busca", nome: "Busca Ativa", dica: "Faltas e acompanhamento", icone: "lupa" },
-    { id: "protecao", nome: "Proteção", dica: "Conselho Tutelar", icone: "escudo" },
-    { id: "relatorio", nome: "Relatório Mensal", dica: "Frequência e casos", icone: "grafico" },
-    { id: "comunicados", nome: "Comunicados", dica: "Avisos e leituras", icone: "megafone" },
-    { id: "calendario", nome: "Calendário", dica: "Eventos e banners", icone: "calendario" },
-    { id: "autorizacoes", nome: "Autorizações", dica: "Assinatura digital", icone: "caneta" },
-    { id: "consentimentos", nome: "Consentimentos", dica: "Imagem e informações", icone: "termo" },
-    { id: "usuarios", nome: "Usuários", dica: "Acessos ao sistema", icone: "cadeado" },
-    { id: "logs", nome: "Logs", dica: "Atividade do sistema", icone: "atividade" },
+    { grupo: "Dia a dia", id: "secretaria", nome: "Central do Dia", dica: "Visão geral da escola", icone: "casa" },
+    { grupo: "Dia a dia", id: "frequencia", nome: "Frequência", dica: "Presença e faltas", icone: "presenca" },
+    { grupo: "Dia a dia", id: "seguranca", nome: "Monitoramento", dica: "Portões e câmeras", icone: "olho" },
+    { grupo: "Acompanhamento", id: "busca", nome: "Busca Ativa", dica: "Faltas e acompanhamento", icone: "lupa" },
+    { grupo: "Acompanhamento", id: "protecao", nome: "Proteção", dica: "Conselho Tutelar", icone: "escudo" },
+    { grupo: "Acompanhamento", id: "relatorio", nome: "Relatório Mensal", dica: "Frequência e casos", icone: "grafico" },
+    { grupo: "Comunicação", id: "comunicados", nome: "Comunicados", dica: "Avisos e leituras", icone: "megafone" },
+    { grupo: "Comunicação", id: "calendario", nome: "Calendário", dica: "Eventos e banners", icone: "calendario" },
+    { grupo: "Comunicação", id: "autorizacoes", nome: "Autorizações", dica: "Assinatura digital", icone: "caneta" },
+    { grupo: "Comunicação", id: "consentimentos", nome: "Consentimentos", dica: "Imagem e informações", icone: "termo" },
+    { grupo: "Administração", id: "cadastro", nome: "Alunos e turmas", dica: "Cadastro e turmas", icone: "novoAluno" },
+    { grupo: "Administração", id: "usuarios", nome: "Usuários", dica: "Acessos ao sistema", icone: "cadeado" },
+    { grupo: "Administração", id: "logs", nome: "Registro de atividades", dica: "Quem fez o quê", icone: "atividade" },
   ],
   pai: [
     { id: "pais", nome: "Portal dos Pais", dica: "Meu filho", icone: "familia" },
@@ -120,6 +192,9 @@ const ICONES = {
   setaEsq: { anim: "anda", svg: '<path d="m15 18-6-6 6-6"/>' },
   setaDir: { anim: "anda", svg: '<path d="m9 18 6-6-6-6"/>' },
   sair: { anim: "anda", svg: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>' },
+  sino: { anim: "balanca", svg: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>' },
+  mais: { anim: "pulsa", svg: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>' },
+  mensagem: { anim: "pula", svg: '<path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.6A8.4 8.4 0 1 1 21 11.5z"/>' },
 };
 // <svg> com os atributos de traço no próprio elemento: funciona também nos comprovantes abertos em outra janela (sem o CSS do sistema)
 const ico = (nome, extra = "") => { const i = ICONES[nome];
@@ -280,7 +355,7 @@ new MutationObserver(() => {
 const titulos = {
   secretaria: "Central do Dia", seguranca: "Monitoramento", pais: "Portal dos Pais", calendario: "Calendário Escolar", perfil: "Meu Perfil",
   frequencia: "Controle de Frequência", busca: "Busca Ativa", relatorio: "Relatório Mensal",
-  cadastro: "Cadastro de Aluno", usuarios: "Usuários do Sistema", logs: "Logs de Atividade", turma: "Minha Turma",
+  cadastro: "Alunos e Turmas", usuarios: "Usuários do Sistema", logs: "Registro de Atividades", turma: "Minha Turma",
   ficha: "Ficha do Aluno", ocorrencias: "Ocorrências", comunicados: "Comunicados", autorizacoes: "Autorizações Digitais", consentimentos: "Consentimento dos Responsáveis", protecao: "Proteção da Criança",
 };
 const papelLabel = (p) => ({ admin: "Gestão", pai: "Responsável", professor: "Professor(a)", sistema: "Sistema" }[p] || p);
@@ -358,7 +433,8 @@ function telaCarregando() {
 }
 function sair() {
   usuarioLogado = null;
-  clearInterval(timerTela); clearInterval(timerBanner);
+  clearInterval(timerTela); clearInterval(timerBanner); clearInterval(timerAvisos);
+  buscaAlunos = null; document.getElementById("avisos-area").classList.add("oculto"); document.getElementById("busca-rapida").classList.add("oculto");
   cacheBanner.forEach((url) => URL.revokeObjectURL(url)); cacheBanner.clear();
   localStorage.removeItem("sive-usuario");
   document.getElementById("app").classList.add("oculto");
@@ -388,8 +464,123 @@ function entrarNoApp() {
   document.getElementById("user-papel").textContent = papelLabel(usuarioLogado.papel);
   document.getElementById("user-iniciais").textContent = iniciais(usuarioLogado.nome);
   const telaInicial = { admin: "secretaria", pai: "pais", professor: "turma" }[usuarioLogado.papel];
+  iniciarAvisos(); iniciarBuscaRapida();
   atualizarContexto().finally(() => mostrar(telaInicial));
 }
+
+// ---------- Sino de avisos (responsável): o que aconteceu com o filho e o que espera por você ----------
+function iniciarAvisos() {
+  const area = document.getElementById("avisos-area");
+  area.classList.toggle("oculto", usuarioLogado.papel !== "pai");
+  clearInterval(timerAvisos);
+  if (usuarioLogado.papel !== "pai") return;
+  avisosConhecidos = -1;
+  atualizarContadorAvisos();
+  timerAvisos = setInterval(atualizarContadorAvisos, 60000); // a cada minuto
+  const botao = document.getElementById("btn-avisos"), painel = document.getElementById("avisos-painel");
+  const fechar = () => { painel.classList.add("oculto"); botao.setAttribute("aria-expanded", "false"); };
+  botao.onclick = seguro(async () => {
+    if (!painel.classList.contains("oculto")) return fechar();
+    painel.innerHTML = `<small style="padding:14px">Carregando...</small>`; painel.classList.remove("oculto"); botao.setAttribute("aria-expanded", "true");
+    const r = await api("/api/avisos");
+    desenharAvisos(r);
+    await api("/api/avisos/vistos", { method: "POST", body: "{}" }); // abriu o sino: os avisos deixam de ser "novos"
+    marcarContador(0); avisosConhecidos = 0;
+  });
+  document.addEventListener("click", (e) => { if (!e.target.closest("#avisos-area")) fechar(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !painel.classList.contains("oculto")) { fechar(); botao.focus(); } });
+}
+function marcarContador(n) {
+  const c = document.getElementById("avisos-contador");
+  c.textContent = n > 9 ? "9+" : n; c.classList.toggle("oculto", !n);
+  document.getElementById("btn-avisos").setAttribute("aria-label", n ? `Avisos: ${n} novo(s)` : "Avisos");
+}
+async function atualizarContadorAvisos() {
+  if (!usuarioLogado || usuarioLogado.papel !== "pai") return;
+  try {
+    const r = await api("/api/avisos");
+    marcarContador(r.novos);
+    // Aviso do navegador (se a pessoa permitiu): só quando chegou algo novo e a aba não está à vista
+    if (avisosConhecidos >= 0 && r.novos > avisosConhecidos && document.hidden && "Notification" in window && Notification.permission === "granted") {
+      const n = r.itens.find((i) => i.novo);
+      if (n) new Notification("S.I.V.E.", { body: n.titulo, icon: "assets/favicon.png" });
+    }
+    avisosConhecidos = r.novos;
+  } catch { /* tenta de novo no próximo minuto */ }
+}
+const iconeAviso = { entrada: "setaBaixo", saida: "setaCima", autorizacao: "caneta", comunicado: "megafone", ocorrencia: "prancheta", pendencia: "documento", evento: "calendario" };
+function quandoRelativo(iso) {
+  const d = new Date(iso), min = Math.round((Date.now() - d) / 60000);
+  if (min < 1) return "agora"; if (min < 60) return `há ${min} min`;
+  const h = Math.round(min / 60); if (h < 24) return `há ${h} h`;
+  return d.toLocaleDateString("pt-BR", { day: "numeric", month: "short" });
+}
+function desenharAvisos(r) {
+  const painel = document.getElementById("avisos-painel");
+  const podeNotificar = "Notification" in window && Notification.permission === "default";
+  painel.innerHTML = `<div class="avisos-topo"><b>Avisos</b><small>${r.novos ? `${r.novos} novo(s)` : "Nenhum aviso novo"}</small></div>
+    ${r.itens.length ? `<div class="avisos-lista">${r.itens.map((i, k) => `<button type="button" class="aviso ${i.novo ? "novo" : ""} ${i.acao ? "acao" : ""}" data-aviso="${k}">
+      <span class="icone ${i.acao ? "warning" : "info"}">${ico(iconeAviso[i.tipo] || "sino")}</span>
+      <span class="aviso-texto"><b>${esc(i.titulo)}</b><small>${esc(i.texto)} • ${quandoRelativo(i.quando)}</small></span></button>`).join("")}</div>`
+      : `<div class="vazio" style="margin:12px"><small>Nada por aqui ainda. Entradas, saídas, comunicados e autorizações do seu filho aparecem neste sino.</small></div>`}
+    ${podeNotificar ? `<button type="button" class="btn outline pequeno avisos-permitir" id="avisos-permitir">${ico("sino")} Receber avisos do navegador</button>` : ""}`;
+  painel.querySelectorAll("[data-aviso]").forEach((b) => b.onclick = () => {
+    const i = r.itens[Number(b.dataset.aviso)];
+    painel.classList.add("oculto"); document.getElementById("btn-avisos").setAttribute("aria-expanded", "false");
+    if (i.aluno_id && usuarioLogado.aluno_id !== i.aluno_id && (usuarioLogado.filhos || []).some((f) => f.id === i.aluno_id)) { usuarioLogado.aluno_id = i.aluno_id; desenharSeletorContexto(); }
+    dados.abaPedida = i.destino.aba || null;
+    mostrar(i.destino.tela);
+  });
+  const permitir = document.getElementById("avisos-permitir");
+  if (permitir) permitir.onclick = async () => {
+    const r2 = await Notification.requestPermission();
+    avisar(r2 === "granted" ? "Pronto! Quando chegar um aviso e o S.I.V.E. estiver aberto em outra aba, o navegador avisa você." : "Tudo bem. Os avisos continuam aparecendo no sino.", r2 === "granted" ? "success" : "info");
+    permitir.remove();
+  };
+}
+
+// ---------- Busca rápida de aluno no topo (gestão: todos; professor: a turma aberta). Tecla "/" para buscar. ----------
+const semAcento = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+function iniciarBuscaRapida() {
+  const caixa = document.getElementById("busca-rapida"), campo = document.getElementById("busca-rapida-campo"), lista = document.getElementById("busca-rapida-lista");
+  const pode = ["admin", "professor"].includes(usuarioLogado.papel);
+  caixa.classList.toggle("oculto", !pode);
+  if (!pode) return;
+  campo.placeholder = usuarioLogado.papel === "admin" ? "Buscar aluno... (tecla /)" : "Buscar aluno da turma... (tecla /)";
+  buscaAlunos = null; let marcado = 0, achados = [];
+  const carregar = async () => {
+    if (buscaAlunos) return;
+    buscaAlunos = usuarioLogado.papel === "admin" ? (await api("/api/alunos")).filter((a) => a.situacao === "Ativo")
+      : (await api("/api/minha-turma")).alunos.map((a) => ({ ...a, sala: usuarioLogado.sala }));
+  };
+  const fechar = () => { lista.classList.add("oculto"); campo.setAttribute("aria-expanded", "false"); };
+  const abrir = (a) => { campo.value = ""; fechar(); campo.blur(); abrirFicha(a.id, tela === "ficha" ? dados.fichaOrigem || "secretaria" : tela); };
+  const desenhar = () => {
+    const termo = semAcento(campo.value.trim());
+    if (!termo) return fechar();
+    achados = buscaAlunos.filter((a) => semAcento(a.nome).includes(termo)).slice(0, 8);
+    marcado = Math.min(marcado, Math.max(achados.length - 1, 0));
+    lista.innerHTML = achados.length ? achados.map((a, i) => `<button type="button" role="option" aria-selected="${i === marcado}" class="${i === marcado ? "marcado" : ""}" data-busca="${i}">
+      <span class="avatar">${iniciais(a.nome)}</span><span><b>${esc(a.nome)}</b><small>${esc(a.sala)}</small></span></button>`).join("")
+      : `<small style="padding:12px;display:block">Nenhum aluno com esse nome.</small>`;
+    lista.classList.remove("oculto"); campo.setAttribute("aria-expanded", "true");
+    lista.querySelectorAll("[data-busca]").forEach((b) => b.onmousedown = (e) => { e.preventDefault(); abrir(achados[Number(b.dataset.busca)]); });
+  };
+  campo.onfocus = seguro(carregar);
+  campo.oninput = seguro(async () => { await carregar(); marcado = 0; desenhar(); });
+  campo.onkeydown = (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); marcado = Math.min(marcado + 1, achados.length - 1); desenhar(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); marcado = Math.max(marcado - 1, 0); desenhar(); }
+    else if (e.key === "Enter" && achados[marcado]) { e.preventDefault(); abrir(achados[marcado]); }
+    else if (e.key === "Escape") { campo.value = ""; fechar(); campo.blur(); }
+  };
+  campo.onblur = () => setTimeout(fechar, 150);
+}
+document.addEventListener("keydown", (e) => { // "/" abre a busca (como em muitos sistemas), se a pessoa não estiver digitando em outro campo
+  if (e.key !== "/" || !usuarioLogado || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  const campo = document.getElementById("busca-rapida-campo");
+  if (!document.getElementById("busca-rapida").classList.contains("oculto") && !document.getElementById("app").classList.contains("oculto")) { e.preventDefault(); campo.focus(); }
+});
 // Busca os filhos (responsável) ou as turmas (professor) e mostra o seletor no topo quando houver mais de um
 async function atualizarContexto() {
   if (["pai", "professor"].includes(usuarioLogado.papel)) {
@@ -411,7 +602,7 @@ function desenharSeletorContexto() {
   sel.setAttribute("aria-label", u.papel === "pai" ? "Escolher o filho" : "Escolher a turma");
   sel.title = u.papel === "pai" ? "Trocar de filho" : "Trocar de turma";
   sel.onchange = () => {
-    if (u.papel === "pai") u.aluno_id = Number(sel.value); else u.sala = sel.value;
+    if (u.papel === "pai") u.aluno_id = Number(sel.value); else { u.sala = sel.value; buscaAlunos = null; }
     localStorage.setItem("sive-usuario", JSON.stringify(u));
     mostrar(tela === "ficha" ? (u.papel === "pai" ? "pais" : "turma") : tela);
   };
@@ -508,7 +699,7 @@ async function mostrarConsentimento(modo) { // modo "primeiro" (logo após o log
     const detalhe = document.createElement("small"); detalhe.style.display = "block"; detalhe.textContent = o.detalhe; texto.append(detalhe);
     rotulo.append(caixa, texto); lista.append(rotulo);
   }
-  $("cons-nome").value = ""; $("cons-senha").value = ""; $("cons-erro").classList.add("oculto");
+  $("cons-confirmo").checked = false; $("cons-senha").value = ""; $("cons-erro").classList.add("oculto");
 }
 document.getElementById("form-consent").onsubmit = async (e) => {
   e.preventDefault();
@@ -516,10 +707,12 @@ document.getElementById("form-consent").onsubmit = async (e) => {
   erro.classList.add("oculto");
   const escolhas = {};
   document.querySelectorAll("#cons-opcoes input").forEach((c) => { escolhas[c.dataset.opcao] = c.checked; });
-  if (!Object.values(escolhas).some(Boolean) && !confirm("Você não está autorizando nenhum item. Confirma que NÃO autoriza?")) return;
+  if (!$("cons-confirmo").checked) { erro.textContent = "Marque “Li o termo e confirmo minhas escolhas” para assinar."; erro.classList.remove("oculto"); return; }
+  if (!Object.values(escolhas).some(Boolean) && !(await confirmar({ titulo: "Não autorizar nenhum item?", texto: "Você deixou todos os itens desmarcados. A escola não vai usar as informações nem as imagens do seu filho no sistema. Você pode mudar isso depois no Portal dos Pais.", botao: "Sim, não autorizo" }))) return;
   try {
-    await api(`/api/alunos/${usuarioLogado.aluno_id}/consentimento`, { method: "POST", body: JSON.stringify({ ...escolhas, nome: $("cons-nome").value, senha: $("cons-senha").value }) });
-    $("cons-nome").value = ""; $("cons-senha").value = "";
+    await api(`/api/alunos/${usuarioLogado.aluno_id}/consentimento`, { method: "POST", body: JSON.stringify({ ...escolhas, confirmo: true, senha: $("cons-senha").value }) });
+    $("cons-confirmo").checked = false; $("cons-senha").value = "";
+    avisar("Termo assinado. Você pode alterar ou revogar quando quiser.");
     $("tela-consent").classList.add("oculto");
     entrarNoApp();
   } catch (err) { if (err.message !== "Sessão expirada") { erro.textContent = err.message; erro.classList.remove("oculto"); } }
@@ -556,7 +749,7 @@ function blocoVerificacao(codigo) {
 }
 async function abrirComprovanteConsentimento(c, aluno) {
   const w = window.open("", "_blank");
-  if (!w) { alert("Permita pop-ups neste site para ver o comprovante."); return; }
+  if (!w) { avisar("O navegador bloqueou a janela do comprovante. Permita pop-ups para este site e tente de novo.", "danger"); return; }
   const termo = await (await fetch("/api/consentimento-termo")).json();
   const linhas = termo.opcoes.map((o) => `<tr><td>${esc(o.curto)}</td><td><b>${c[o.id] ? ico("confere") + " Autorizo" : ico("proibido") + " Não autorizo"}</b></td></tr>`).join("");
   w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Comprovante ${esc(c.codigo)}</title>
@@ -566,7 +759,7 @@ async function abrirComprovanteConsentimento(c, aluno) {
     <tr><td>Aluno(a)</td><td>${esc(aluno.nome)} — ${esc(aluno.sala)}</td></tr><tr><td>Assinado por</td><td>${esc(c.assinado_nome)}</td></tr>
     <tr><td>Data e hora</td><td>${esc(c.assinado_em)}</td></tr><tr><td>Código de verificação</td><td class="cod">${esc(c.codigo)}</td></tr></table>
     <h3>Escolhas do responsável</h3><table>${linhas}</table>
-    ${blocoVerificacao(c.codigo)}<p>Documento gerado pelo sistema S.I.V.E. O consentimento foi confirmado com o nome completo e a senha do responsável e pode ser alterado ou revogado a qualquer momento no Portal dos Pais.</p><button id="imprimir">Imprimir</button></body></html>`);
+    ${blocoVerificacao(c.codigo)}<p>Documento gerado pelo sistema S.I.V.E. O consentimento foi confirmado com a senha do responsável e pode ser alterado ou revogado a qualquer momento no Portal dos Pais.</p><button id="imprimir">Imprimir</button></body></html>`);
   w.document.close();
   w.document.getElementById("imprimir").addEventListener("click", () => w.print());
 }
@@ -747,9 +940,9 @@ function alerta(icone, n, titulo, texto, tom, ir) {
 function telaSecretaria() {
   const r = dados.resumo;
   const tag = r.eh_hoje ? "Hoje" : dataCurta(r.data);
-  const aviso = r.eh_hoje ? "" : ` Mostrando o último dia com chamada registrada (${dataCurta(r.data)}).`;
+  const aviso = r.eh_hoje ? "" : r.fim_de_semana ? ` Hoje não tem aula: mostrando o último dia letivo (${dataCurta(r.data)}).` : ` Mostrando o último dia com chamada registrada (${dataCurta(r.data)}).`;
+  const comRegistro = r.presentes + r.ausentes;
   return `<div class="topo"><p class="destaque">Visão geral</p><h2>${saudacao()}, ${esc(usuarioLogado.nome.split(" ")[0])}</h2><small>Acompanhe os indicadores e prioridades da escola.${aviso}</small></div>
-  ${blocoBanners()}
   ${r.professores_inativos ? `<div class="card" style="margin-bottom:16px;border-left:4px solid var(--warning)"><div class="linha" style="flex-wrap:wrap;gap:8px"><b>${ico("pessoa")} ${r.professores_inativos} professor(es) inativado(s) por ${r.inatividade_dias} dias sem acessar${r.reativacoes_pedidas ? ` • ${r.reativacoes_pedidas} pediu(ram) reativação` : ""}</b><button class="btn pequeno" data-ir="usuarios" style="width:auto">Ver em Usuários</button></div><small>O acesso é suspenso sozinho depois de ${r.inatividade_dias} dias sem uso. A gestão reativa com uma senha provisória nova.</small></div>` : ""}
   ${r.comunicacoes_pendentes ? `<div class="card" style="margin-bottom:16px;border-left:4px solid var(--danger)"><div class="linha" style="flex-wrap:wrap;gap:8px"><b>${ico("aviso")} ${r.comunicacoes_pendentes} comunicação(ões) ao Conselho Tutelar pendente(s)</b><button class="btn pequeno" data-ir-protecao style="width:auto">Abrir Proteção</button></div><small>O ECA (arts. 13 e 56) pede que casos de maus-tratos e de faltas reiteradas sejam comunicados ao Conselho Tutelar.</small></div>` : ""}
   <div class="grade g3">
@@ -760,7 +953,8 @@ function telaSecretaria() {
         <div><div class="num">${r.presentes}</div><small>${ico("confere", "ok")} Presentes</small></div>
         <div><div class="num">${r.ausentes}</div><small>${ico("aviso")} Ausentes • ${r.busca_ativa} em Busca Ativa</small></div>
       </div>
-      <small>${r.percentual == null ? "Sem chamada registrada" : `${pct(r.percentual)} de presença`}</small></article>
+      <small>${!comRegistro ? "Nenhuma chamada registrada ainda" : `${pct(r.percentual)} de presença entre ${comRegistro} aluno(s) com registro`}</small>
+      ${r.sem_registro ? `<small class="nota-alerta">${ico("aviso")} ${r.sem_registro} aluno(s) ainda sem registro neste dia</small>` : ""}</article>
     <button type="button" class="card metrica clicavel" data-ir="ocorrencias-gestao" title="Abrir a pasta de ocorrências">
       <div class="linha"><div class="icone info">${ico("prancheta")}</div><small>${ico("pasta")} Abrir pasta</small></div>
       <small>Ocorrências</small><div class="num" id="oc-gestao-num">${r.ocorrencias_gestao}</div>
@@ -772,6 +966,7 @@ function telaSecretaria() {
     ${alerta(ico("pasta"), r.documentos_recentes, "Documentos recebidos recentemente", "Enviados pelos responsáveis (24h)", "warning", "docs-recentes")}
     ${alerta(ico("caneta"), r.autorizacoes_recentes, "Autorizações recebidas recentemente", "Assinadas nas últimas 24h", "info", "autorizacoes")}
   </div>
+  ${blocoBanners()}
   <section class="card"><div class="linha" style="flex-wrap:wrap;gap:12px"><div><h2>Gestão de alunos</h2><small>Clique nos títulos para ordenar e abra a ficha de cada aluno.</small></div>
     <div class="linha" style="gap:16px;flex-wrap:wrap;justify-content:flex-end">
       <select id="g-filtro" style="width:auto"><option value="todos">Todos os alunos</option><option value="pendencias">Com pendências</option><option value="aut">Autorização pendente</option><option value="comunicados">Comunicado não lido</option><option value="adv">Com advertências</option></select>
@@ -937,7 +1132,7 @@ function ligarGestao() {
 // ---------- Controle de frequência (administração) ----------
 function telaFrequencia() {
   return `<div class="topo"><h2>Controle de frequência</h2><small>Presença e faltas por dia. Clique em "Histórico" para ver o detalhe de cada aluno.</small></div>
-  <div class="grade g3" id="freq-cards"></div>
+  <div class="grade g4" id="freq-cards"></div><div id="freq-aviso"></div>
   <section class="card">
     <div class="linha" style="flex-wrap:wrap;align-items:flex-end;gap:12px">
       <div><small>Data</small><input type="date" id="freq-data" style="max-width:200px"></div>
@@ -951,11 +1146,15 @@ function telaFrequencia() {
 function desenharFrequencia() {
   const f = dados.freq;
   document.getElementById("freq-data").value = f.data;
-  const tag = f.eh_hoje ? "Hoje" : dataCurta(f.data);
+  const tag = f.eh_hoje ? "Hoje" : dataCurta(f.data), comRegistro = f.presentes + f.ausentes;
   document.getElementById("freq-cards").innerHTML =
-    metrica(ico("familia"), "Total de Alunos", f.total, "alunos cadastrados", "info", tag) +
-    metrica(ico("confere"), "Presentes", f.presentes, f.presentes + f.ausentes ? `${pct(calcPct(f.presentes, f.ausentes))} de presença` : "Sem chamada neste dia", "success", tag) +
-    metrica(ico("proibido"), "Ausentes", f.ausentes, "faltas no dia", "danger", tag);
+    metrica(ico("familia"), "Total de Alunos", f.total, "alunos ativos", "info", tag) +
+    metrica(ico("confere"), "Presentes", f.presentes, comRegistro ? `${pct(calcPct(f.presentes, f.ausentes))} dos ${comRegistro} com registro` : "Sem chamada neste dia", "success", tag) +
+    metrica(ico("proibido"), "Ausentes", f.ausentes, "faltas no dia", "danger", tag) +
+    metrica(ico("relogio"), "Sem registro", f.sem_registro, f.sem_registro ? "chamada ainda não feita" : "todos registrados", f.sem_registro ? "warning" : "neutral", tag);
+  document.getElementById("freq-aviso").innerHTML = f.fim_de_semana
+    ? `<p class="pill info aviso-largo">${ico("calendario")} Hoje não tem aula. Mostrando o último dia letivo: ${dataCurta(f.data)}.</p>`
+    : f.sem_registro && comRegistro ? `<p class="pill warning aviso-largo">${ico("aviso")} ${f.sem_registro} aluno(s) ainda sem registro: o percentual de presença considera só os ${comRegistro} que já têm chamada ou entrada.</p>` : "";
   const filtro = document.getElementById("freq-busca").value.toLowerCase();
   document.getElementById("freq-linhas").innerHTML = f.alunos.filter((a) => a.nome.toLowerCase().includes(filtro)).map((a) => `<tr>
     <td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><div><b>${esc(a.nome)}</b><small>${esc(a.sala)}</small></div></div></td>
@@ -1000,6 +1199,20 @@ function blocoConselho(c) { // ECA, art. 56, II: faltas reiteradas, esgotados os
       <div class="acoes"><button class="btn pequeno" data-ct-enviar="${c.id}">Registrar comunicação</button><button class="btn outline pequeno" data-ct-cancelar="${c.id}">Cancelar</button></div>
     </div>`;
 }
+// Telefone em link: no celular, toca e liga. WhatsApp: abre a conversa (wa.me, com o 55 do Brasil).
+const soDigitos = (t) => String(t || "").replace(/\D/g, "");
+function contatosFamilia(lista) {
+  if (!lista || !lista.length) return `<small class="contatos-vazio">${ico("aviso")} Nenhum responsável cadastrado. Complete o cadastro em Alunos e turmas.</small>`;
+  return `<div class="contatos-familia"><small><b>Contato da família</b></small>${lista.map((r) => {
+    const tel = soDigitos(r.telefone), tel2 = soDigitos(r.telefone2);
+    return `<div class="contato"><span><b>${esc(r.nome)}</b> <small style="display:inline">(${esc(r.parentesco)}) • prefere ${esc(r.contato_preferido || "WhatsApp")}</small></span>
+      <span class="acoes" style="margin:0">${tel ? `<a class="btn outline pequeno" href="tel:${tel}">${ico("telefone")} ${esc(r.telefone)}</a>
+        <a class="btn outline pequeno" href="https://wa.me/55${tel}" target="_blank" rel="noopener">${ico("mensagem")} WhatsApp</a>` : ""}
+        ${tel2 ? `<a class="btn outline pequeno" href="tel:${tel2}">${ico("telefone")} ${esc(r.telefone2)}</a>` : ""}
+        ${r.email ? `<a class="btn outline pequeno" href="mailto:${esc(r.email)}">${ico("email")} E-mail</a>` : ""}
+        ${!tel && !tel2 && !r.email ? "<small>Sem telefone cadastrado</small>" : ""}</span></div>`;
+  }).join("")}</div>`;
+}
 function cartaoCaso(c) {
   const aberto = c.status === "Em acompanhamento";
   return `<article class="card" style="margin-bottom:16px">
@@ -1007,9 +1220,10 @@ function cartaoCaso(c) {
       <div class="aluno"><span class="avatar">${iniciais(c.nome)}</span><div><b>${esc(c.nome)}</b><small>${esc(c.sala)} • aberto em ${c.aberta_em}${c.encerrada_em ? " • encerrado em " + c.encerrada_em : ""}</small></div></div>
       <div>${pill(aberto ? "Em acompanhamento" : "Resolvido", aberto ? "danger" : "success")} ${pill(`${c.faltas_atuais} faltas em ${dados.busca.criterio.dias} dias`, "warning")}</div>
     </div>
+    ${aberto ? contatosFamilia(c.contatos) : ""}
     <div style="margin-top:8px">${c.registros.map((r) => `<div class="nota ${r.nome_usuario === "Sistema" ? "sistema" : ""}"><small><b>${esc(r.nome_usuario)}</b> • ${r.quando}</small>${esc(r.texto)}</div>`).join("")}</div>
-    ${aberto ? `<textarea rows="2" maxlength="450" data-nota="${c.id}" placeholder="Anote o acompanhamento (ligação, visita, conversa com a família...)" style="margin-top:8px"></textarea>
-      <div class="acoes"><button class="btn pequeno" data-anotar="${c.id}">Registrar acompanhamento</button><button class="btn outline pequeno" data-encerrar="${c.id}">Encerrar caso</button></div>` : ""}
+    ${aberto ? `<textarea rows="2" maxlength="450" data-nota="${c.id}" placeholder="Anote o acompanhamento (ligação, visita, conversa com a família...)" style="margin-top:8px" aria-label="Acompanhamento de ${esc(c.nome)}"></textarea>
+      <div class="acoes acoes-separadas"><button class="btn pequeno" data-anotar="${c.id}">Registrar acompanhamento</button><button class="btn perigo-leve pequeno" data-encerrar="${c.id}" data-nome="${esc(c.nome)}">Encerrar caso</button></div>` : ""}
     ${blocoConselho(c)}
   </article>`;
 }
@@ -1024,13 +1238,15 @@ function desenharBusca() {
   document.querySelectorAll("[data-anotar]").forEach((b) => b.onclick = seguro(async () => {
     const texto = document.querySelector(`[data-nota="${b.dataset.anotar}"]`).value;
     await api(`/api/busca-ativa/${b.dataset.anotar}/acompanhamento`, { method: "POST", body: JSON.stringify({ texto }) });
-    await recarregar();
+    await recarregar(); avisar("Acompanhamento registrado.");
   }));
   document.querySelectorAll("[data-encerrar]").forEach((b) => b.onclick = seguro(async () => {
-    if (!confirm("Encerrar este caso de Busca Ativa?")) return;
-    const texto = document.querySelector(`[data-nota="${b.dataset.encerrar}"]`).value;
+    const r = await confirmar({ titulo: `Encerrar o caso de ${b.dataset.nome}?`, texto: "O caso sai de \"Em acompanhamento\" e vai para os encerrados (o histórico fica guardado). Se o aluno voltar a faltar muito, o sistema abre um caso novo sozinho.",
+      botao: "Encerrar caso", perigo: true, campo: { rotulo: "Motivo do encerramento (opcional)", placeholder: "Ex.: aluno voltou a frequentar, família regularizou a situação...", valor: document.querySelector(`[data-nota="${b.dataset.encerrar}"]`).value } });
+    if (!r) return;
+    const texto = r.valor;
     await api(`/api/busca-ativa/${b.dataset.encerrar}/encerrar`, { method: "PUT", body: JSON.stringify({ texto }) });
-    await recarregar();
+    await recarregar(); avisar("Caso encerrado.");
   }));
   const painel = (id) => document.querySelector(`[data-ct-painel="${id}"]`);
   document.querySelectorAll("[data-ct-abrir]").forEach((b) => b.onclick = () => painel(b.dataset.ctAbrir).classList.toggle("oculto"));
@@ -1220,7 +1436,7 @@ function desenharCalendario() {
       <span><b>${esc(e.titulo)}</b><small>${esc(e.tipo)} • ${quandoEvento(e)}${e.sala ? " • " + esc(e.sala) : ""}</small></span></button>`).join("") : vazio("Nenhum evento marcado.");
   document.querySelectorAll("[data-ir-dia]").forEach((b) => b.onclick = seguro(async () => { await irParaMes(b.dataset.irDia.slice(0, 7), b.dataset.irDia); }));
   document.querySelectorAll("[data-excluir-evento]").forEach((b) => b.onclick = seguro(async () => {
-    if (!confirm(`Excluir o evento "${b.dataset.titulo}"?`)) return;
+    if (!(await confirmar({ titulo: "Excluir este evento?", texto: `"${b.dataset.titulo}" sai do calendário e dos banners para todas as pessoas. Essa ação não pode ser desfeita.`, botao: "Excluir evento", perigo: true }))) return;
     await api(`/api/eventos/${b.dataset.excluirEvento}`, { method: "DELETE" });
     dados.calMsg = "Evento excluído."; await mostrar("calendario");
   }));
@@ -1355,7 +1571,7 @@ function desenharMonFacial() {
       <small>${ico("confere", "ok")} <b>Não guarda fotos nem biometria</b>: sem cadastro facial, a imagem é descartada e ninguém é identificado. As passagens são apagadas depois de ${f.retencao_dias} dias.</small>
       <small>${ico("confere", "ok")} Os responsáveis veem só a entrada e a saída do próprio filho, nunca as câmeras.</small></div>`;
   document.getElementById("mon-facial-btn").onclick = seguro(async () => {
-    if (f.ligado && !confirm("Desligar o reconhecimento facial? As entradas passam a ser registradas pela portaria.")) return;
+    if (f.ligado && !(await confirmar({ titulo: "Desligar o reconhecimento facial?", texto: "As câmeras deixam de identificar os alunos na hora. A partir de agora, as entradas e saídas precisam ser registradas pela portaria.", botao: "Desligar", perigo: true }))) return;
     await api("/api/configuracoes/reconhecimento-facial", { method: "PUT", body: JSON.stringify({ ligado: !f.ligado }) });
     await recarregarMonitoramento(true);
   });
@@ -1497,29 +1713,26 @@ const nomesTurmas = () => (dados.turmas || []).filter((t) => t.ativa).map((t) =>
 function telaCadastroAluno() {
   const msg = dados.cadastroMsg || ""; dados.cadastroMsg = "";
   const todos = dados.alunos || [], alunos = todos.filter((a) => a.situacao === "Ativo"), foraDaEscola = todos.filter((a) => a.situacao !== "Ativo");
-  const turmas = new Map(); // turma -> alunos, já em ordem alfabética
-  for (const a of [...alunos].sort((x, y) => porNome(x.nome, y.nome))) {
-    if (!turmas.has(a.sala)) turmas.set(a.sala, []);
-    turmas.get(a.sala).push(a);
-  }
-  // Situação: quem sai da escola não é apagado (o histórico fica), só deixa de aparecer nas listas do dia a dia
-  const seletorSituacao = (a) => `<select class="ca-situacao" data-aluno="${a.id}" data-nome="${esc(a.nome)}" aria-label="Situação de ${esc(a.nome)}" style="width:auto;padding:6px 8px">
-    ${["Ativo", "Transferido", "Concluiu", "Desistente"].map((s) => `<option ${s === a.situacao ? "selected" : ""}>${s}</option>`).join("")}</select>`;
-  const linhaAluno = (a) => `<tr><td><b>${esc(a.nome)}</b></td><td>${esc(a.matricula || "—")}</td><td>${seletorSituacao(a)}</td>
-    <td><button type="button" class="btn outline pequeno" data-ca-ficha="${a.id}">Abrir ficha</button></td></tr>`;
-  const cabecalho = "<thead><tr><th>Aluno</th><th>Matrícula</th><th>Situação</th><th></th></tr></thead>";
-  const lista = [...turmas.keys()].sort(porNome).map((sala) => {
-    const da = turmas.get(sala);
-    return `<h3 style="margin:18px 0 8px">${esc(sala)} <small style="display:inline">(${da.length} aluno(s))</small></h3>
-      <div class="tabela"><table>${cabecalho}<tbody>${da.map(linhaAluno).join("")}</tbody></table></div>`;
-  }).join("");
+  // Ações pouco usadas e sensíveis (mudar a situação do aluno) ficam num menu "⋯", com confirmação. Antes era um seletor solto em cada linha.
+  const menuAluno = (a) => `<details class="menu-acoes"><summary class="btn outline pequeno" aria-label="Mais ações para ${esc(a.nome)}" title="Mais ações">${ico("mais")}</summary>
+    <div class="menu-acoes-lista"><button type="button" data-ca-situacao="${a.id}" data-nome="${esc(a.nome)}" data-atual="${esc(a.situacao)}">Mudar situação…</button></div></details>`;
+  const tomSituacao = { Ativo: "success", Transferido: "info", Concluiu: "neutral", Desistente: "warning" };
+  const linhaAluno = (a, fora) => `<tr data-turma="${esc(a.sala)}" data-nome="${esc(a.nome.toLowerCase())}"><td><b>${esc(a.nome)}</b></td><td>${esc(a.sala)}</td><td>${esc(a.matricula || "—")}</td>
+    <td>${pill(esc(a.situacao), tomSituacao[a.situacao] || "neutral")}${fora && a.situacao_em ? `<small>desde ${a.situacao_em}</small>` : ""}</td>
+    <td class="celula-acoes"><button type="button" class="btn outline pequeno" data-ca-ficha="${a.id}">Abrir ficha</button>${menuAluno(a)}</td></tr>`;
+  const ordenados = [...alunos].sort((x, y) => porNome(x.sala, y.sala) || porNome(x.nome, y.nome));
+  const turmasComAluno = [...new Set(alunos.map((a) => a.sala))].sort(porNome);
+  const lista = ordenados.length ? `<div class="linha filtros-lista">
+      <select id="ca-filtro-turma" aria-label="Filtrar por turma" style="width:auto"><option value="">Todas as turmas (${alunos.length})</option>${turmasComAluno.map((t) => `<option value="${esc(t)}">${esc(t)} (${alunos.filter((a) => a.sala === t).length})</option>`).join("")}</select>
+      <input id="ca-busca" class="campo-busca" placeholder="Buscar pelo nome..." aria-label="Buscar aluno pelo nome" style="max-width:280px"></div>
+    <div class="tabela"><table><thead><tr><th>Aluno</th><th>Turma</th><th>Matrícula</th><th>Situação</th><th></th></tr></thead><tbody id="ca-linhas">${ordenados.map((a) => linhaAluno(a, false)).join("")}</tbody></table></div>
+    <small id="ca-contagem" style="margin-top:8px"></small>` : "";
   const fora = foraDaEscola.length ? `<details class="pasta" style="margin-top:18px"><summary><b>${ico("pasta")} Fora da escola</b> <small style="display:inline">(${foraDaEscola.length}: transferidos, concluintes e desistentes)</small></summary>
-    <div class="tabela"><table><thead><tr><th>Aluno</th><th>Última turma</th><th>Situação</th><th>Desde</th><th></th></tr></thead><tbody>${[...foraDaEscola].sort((x, y) => porNome(x.nome, y.nome)).map((a) =>
-      `<tr><td><b>${esc(a.nome)}</b></td><td>${esc(a.sala)}</td><td>${seletorSituacao(a)}</td><td>${a.situacao_em || "—"}</td><td><button type="button" class="btn outline pequeno" data-ca-ficha="${a.id}">Abrir ficha</button></td></tr>`).join("")}</tbody></table></div></details>` : "";
+    <div class="tabela"><table><thead><tr><th>Aluno</th><th>Última turma</th><th>Matrícula</th><th>Situação</th><th></th></tr></thead><tbody>${[...foraDaEscola].sort((x, y) => porNome(x.nome, y.nome)).map((a) => linhaAluno(a, true)).join("")}</tbody></table></div></details>` : "";
   const editando = dados.turmaEditando ? (dados.turmas || []).find((t) => t.id === dados.turmaEditando) : null;
   const opcoesTurno = (atual) => `<option value="">—</option>${["Manhã", "Tarde", "Integral", "Noite"].map((t) => `<option ${t === atual ? "selected" : ""}>${t}</option>`).join("")}`;
   return `<div class="topo linha" style="flex-wrap:wrap">
-    <div><h2>Cadastro de Aluno</h2><small>Alunos cadastrados, separados por turma (ordem alfabética).</small></div>
+    <div><h2>Alunos e turmas</h2><small>Todos os alunos em uma lista: filtre pela turma ou busque pelo nome. As turmas ficam logo abaixo.</small></div>
     <button type="button" class="btn" id="ca-novo" style="width:auto;padding:10px 18px">+ Novo cadastro</button></div>
   ${msg ? `<p class="pill success" style="white-space:normal;margin-bottom:14px">${esc(msg)}</p>` : ""}
   <section class="card">
@@ -1678,13 +1891,32 @@ function desenharCadastroAluno() {
   modal.onkeydown = (e) => { if (e.key === "Escape") fecharModal(); };
   $("ca-add-resp").onclick = () => { listaResp.insertAdjacentHTML("beforeend", linhaResponsavel()); wireRemoverResponsavel(); };
   document.querySelectorAll("[data-ca-ficha]").forEach((b) => b.onclick = () => abrirFicha(Number(b.dataset.caFicha), "cadastro"));
-  document.querySelectorAll(".ca-situacao").forEach((sel) => sel.onchange = seguro(async () => {
-    const antes = [...sel.options].find((o) => o.defaultSelected).value, nova = sel.value;
-    const motivo = nova === "Ativo" ? "" : prompt(`${sel.dataset.nome}: ${nova}.\nMotivo ou observação (opcional, ex.: escola de destino):`, "");
-    if (motivo === null) { sel.value = antes; return; } // cancelou
-    try { await api(`/api/alunos/${sel.dataset.aluno}/situacao`, { method: "PUT", body: JSON.stringify({ situacao: nova, motivo }) }); }
-    catch (e) { sel.value = antes; throw e; }
-    dados.cadastroMsg = nova === "Ativo" ? `${sel.dataset.nome} voltou para a lista de alunos.` : `${sel.dataset.nome} foi para "Fora da escola" (${nova}). O histórico continua guardado.`;
+  // Filtro por turma + busca pelo nome (na própria lista, sem recarregar)
+  const filtrarAlunos = () => {
+    const turma = $("ca-filtro-turma").value, busca = $("ca-busca").value.trim().toLowerCase();
+    const linhas = [...document.querySelectorAll("#ca-linhas tr")];
+    linhas.forEach((tr) => { tr.classList.toggle("oculto", (turma && tr.dataset.turma !== turma) || (busca && !tr.dataset.nome.includes(busca))); });
+    const visiveis = linhas.filter((tr) => !tr.classList.contains("oculto")).length;
+    $("ca-contagem").textContent = `${visiveis} de ${linhas.length} aluno(s)`;
+  };
+  if ($("ca-filtro-turma")) { $("ca-filtro-turma").onchange = filtrarAlunos; $("ca-busca").oninput = filtrarAlunos; filtrarAlunos(); }
+  // Mudar a situação: janela com a escolha, o motivo e a consequência explicada
+  document.querySelectorAll("[data-ca-situacao]").forEach((b) => b.onclick = seguro(async () => {
+    b.closest("details").open = false;
+    const nome = b.dataset.nome, atual = b.dataset.atual;
+    const escolha = await confirmar({ titulo: `Situação de ${nome}`, texto: "Quem sai da escola não é apagado: o aluno sai das chamadas, comunicados e listas do dia a dia, mas todo o histórico continua guardado e pode voltar a qualquer momento.",
+      botao: "Continuar", campo: { rotulo: "Nova situação", tipo: "select", opcoes: ["Ativo", "Transferido", "Concluiu", "Desistente"], valor: atual } });
+    if (!escolha || escolha.valor === atual) return;
+    const nova = escolha.valor;
+    let motivo = "";
+    if (nova !== "Ativo") {
+      const m = await confirmar({ titulo: `Marcar ${nome} como "${nova}"?`, texto: "O aluno vai para \"Fora da escola\" e deixa de aparecer nas chamadas e nos comunicados.", botao: `Confirmar: ${nova}`, perigo: true,
+        campo: { rotulo: "Motivo ou observação (opcional)", placeholder: "Ex.: escola de destino" } });
+      if (!m) return;
+      motivo = m.valor;
+    }
+    await api(`/api/alunos/${b.dataset.caSituacao}/situacao`, { method: "PUT", body: JSON.stringify({ situacao: nova, motivo }) });
+    dados.cadastroMsg = nova === "Ativo" ? `${nome} voltou para a lista de alunos.` : `${nome} foi para "Fora da escola" (${nova}). O histórico continua guardado.`;
     await mostrar("cadastro");
   }));
   // Turmas: criar, ou editar a que foi escolhida no botão "Editar"
@@ -1806,23 +2038,34 @@ function statusUsuario(u) {
   if (u.inativado_motivo === "inatividade") return pill(`Inativo: ${u.dias_sem_acesso} dias sem acesso`, "warning") + (u.reativacao_pedida_em ? " " + pill("Pediu reativação", "danger") : "");
   return pill("Inativo", "neutral");
 }
+// Ações por usuário: a principal fica à vista; as sensíveis (desativar, zerar duas etapas) ficam no menu "⋯" e pedem confirmação.
+// A própria pessoa logada não vê "Desativar" na sua linha (o servidor também recusa).
+function acoesUsuario(u) {
+  const eu = usuarioLogado.id ? u.id === usuarioLogado.id : u.nome === usuarioLogado.nome && u.papel === usuarioLogado.papel;
+  if (eu) return pill("Você", "info");
+  if (!u.ativo && u.inativado_motivo === "inatividade") return `<button class="btn pequeno" data-reativar="${u.id}" data-nome="${esc(u.nome)}">Reativar</button>`;
+  if (!u.ativo) return `<button class="btn outline pequeno" data-id="${u.id}" data-ativo="1" data-nome="${esc(u.nome)}">Ativar</button>`;
+  return `<details class="menu-acoes"><summary class="btn outline pequeno" aria-label="Mais ações para ${esc(u.nome)}" title="Mais ações">${ico("mais")}</summary>
+    <div class="menu-acoes-lista">${u.dois_fatores ? `<button type="button" data-zerar-2fa="${u.id}" data-nome="${esc(u.nome)}">Zerar duas etapas…</button>` : ""}
+      <button type="button" class="perigo" data-id="${u.id}" data-ativo="0" data-nome="${esc(u.nome)}">Desativar acesso…</button></div></details>`;
+}
 function desenharListaUsuarios() {
   document.getElementById("lista-usuarios").innerHTML = dados.usuarios.map((u) => `<tr>
     <td>${esc(u.nome)}</td><td>${esc(u.usuario)}</td><td>${papelLabel(u.papel)}</td>
     <td>${vinculoUsuario(u)}</td><td>${u.ultimo_acesso || "Nunca entrou"}</td>
     <td>${statusUsuario(u)}${u.dois_fatores ? " " + pill("2 etapas", "info") : ""}</td>
-    <td>${!u.ativo && u.inativado_motivo === "inatividade"
-      ? `<button class="btn pequeno" data-reativar="${u.id}" data-nome="${esc(u.nome)}">Reativar</button>`
-      : `<button class="btn outline pequeno" data-id="${u.id}" data-ativo="${u.ativo ? 0 : 1}">${u.ativo ? "Desativar" : "Ativar"}</button>`}
-      ${u.dois_fatores && u.usuario !== usuarioLogado.usuario ? `<button class="btn outline pequeno" data-zerar-2fa="${u.id}" data-nome="${esc(u.nome)}" style="margin-top:6px">Zerar 2 etapas</button>` : ""}</td>
+    <td class="celula-acoes">${acoesUsuario(u)}</td>
   </tr>`).join("");
   document.querySelectorAll("#lista-usuarios [data-ativo]").forEach((b) => b.onclick = seguro(async () => {
-    await api(`/api/usuarios/${b.dataset.id}/ativo`, { method: "PUT", body: JSON.stringify({ ativo: b.dataset.ativo === "1" }) });
+    const ativar = b.dataset.ativo === "1", det = b.closest("details"); if (det) det.open = false;
+    if (!ativar && !(await confirmar({ titulo: `Desativar o acesso de ${b.dataset.nome}?`, texto: "A pessoa sai do sistema na hora, em todos os aparelhos, e não consegue mais entrar. Nada é apagado: você pode ativar de novo quando quiser.", botao: "Desativar acesso", perigo: true }))) return;
+    await api(`/api/usuarios/${b.dataset.id}/ativo`, { method: "PUT", body: JSON.stringify({ ativo: ativar }) });
     await recarregarUsuarios();
+    avisar(ativar ? `Acesso de ${b.dataset.nome} ativado.` : `Acesso de ${b.dataset.nome} desativado.`);
   }));
   document.querySelectorAll("#lista-usuarios [data-reativar]").forEach((b) => b.onclick = reativarProfessor(b));
   document.querySelectorAll("#lista-usuarios [data-zerar-2fa]").forEach((b) => b.onclick = seguro(async () => {
-    if (!confirm(`Zerar a verificação em duas etapas de ${b.dataset.nome}? Use só se a pessoa perdeu o celular. Ela configura de novo no próximo login.`)) return;
+    if (!(await confirmar({ titulo: `Zerar as duas etapas de ${b.dataset.nome}?`, texto: "Use só se a pessoa perdeu o celular. O login dela é encerrado em todos os aparelhos e ela configura o aplicativo de novo no próximo acesso.", botao: "Zerar duas etapas", perigo: true }))) return;
     await api(`/api/usuarios/${b.dataset.zerar2fa}/2fa/zerar`, { method: "PUT", body: "{}" });
     await recarregarUsuarios(`Verificação em duas etapas de ${b.dataset.nome} zerada.`);
   }));
@@ -1861,7 +2104,7 @@ function abrirVinculo(u) {
       catch (e) { falhou(e); }
     };
     corpo.querySelectorAll("[data-desligar]").forEach((b) => b.onclick = async () => {
-      if (!confirm("Desligar este aluno do responsável? Ele deixa de ver o aluno no Portal dos Pais.")) return;
+      if (!(await confirmar({ titulo: "Desligar este aluno do responsável?", texto: "O responsável deixa de ver este aluno no Portal dos Pais. Os registros já feitos continuam guardados.", botao: "Desligar", perigo: true }))) return;
       try { await api(`/api/usuarios/${u.id}/filhos/${b.dataset.desligar}`, { method: "DELETE" }); await depois(); }
       catch (e) { falhou(e); }
     });
@@ -1885,7 +2128,7 @@ function vinculoUsuario(u) {
 }
 // ---------- Reativação de professores (60 dias sem acessar) ----------
 const reativarProfessor = (b) => seguro(async () => {
-  if (!confirm(`Reativar o acesso de ${b.dataset.nome}? Uma senha provisória nova será gerada.`)) return;
+  if (!(await confirmar({ titulo: `Reativar o acesso de ${b.dataset.nome}?`, texto: "O sistema gera uma senha provisória nova, que você repassa ao professor. Ele troca a senha no primeiro acesso e o prazo de 60 dias volta a contar.", botao: "Reativar" }))) return;
   const r = await api(`/api/usuarios/${b.dataset.reativar}/reativar`, { method: "PUT", body: "{}" });
   await recarregarUsuarios(`Acesso de ${b.dataset.nome} reativado. Senha provisória: ${r.senha_provisoria} (repasse ao professor; ele troca no primeiro acesso).`);
 });
@@ -1898,7 +2141,7 @@ function desenharReativacao() {
       <div class="acoes"><button class="btn pequeno" data-reativar="${u.id}" data-nome="${esc(u.nome)}">Reativar com senha nova</button></div></div>`).join("");
   const perto = r.perto.map((u) => `<div class="linha" style="padding:8px 0;border-top:1px solid var(--border);flex-wrap:wrap;gap:8px"><span><b>${esc(u.nome)}</b> <small style="display:inline">(${esc(u.sala || "—")}) • último acesso ${u.ultimo_acesso || "nunca"}</small></span>${pill(`Faltam ${u.faltam} dia(s) para a suspensão`, "warning")}</div>`).join("");
   caixa.innerHTML = `<div class="linha" style="flex-wrap:wrap;gap:8px"><h2>Reativação de professores</h2>${r.inativos.length ? pill(`${r.inativos.length} inativo(s)`, "warning") : pill("Nenhum inativo", "success")}</div>
-    <small>Professores que ficam ${r.dias} dias sem acessar o sistema (AVA) têm o acesso suspenso automaticamente. Ao tentar entrar, o pedido de reativação chega aqui. A reativação gera uma senha provisória nova e o prazo volta a contar.</small>
+    <small>Professores que ficam ${r.dias} dias sem entrar no sistema têm o acesso suspenso automaticamente. Ao tentar entrar, o pedido de reativação chega aqui. A reativação gera uma senha provisória nova e o prazo volta a contar.</small>
     ${msg ? `<p class="pill success" style="margin-top:12px;white-space:normal">${esc(msg)}</p>` : ""}
     ${inativos || ""}
     ${perto ? `<small style="margin-top:14px;font-weight:700;text-transform:uppercase">Perto do limite (${r.aviso} dias ou mais sem acesso)</small>${perto}` : ""}
@@ -1908,48 +2151,92 @@ function desenharReativacao() {
 
 // ---------- Logs de atividade ----------
 function telaLogs() {
-  return `<div class="topo"><h2>Logs de atividade</h2><small>Últimas ações registradas no sistema, com quem fez o quê.</small></div>
-  <section class="card" style="margin-bottom:16px"><div class="linha" style="flex-wrap:wrap;gap:10px"><div><b>Integridade dos logs</b><small>Cada registro é encadeado ao anterior por um código (hash). Se alguém apagar ou alterar um registro direto no banco, a conferência mostra onde.</small></div>
-    <button type="button" class="btn outline pequeno" id="logs-conferir" style="width:auto">${ico("escudoOk")} Conferir integridade</button></div><div id="logs-integridade"></div></section>
-  <section class="card"><div class="tabela"><table><thead><tr><th>Quando</th><th>Usuário</th><th>Papel</th><th>Ação</th><th>Detalhe</th></tr></thead>
-  <tbody>${dados.logs.map((l) => `<tr><td>${l.quando}</td><td>${esc(l.nome_usuario)}</td><td>${papelLabel(l.papel)}</td><td>${acaoLabel(l.acao)}</td><td>${esc(l.detalhe || "—")}</td></tr>`).join("")}</tbody></table></div></section>`;
+  const pessoas = [...new Set(dados.logs.map((l) => l.nome_usuario))].sort(porNome);
+  return `<div class="topo"><h2>Registro de atividades</h2><small>Tudo o que foi feito no sistema, por quem e quando (as últimas 200 ações).</small></div>
+  <section class="card" style="margin-bottom:16px"><div class="linha" style="flex-wrap:wrap;gap:10px"><div><b>Os registros estão completos?</b><small>O sistema protege este histórico: se alguém apagar ou alterar um registro por fora do sistema, a conferência mostra exatamente onde.</small></div>
+    <button type="button" class="btn outline pequeno" id="logs-conferir" style="width:auto">${ico("escudoOk")} Conferir agora</button></div><div id="logs-integridade"></div></section>
+  <section class="card"><div class="linha filtros-lista">
+      <select id="logs-pessoa" aria-label="Filtrar por pessoa" style="width:auto"><option value="">Todas as pessoas</option>${pessoas.map((n) => `<option>${esc(n)}</option>`).join("")}</select>
+      <input id="logs-busca" class="campo-busca" placeholder="Buscar na ação ou no detalhe..." aria-label="Buscar nos registros" style="max-width:300px"></div>
+    <div class="tabela"><table><thead><tr><th>Quando</th><th>Quem</th><th>Perfil</th><th>O que fez</th><th>Detalhe</th></tr></thead>
+  <tbody id="logs-linhas"></tbody></table></div><small id="logs-contagem" style="margin-top:8px"></small></section>`;
+}
+function desenharLogs() {
+  const pessoa = document.getElementById("logs-pessoa").value, busca = document.getElementById("logs-busca").value.trim().toLowerCase();
+  const lista = dados.logs.filter((l) => (!pessoa || l.nome_usuario === pessoa) && (!busca || `${acaoLabel(l.acao)} ${l.detalhe || ""}`.toLowerCase().includes(busca)));
+  document.getElementById("logs-linhas").innerHTML = lista.length ? lista.map((l) => `<tr><td>${l.quando}</td><td>${esc(l.nome_usuario)}</td><td>${papelLabel(l.papel)}</td><td>${acaoLabel(l.acao)}</td><td>${esc(l.detalhe || "—")}</td></tr>`).join("")
+    : `<tr><td colspan="5">${vazio("Nenhum registro com esse filtro.")}</td></tr>`;
+  document.getElementById("logs-contagem").textContent = `${lista.length} de ${dados.logs.length} registro(s)`;
 }
 
 // ---------- Minha Turma e chamada (professor) ----------
+// A chamada vem primeiro (é a tarefa do dia). Ninguém vem marcado "por padrão": só quem passou pelo portão já vem como Presente,
+// com a origem à vista ("entrou 07:31 • câmera"). O professor confirma, marca o resto e salva. No celular, cada aluno é um cartão com botões grandes.
+const horaDe = (texto) => ((String(texto || "").match(/\d{2}:\d{2}/) || [""])[0]);
+function origemPresenca(a) { // de onde veio a presença que já está marcada
+  if (a.origem_hoje === "chamada") return "";
+  if (a.origem_hoje === "portao") return `entrou ${horaDe(a.obs_hoje)} • ${/facial/.test(a.obs_hoje || "") ? "câmera" : "portaria"}`;
+  if (a.agora && a.agora.situacao === "na_escola") return `entrou ${horaDe(a.agora.texto)} • portão`;
+  return "";
+}
 function telaTurma() {
   const hoje = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
   const alunos = dados.turma.alunos;
-  const registrada = alunos.length > 0 && alunos.every((a) => a.status_hoje);
-  const salva = dados.chamadaSalva; dados.chamadaSalva = false;
+  const registrada = alunos.length > 0 && alunos.every((a) => a.origem_hoje === "chamada");
+  const fimDeSemana = [0, 6].includes(new Date().getDay());
   return `<div class="topo"><h2>Minha turma — ${esc(usuarioLogado.sala)}</h2><small>Chamada de hoje (${hoje}), contato dos responsáveis e ficha de cada aluno.</small></div>
-  ${blocoBanners()}
-  <section class="card"><div class="linha" style="flex-wrap:wrap;gap:8px"><h2>Chamada de hoje</h2>${registrada ? pill("Chamada registrada hoje", "success") : pill("Ainda não registrada", "warning")}</div>
-    ${alunos.length ? `<div class="tabela"><table><thead><tr><th>Aluno</th><th>Agora</th><th>Hoje</th><th>Faltas (${dados.turma.dias_faltas} dias)</th><th>Pendências</th><th>Responsáveis</th><th></th></tr></thead>
+  <section class="card chamada"><div class="linha" style="flex-wrap:wrap;gap:8px"><h2>Chamada de hoje</h2>${registrada ? pill("Chamada salva hoje", "success") : pill("Ainda não salva", "warning")}</div>
+    ${fimDeSemana ? `<p class="pill info aviso-largo" style="margin-top:8px">${ico("calendario")} Hoje não tem aula. A chamada só é necessária em dia letivo.</p>` : ""}
+    ${alunos.length ? `<div class="chamada-resumo" id="chamada-resumo"></div>
+      <div class="tabela so-computador"><table><thead><tr><th>Aluno</th><th>Agora</th><th>Chamada</th><th>Faltas (${dados.turma.dias_faltas} dias)</th><th>Pendências</th><th>Responsáveis</th><th></th></tr></thead>
       <tbody id="chamada-linhas"></tbody></table></div>
-      <p class="pill success ${salva ? "" : "oculto"}" style="margin-top:12px">Chamada salva com sucesso!</p>
-      <button class="btn" id="chamada-salvar" style="max-width:260px">Salvar chamada de hoje</button>`
+      <div class="chamada-cards so-celular" id="chamada-cards"></div>
+      <div class="chamada-rodape"><button class="btn" id="chamada-salvar">Salvar chamada de hoje</button></div>`
       : `<div class="vazio"><b>Nenhum aluno cadastrado nesta turma</b><small>Peça à administração para cadastrar os alunos da sala ${esc(usuarioLogado.sala)}.</small></div>`}
-  </section>`;
+  </section>
+  ${blocoBanners()}`;
 }
 function desenharChamada() {
   const corpo = document.getElementById("chamada-linhas");
   if (!corpo) return;
-  corpo.innerHTML = dados.turma.alunos.map((a) => {
+  const alunos = dados.turma.alunos;
+  const botoes = (a, s) => `<div class="seg" role="group" aria-label="Chamada de ${esc(a.nome)}"><button class="${s === "Presente" ? "on-p" : ""}" data-aluno="${a.id}" data-status="Presente" aria-pressed="${s === "Presente"}">Presente</button><button class="${s === "Ausente" ? "on-a" : ""}" data-aluno="${a.id}" data-status="Ausente" aria-pressed="${s === "Ausente"}">Ausente</button></div>`;
+  const origem = (a) => { const o = origemPresenca(a); return o && dados.chamada[a.id] === "Presente" ? `<small class="origem">${ico("setaBaixo")} ${esc(o)}</small>` : ""; };
+  corpo.innerHTML = alunos.map((a) => {
     const s = dados.chamada[a.id];
-    return `<tr><td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><b>${esc(a.nome)}</b></div></td>
+    return `<tr class="${s ? "" : "sem-marcacao"}"><td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><b>${esc(a.nome)}</b></div></td>
       <td>${a.agora ? pillAgora(a.agora) : "—"}</td>
-      <td><div class="seg"><button class="${s === "Presente" ? "on-p" : ""}" data-aluno="${a.id}" data-status="Presente">Presente</button><button class="${s === "Ausente" ? "on-a" : ""}" data-aluno="${a.id}" data-status="Ausente">Ausente</button></div></td>
+      <td>${botoes(a, s)}${origem(a)}</td>
       <td>${pill(a.faltas, a.faltas >= 5 ? "danger" : a.faltas > 0 ? "warning" : "neutral")}</td>
       <td>${a.pendencias ? pill(`${a.pendencias} em aberto`, "warning") : pill("Nenhuma", "neutral")}</td><td>${esc(a.responsaveis || "—")}</td>
       <td><button class="btn outline pequeno" data-ficha="${a.id}">Ficha</button></td></tr>`;
   }).join("");
-  corpo.querySelectorAll("[data-aluno]").forEach((b) => b.onclick = () => { dados.chamada[b.dataset.aluno] = b.dataset.status; desenharChamada(); });
-  corpo.querySelectorAll("[data-ficha]").forEach((b) => b.onclick = () => abrirFicha(Number(b.dataset.ficha), "turma"));
+  document.getElementById("chamada-cards").innerHTML = alunos.map((a) => {
+    const s = dados.chamada[a.id];
+    return `<article class="chamada-card ${s ? "" : "sem-marcacao"}">
+      <div class="linha"><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><div><b>${esc(a.nome)}</b>${origem(a) || `<small>${a.faltas ? `${a.faltas} falta(s) em ${dados.turma.dias_faltas} dias` : "Sem faltas recentes"}</small>`}</div></div>
+        <button class="btn outline pequeno" data-ficha="${a.id}">Ficha</button></div>
+      ${botoes(a, s)}</article>`;
+  }).join("");
+  const presentes = alunos.filter((a) => dados.chamada[a.id] === "Presente").length, ausentes = alunos.filter((a) => dados.chamada[a.id] === "Ausente").length;
+  const faltam = alunos.length - presentes - ausentes;
+  document.getElementById("chamada-resumo").innerHTML = `<span>${pill(`${presentes} presente(s)`, "success")} ${pill(`${ausentes} ausente(s)`, ausentes ? "danger" : "neutral")} ${faltam ? pill(`${faltam} sem marcar`, "warning") : pill("Todos marcados", "info")}</span>
+    ${faltam ? `<button type="button" class="btn outline pequeno" id="chamada-restantes">Marcar os ${faltam} restante(s) como presentes</button>` : ""}`;
+  document.querySelectorAll("#tela [data-aluno]").forEach((b) => b.onclick = () => { dados.chamada[b.dataset.aluno] = b.dataset.status; desenharChamada(); });
+  document.querySelectorAll("#tela [data-ficha]").forEach((b) => b.onclick = () => abrirFicha(Number(b.dataset.ficha), "turma"));
+  const restantes = document.getElementById("chamada-restantes");
+  if (restantes) restantes.onclick = () => { alunos.forEach((a) => { if (!dados.chamada[a.id]) dados.chamada[a.id] = "Presente"; }); desenharChamada(); };
   document.getElementById("chamada-salvar").onclick = seguro(async () => {
+    if (faltam) {
+      avisar(`Falta marcar ${faltam} aluno(s). Marque cada um ou use "Marcar os restantes como presentes".`, "warning");
+      const primeiro = document.querySelector(`#${matchMedia("(max-width: 760px)").matches ? "chamada-cards" : "chamada-linhas"} .sem-marcacao`);
+      if (primeiro) primeiro.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     await api("/api/chamada", { method: "POST", body: JSON.stringify({
       registros: Object.entries(dados.chamada).map(([id, status]) => ({ aluno_id: Number(id), status })),
     }) });
-    dados.chamadaSalva = true;
+    avisar(`Chamada salva: ${presentes} presente(s) e ${ausentes} ausente(s).`);
     await mostrar("turma");
   });
 }
@@ -1966,16 +2253,46 @@ function cartaoStatusAgora() {
     <small style="color:#DCEEF8;margin-top:10px">Chamada de hoje</small><b>${hoje ? esc(hoje.status) + " — " + esc(hoje.observacao) : "Ainda não registrada"}</b>
     <small style="color:#DCEEF8;margin-top:10px">Turma</small><b>${dados.filho ? esc(dados.filho.sala) : "—"}</b>`;
 }
+// "Precisa da sua atenção": tudo o que espera uma ação do responsável, com o botão que leva direto até lá
+function itensAtencao() {
+  const f = dados.ficha, itens = [];
+  f.autorizacoes.filter((a) => !a.assinada && !a.vencida).forEach((a) => itens.push({ icone: "caneta", texto: `Autorização para assinar: <b>${esc(a.titulo)}</b>${a.valida_ate ? ` <small style="display:inline">• até ${a.valida_ate}</small>` : ""}`, botao: "Assinar", aba: "autorizacoes" }));
+  if (dados.ocorrenciasNovas) itens.push({ icone: "prancheta", texto: `<b>${dados.ocorrenciasNovas} ocorrência(s)</b> registrada(s) pelo professor esperando a sua ciência`, botao: "Ler e assinar", tela: "ocorrencias" });
+  f.pendencias.filter((p) => p.status === "Aberta" && p.tipo === "Documento").forEach((p) => itens.push({ icone: "documento", texto: `A escola pediu: <b>${esc(p.descricao)}</b>`, botao: "Enviar documento", aba: "documentos" }));
+  const naoLidos = f.comunicados.filter((c) => !c.lido).length;
+  if (naoLidos) itens.push({ icone: "megafone", texto: `<b>${naoLidos} comunicado(s)</b> ainda não lido(s)`, botao: "Ler", aba: "comunicados" });
+  if (f.consentimento && f.consentimento.status === "pendente") itens.push({ icone: "termo", texto: "<b>Termo de consentimento</b> (imagem e informações) ainda sem resposta", botao: "Responder", consent: true });
+  return itens;
+}
+function cartaoAtencao() {
+  const itens = itensAtencao();
+  return `<section class="card atencao ${itens.length ? "tem-itens" : ""}" aria-labelledby="atencao-titulo"><div class="linha"><h2 id="atencao-titulo">${itens.length ? "Precisa da sua atenção" : "Tudo em dia"}</h2>${itens.length ? pill(itens.length, "warning") : ""}</div>
+    ${itens.length ? itens.map((x, i) => `<div class="atencao-item"><span class="icone warning">${ico(x.icone)}</span><span class="atencao-texto">${x.texto}</span><button type="button" class="btn pequeno" data-atencao="${i}">${x.botao}</button></div>`).join("")
+      : `<div class="atencao-ok">${ico("confere", "ok")} <span>Nada esperando por você agora. Quando a escola mandar algo, aparece aqui e no sino lá em cima.</span></div>`}</section>`;
+}
+function ligarAtencao() {
+  const itens = itensAtencao();
+  document.querySelectorAll("[data-atencao]").forEach((b) => b.onclick = () => {
+    const x = itens[Number(b.dataset.atencao)];
+    if (x.tela) return mostrar(x.tela);
+    if (x.consent) return seguro(() => mostrarConsentimento("alterar"))();
+    dados.fichaAba = x.aba; desenharFicha();
+    document.getElementById("ficha-filho").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
 function telaPais() {
   const h = dados.historico;
   return `<div class="topo"><small>Olá, ${esc(usuarioLogado.nome.split(" ")[0])}</small><h2>Acompanhe ${dados.filho ? "o(a) " + esc(dados.filho.nome.split(" ")[0]) : "seu filho"}</h2></div>
+  <div class="grade pais-topo">
+    <section class="status" id="status-agora">${cartaoStatusAgora()}</section>
+    ${cartaoAtencao()}
+  </div>
   ${blocoBanners()}
   <div class="grade pais" style="align-items:start">
-    <section class="status" id="status-agora">${cartaoStatusAgora()}</section>
     <aside class="card"><h2>Histórico de presença</h2><small>Últimos ${h.dias} dias</small>${blocoHistorico(h)}</aside>
+    ${cartaoConsentimento().replace('style="margin-top:20px"', 'style="margin-top:0"')}
   </div>
-  ${cartaoConsentimento()}
-  <section class="card" style="margin-top:20px"><h2>Ficha do meu filho</h2><small>Comunicados, autorizações para assinar, documentos, pendências e ocorrências.</small><div id="ficha-corpo"></div></section>`;
+  <section class="card" id="ficha-filho" style="margin-top:20px"><h2>Ficha do meu filho</h2><small>Comunicados, autorizações para assinar, documentos, pendências e ocorrências.</small><div id="ficha-corpo"></div></section>`;
 }
 
 // ---------- Ficha do aluno (abas): usada pela gestão, pelo professor da turma e pelo responsável ----------
@@ -2009,15 +2326,19 @@ function abaComunicados(f, ehPai) {
     ${c.lido ? `<small style="margin-top:6px">Lido em ${c.lido_em}</small>` : ehPai ? `<button class="btn pequeno" data-ler="${c.id}" style="margin-top:10px">Marcar como lido</button>` : ""}</div>`).join("") : vazio("Nenhum comunicado para este aluno.");
 }
 function abaAutorizacoes(f, ehPai) {
-  return f.autorizacoes.length ? f.autorizacoes.map((a) => `<div class="item">
-    <div class="linha" style="gap:8px;flex-wrap:wrap"><div><b>${esc(a.titulo)}</b><small>${ico("calendario")} ${esc(a.validade || "—")}</small></div>${a.assinada ? pill("Assinada", "success") : pill("Pendente", "warning")}</div>
+  const situacao = (a) => a.assinada ? pill("Assinada", "success") : a.vencida ? pill(`Prazo encerrado em ${a.valida_ate}`, "neutral") : pill(a.valida_ate ? `Assinar até ${a.valida_ate}` : "Pendente", "warning");
+  return f.autorizacoes.length ? f.autorizacoes.map((a) => `<div class="item ${a.vencida ? "vencida" : ""}">
+    <div class="linha" style="gap:8px;flex-wrap:wrap"><div><b>${esc(a.titulo)}</b><small>${ico("calendario")} ${esc(a.validade || "—")}</small></div>${situacao(a)}</div>
     <small style="margin-top:6px">${esc(a.detalhe || "")}</small>
     ${a.assinada
       ? `${seloAssinatura("Assinatura digital do responsável", a.assinada_nome, a.assinada_em, a.codigo)}
          <button class="btn outline pequeno" data-comprovante="${a.id}" style="margin-top:8px">Ver comprovante</button>`
-      : ehPai ? `<small style="margin-top:10px">Ao assinar, você autoriza o que está descrito acima. Para confirmar, digite seu nome completo e sua senha.</small>
-         <div class="grade dois" style="margin-top:8px"><input placeholder="Seu nome completo" data-as-nome="${a.id}" autocomplete="off"><input type="password" placeholder="Sua senha" data-as-senha="${a.id}" autocomplete="off"></div>
-         <button class="btn pequeno" data-assinar="${a.id}" style="margin-top:10px">${ico("caneta")} Assinar digitalmente</button>` : ""}
+      : a.vencida ? `<small style="margin-top:8px">O prazo para assinar terminou e esta autorização não pode mais ser assinada pelo sistema. Se ainda precisar, fale com a escola.</small>`
+      : ehPai ? `<div class="assinatura-caixa">
+         <label class="termo-aceite confirma-assinatura"><input type="checkbox" data-as-confirmo="${a.id}"> <span><b>Li e autorizo</b> o que está descrito acima.</span></label>
+         <div class="linha" style="gap:8px;flex-wrap:wrap;justify-content:flex-start;width:100%"><input type="password" placeholder="Sua senha" data-as-senha="${a.id}" autocomplete="current-password" aria-label="Sua senha para assinar" style="max-width:220px">
+         <button class="btn pequeno" data-assinar="${a.id}" style="width:auto">${ico("caneta")} Assinar digitalmente</button></div>
+         <small>A assinatura usa o nome do seu cadastro e fica registrada com data, hora e um código de verificação.</small></div>` : ""}
   </div>`).join("") : vazio("Nenhuma autorização para este aluno.");
 }
 function abaDocumentos(f, ehGestao) {
@@ -2053,14 +2374,14 @@ function abaOcorrencias(f, podeRegistrar) {
 }
 function abrirComprovante(a, aluno) {
   const w = window.open("", "_blank");
-  if (!w) { alert("Permita pop-ups neste site para ver o comprovante."); return; }
+  if (!w) { avisar("O navegador bloqueou a janela do comprovante. Permita pop-ups para este site e tente de novo.", "danger"); return; }
   w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Comprovante ${esc(a.codigo)}</title>
     <style>body{font-family:Arial,sans-serif;max-width:640px;margin:40px auto;padding:0 20px;color:#140040}h1{font-size:22px}table{width:100%;border-collapse:collapse;margin:20px 0}td{padding:10px;border-bottom:1px solid #EAD6CA}td:first-child{color:#5B5278;width:38%}.cod{font-size:20px;letter-spacing:2px;font-weight:700}@media print{button{display:none}}</style></head><body>
     <h1>${ico("escudoOk")} S.I.V.E. — Comprovante de autorização digital</h1>
     <table><tr><td>Autorização</td><td>${esc(a.titulo)}</td></tr><tr><td>Detalhes</td><td>${esc(a.detalhe || "—")}</td></tr>
     <tr><td>Aluno(a)</td><td>${esc(aluno.nome)} — ${esc(aluno.sala)}</td></tr><tr><td>Assinada por</td><td>${esc(a.assinada_nome)}</td></tr>
     <tr><td>Data e hora</td><td>${esc(a.assinada_em)}</td></tr><tr><td>Código de verificação</td><td class="cod">${esc(a.codigo)}</td></tr></table>
-    ${blocoVerificacao(a.codigo)}<p>Documento gerado pelo sistema S.I.V.E. A assinatura foi confirmada com o nome completo e a senha do responsável.</p><button id="imprimir">Imprimir</button></body></html>`);
+    ${blocoVerificacao(a.codigo)}<p>Documento gerado pelo sistema S.I.V.E. A assinatura foi confirmada com a senha do responsável.</p><button id="imprimir">Imprimir</button></body></html>`);
   w.document.close();
   w.document.getElementById("imprimir").addEventListener("click", () => w.print());
 }
@@ -2084,7 +2405,7 @@ function desenharFicha() {
   const f = dados.ficha, papel = usuarioLogado.papel;
   const ehPai = papel === "pai", ehGestao = papel === "admin", podeRegistrar = !ehPai;
   const aba = dados.fichaAba;
-  const naoLidos = f.comunicados.filter((c) => !c.lido).length, autPend = f.autorizacoes.filter((a) => !a.assinada).length;
+  const naoLidos = f.comunicados.filter((c) => !c.lido).length, autPend = f.autorizacoes.filter((a) => !a.assinada && !a.vencida).length;
   const pendAbertas = f.pendencias.filter((p) => p.status === "Aberta").length;
   const abas = [["comunicados", "Comunicados", naoLidos ? `${naoLidos} novo(s)` : ""], ["autorizacoes", "Autorizações", autPend ? `${autPend} pendente(s)` : ""],
     ["documentos", "Documentos", f.documentos.length || ""], ["pendencias", "Pendências", pendAbertas ? `${pendAbertas} aberta(s)` : ""], ["ocorrencias", "Ocorrências", f.ocorrencias.length || ""]];
@@ -2104,20 +2425,24 @@ function desenharFicha() {
   corpo.querySelectorAll("[data-aba]").forEach((b) => b.onclick = () => { dados.fichaAba = b.dataset.aba; desenharFicha(); });
   corpo.querySelectorAll("[data-ler]").forEach((b) => b.onclick = seguro(async () => {
     await api(`/api/comunicados/${b.dataset.ler}/ler`, { method: "POST", body: "{}" }); await recarregarFicha();
+    if (tela === "pais") { document.querySelector(".atencao").outerHTML = cartaoAtencao(); ligarAtencao(); }
   }));
   corpo.querySelectorAll("[data-assinar]").forEach((b) => b.onclick = seguro(async () => {
     const id = b.dataset.assinar;
-    await api(`/api/autorizacoes/${id}/assinar`, { method: "POST", body: JSON.stringify({
-      nome: corpo.querySelector(`[data-as-nome="${id}"]`).value, senha: corpo.querySelector(`[data-as-senha="${id}"]`).value }) });
+    if (!corpo.querySelector(`[data-as-confirmo="${id}"]`).checked) throw new Error("Marque “Li e autorizo” para assinar.");
+    if (!corpo.querySelector(`[data-as-senha="${id}"]`).value) throw new Error("Digite a sua senha para assinar.");
+    await api(`/api/autorizacoes/${id}/assinar`, { method: "POST", body: JSON.stringify({ confirmo: true, senha: corpo.querySelector(`[data-as-senha="${id}"]`).value }) });
     dados.fichaMsg = "Autorização assinada! O comprovante está disponível abaixo.";
+    avisar("Autorização assinada.");
     await recarregarFicha();
+    if (tela === "pais") { document.querySelector(".atencao").outerHTML = cartaoAtencao(); ligarAtencao(); }
   }));
   corpo.querySelectorAll("[data-comprovante]").forEach((b) => b.onclick = () =>
     abrirComprovante(f.autorizacoes.find((a) => a.id === Number(b.dataset.comprovante)), f.aluno));
   corpo.querySelectorAll("[data-baixar-dados]").forEach((b) => b.onclick = seguro(() => baixarDadosAluno(b.dataset.baixarDados)));
   corpo.querySelectorAll("[data-baixar]").forEach((b) => b.onclick = seguro(() => baixarDocumento(b.dataset.baixar, b.dataset.nome)));
   corpo.querySelectorAll("[data-excluir-doc]").forEach((b) => b.onclick = seguro(async () => {
-    if (!confirm("Excluir este documento? Essa ação não pode ser desfeita.")) return;
+    if (!(await confirmar({ titulo: "Excluir este documento?", texto: "O arquivo é apagado do sistema e não pode ser recuperado. A exclusão fica registrada nos logs.", botao: "Excluir documento", perigo: true }))) return;
     await api(`/api/documentos/${b.dataset.excluirDoc}`, { method: "DELETE" });
     dados.fichaMsg = "Documento excluído."; await recarregarFicha();
   }));
@@ -2341,7 +2666,7 @@ function ligarComunicados() {
       try { await api("/api/comunicados", { method: "POST", body: JSON.stringify(corpo) }); }
       catch (e) {
         if (e.codigo !== "NOME_DE_ALUNO") throw e;
-        if (!confirm(`Este comunicado cita o nome de aluno(s): ${e.alunos.join(", ")}.\n\nTodas as famílias que recebem o aviso vão ler. Publicar mesmo assim?`)) return;
+        if (!(await confirmar({ titulo: "O comunicado cita o nome de aluno(s)", texto: `Nomes encontrados: ${e.alunos.join(", ")}. Todas as famílias que recebem o aviso vão ler (ECA, arts. 17 e 18). Publique só se for necessário.`, botao: "Publicar mesmo assim", perigo: true }))) return;
         await api("/api/comunicados", { method: "POST", body: JSON.stringify({ ...corpo, confirmar_nomes: true }) });
       }
       document.getElementById("form-com").reset();
@@ -2356,7 +2681,8 @@ function telaAutorizacoes() {
   const salas = nomesTurmas();
   return `<section class="card"><h2>Nova autorização</h2><small>O responsável de cada aluno do destino receberá a autorização para assinar digitalmente.</small>
     <form id="form-aut" style="margin-top:14px"><div class="grade dois"><div><small>Título</small><input id="aut-titulo" required maxlength="100" placeholder="Ex.: Passeio ao zoológico"></div>
-      <div><small>Validade / data</small><input id="aut-validade" maxlength="50" placeholder="Ex.: 25 de outubro"></div></div>
+      <div><small>Assinar até (último dia)</small><input id="aut-valida-ate" type="date" min="${hojeLocalISO()}"></div></div>
+      <div style="margin-top:12px"><small>Quando é (texto livre, opcional)</small><input id="aut-validade" maxlength="50" placeholder="Ex.: Passeio em 25 de outubro"></div>
       <div style="margin-top:12px"><small>Detalhes</small><input id="aut-detalhe" maxlength="250" placeholder="Ex.: Saída às 8h, retorno às 15h"></div>
       <div style="margin-top:12px"><small>Destino</small><select id="aut-sala"><option value="">Todos os alunos</option>${salas.map((s) => `<option>${esc(s)}</option>`).join("")}</select></div>
       <p class="pill danger oculto" id="aut-erro" style="margin-top:12px"></p><p class="pill success oculto" id="aut-ok" style="margin-top:12px"></p>
@@ -2367,7 +2693,8 @@ function desenharGrupos() {
   document.getElementById("aut-lista").innerHTML = dados.grupos.length ? dados.grupos.map((g) => {
     const p = g.total ? Math.round(g.assinadas * 100 / g.total) : 0;
     return `<article class="card" style="margin-bottom:12px">
-      <div class="linha" style="gap:8px;flex-wrap:wrap"><div><b>${esc(g.titulo)}</b><small>${ico("calendario")} ${esc(g.validade || "—")} • criada em ${g.criada_em} por ${esc(g.criada_por_nome)}</small></div>${g.assinadas === g.total ? pill("Todas assinadas", "success") : pill(`${g.total - g.assinadas} pendente(s)`, "warning")}</div>
+      <div class="linha" style="gap:8px;flex-wrap:wrap"><div><b>${esc(g.titulo)}</b><small>${ico("calendario")} ${esc(g.validade || "—")}${g.valida_ate ? ` • assinar até ${g.valida_ate}` : ""} • criada em ${g.criada_em} por ${esc(g.criada_por_nome)}</small></div>
+        ${g.assinadas === g.total ? pill("Todas assinadas", "success") : g.vencida ? pill(`Prazo encerrado • ${g.total - g.assinadas} sem assinatura`, "neutral") : pill(`${g.total - g.assinadas} pendente(s)`, "warning")}</div>
       ${g.detalhe ? `<small style="margin-top:6px">${esc(g.detalhe)}</small>` : ""}
       <div class="linha" style="margin-top:12px"><small>Assinadas: <b>${g.assinadas}</b> de <b>${g.total}</b></small><small>${p}%</small></div><div class="barra"><i style="width:${p}%"></i></div>
       <button class="btn outline pequeno" data-grupo="${g.grupo}" style="margin-top:12px">Ver detalhes</button><div id="grp-${g.grupo}" class="oculto" style="margin-top:10px"></div></article>`;
@@ -2389,7 +2716,7 @@ function ligarAutorizacoes() {
     document.getElementById("aut-erro").classList.add("oculto"); ok.classList.add("oculto");
     try {
       const r = await api("/api/autorizacoes", { method: "POST", body: JSON.stringify({ titulo: document.getElementById("aut-titulo").value,
-        validade: document.getElementById("aut-validade").value, detalhe: document.getElementById("aut-detalhe").value, sala: document.getElementById("aut-sala").value }) });
+        validade: document.getElementById("aut-validade").value, valida_ate: document.getElementById("aut-valida-ate").value || undefined, detalhe: document.getElementById("aut-detalhe").value, sala: document.getElementById("aut-sala").value }) });
       document.getElementById("form-aut").reset();
       dados.grupos = await api("/api/autorizacoes-grupos"); desenharGrupos();
       ok.textContent = `Autorização enviada para ${r.alunos} aluno(s)!`; ok.classList.remove("oculto");
@@ -2441,7 +2768,8 @@ async function mostrar(id) {
     }
     if (id === "turma") {
       dados.turma = await api("/api/minha-turma"); dados.banners = await api("/api/eventos/banners");
-      dados.chamada = Object.fromEntries(dados.turma.alunos.map((a) => [a.id, a.status_hoje || "Presente"]));
+      // Ninguém vem marcado por padrão: só o que já foi salvo, ou quem passou pelo portão hoje (câmera ou portaria)
+      dados.chamada = Object.fromEntries(dados.turma.alunos.map((a) => [a.id, a.status_hoje || (a.agora && a.agora.situacao === "na_escola" ? "Presente" : undefined)]).filter(([, v]) => v));
     }
     if (id === "pais") {
       const alunoId = usuarioLogado.aluno_id;
@@ -2449,7 +2777,8 @@ async function mostrar(id) {
       dados.historico = await api(`/api/presencas/${alunoId}?dias=30`);
       dados.ficha = await api(`/api/alunos/${alunoId}/ficha`);
       dados.agora = await api(`/api/alunos/${alunoId}/agora`); dados.banners = await api("/api/eventos/banners");
-      dados.fichaAba = dados.ficha.autorizacoes.some((a) => !a.assinada) ? "autorizacoes" : "comunicados";
+      dados.ocorrenciasNovas = (await api("/api/minhas-ocorrencias/novas")).novas;
+      dados.fichaAba = dados.abaPedida || (dados.ficha.autorizacoes.some((a) => !a.assinada && !a.vencida) ? "autorizacoes" : "comunicados");
     }
     document.getElementById("tela").innerHTML = {
       secretaria: telaSecretaria, seguranca: telaSeguranca, pais: telaPais, frequencia: telaFrequencia, busca: telaBusca,
@@ -2470,16 +2799,21 @@ async function mostrar(id) {
     if (id === "usuarios") desenharUsuarios();
     if (id === "turma") desenharChamada();
     if (id === "ficha") { document.getElementById("ficha-voltar").onclick = () => mostrar(dados.fichaOrigem); desenharFicha(); }
-    if (id === "logs") document.getElementById("logs-conferir").onclick = seguro(async () => {
-      const r = await api("/api/logs/integridade"), caixa = document.getElementById("logs-integridade");
-      caixa.innerHTML = r.ok ? `<p class="pill success" style="margin-top:10px;white-space:normal">${r.conferidos} registro(s) conferido(s): nenhum foi apagado ou alterado.</p>`
-        : `<p class="pill danger" style="margin-top:10px;white-space:normal">Corrente quebrada no registro nº ${r.problema_em.id} (${esc(r.problema_em.quando)}, ${esc(acaoLabel(r.problema_em.acao))}): um registro foi apagado ou alterado logo antes ou nele.</p>`;
-    });
+    if (id === "logs") {
+      desenharLogs();
+      document.getElementById("logs-pessoa").onchange = desenharLogs; document.getElementById("logs-busca").oninput = desenharLogs;
+      document.getElementById("logs-conferir").onclick = seguro(async () => {
+        const r = await api("/api/logs/integridade"), caixa = document.getElementById("logs-integridade");
+        caixa.innerHTML = r.ok ? `<p class="pill success aviso-largo" style="margin-top:10px">${ico("confere")} Tudo certo: ${r.conferidos} registro(s) conferido(s), nenhum foi apagado ou alterado.</p>`
+          : `<p class="pill danger aviso-largo" style="margin-top:10px">${ico("aviso")} Atenção: o registro nº ${r.problema_em.id} (${esc(r.problema_em.quando)}, ${esc(acaoLabel(r.problema_em.acao))}) ou o anterior a ele foi apagado ou alterado por fora do sistema. Avise o responsável pela segurança dos dados.</p>`;
+      });
+    }
     if (id === "comunicados") ligarComunicados();
     if (id === "protecao") ligarProtecao();
     if (id === "autorizacoes") ligarAutorizacoes();
     if (id === "pais") {
-      desenharFicha();
+      desenharFicha(); ligarAtencao();
+      if (dados.abaPedida) { dados.abaPedida = null; document.getElementById("ficha-filho").scrollIntoView({ behavior: "smooth", block: "start" }); }
       timerTela = setInterval(async () => { // status ao vivo: atualiza sozinho a cada 30 segundos
         try { dados.agora = await api(`/api/alunos/${usuarioLogado.aluno_id}/agora`); const c = document.getElementById("status-agora"); if (c && tela === "pais") c.innerHTML = cartaoStatusAgora(); } catch { /* tenta de novo na próxima */ }
       }, 30000);
@@ -2495,7 +2829,7 @@ function desenharMenu() {
   const contador = (m) => (m.id === "ocorrencias" && novas ? `<span class="contador" title="${novas} ocorrência(s) nova(s)">${novas}</span>` : "");
   const trocouAba = ativa !== ultimaAbaAtiva; ultimaAbaAtiva = ativa;
   const classe = (m) => (m.id === ativa ? `ativo${trocouAba ? " entrou" : ""}` : "");
-  document.getElementById("nav").innerHTML = menus.map((m) => `<button class="${classe(m)}" data-id="${m.id}">${iconeMenu(m.icone)}<span><b>${m.nome}</b><small>${m.dica}</small></span>${contador(m)}</button>`).join("");
+  document.getElementById("nav").innerHTML = menus.map((m, i) => `${m.grupo && m.grupo !== (menus[i - 1] || {}).grupo ? `<div class="nav-grupo">${m.grupo}</div>` : ""}<button class="${classe(m)}" data-id="${m.id}" ${m.id === ativa ? 'aria-current="page"' : ""}>${iconeMenu(m.icone)}<span><b>${m.nome}</b><small>${m.dica}</small></span>${contador(m)}</button>`).join("");
   document.getElementById("btn-menu").classList.toggle("tem-aviso", novas > 0); // no celular o menu fica fechado: um ponto no ☰ avisa
   document.querySelectorAll("#nav button").forEach((b) => b.onclick = () => mostrar(b.dataset.id));
 }

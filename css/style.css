@@ -1,3 +1,7 @@
+/* ===== Fontes da identidade visual (guardadas no próprio projeto: funcionam sem internet e sem depender de site externo) =====
+   DM Sans e Manrope, licença SIL Open Font License 1.1 (os textos das licenças estão em assets/fonts/). */
+@font-face{font-family:"DM Sans";src:url("../assets/fonts/dm-sans.woff2") format("woff2");font-weight:100 1000;font-style:normal;font-display:swap}
+@font-face{font-family:"Manrope";src:url("../assets/fonts/manrope.woff2") format("woff2");font-weight:200 800;font-style:normal;font-display:swap}
 /* ===== Identidade visual (paleta oficial) =====================================================
    Cores aprovadas:  creme #FFF2EB · índigo #140040 · tijolo #68150A · azul #0B78B3
    Derivadas (estados e bordas): azul-escuro #085C8A · azul-suave #DCEEF8 · tijolo-suave #F4DAD3 · borda #EAD6CA
@@ -9,7 +13,7 @@
 *{box-sizing:border-box;margin:0}
 body{font-family:"DM Sans",Arial,sans-serif;background:var(--bg);color:var(--fg)}
 h1,h2,h3,b{font-family:"Manrope",Arial,sans-serif}
-small{display:block;font-size:12px;color:var(--muted-fg)}
+small{display:block;font-size:13px;line-height:1.4;color:var(--muted-fg)} /* era 12px: difícil de ler no celular */
 button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
 input{font:inherit;padding:10px 12px;border:1px solid var(--border);border-radius:8px;width:100%}
 #menu{position:fixed;inset:0 auto 0 0;width:320px;max-width:85vw;background:var(--menu);padding:20px 16px;display:flex;flex-direction:column;transform:translateX(-100%);transition:.25s;z-index:50}
@@ -91,7 +95,7 @@ main{padding:16px;max-width:1400px;margin:auto}
 .topo{margin-bottom:16px}
 .topo h2{font-size:26px}
 .topo .destaque{color:var(--primary-ink);font-weight:600;font-size:14px}
-.pill{display:inline-block;padding:4px 10px;border-radius:99px;font-size:12px;font-weight:600}
+.pill{display:inline-block;padding:4px 10px;border-radius:99px;font-size:12.5px;font-weight:600}
 .success{background:var(--success-soft);color:var(--success)}
 .warning{background:var(--warning-soft);color:var(--warning)}
 .danger{background:var(--danger-soft);color:var(--danger)}
@@ -500,3 +504,134 @@ header{box-shadow:inset 0 -3px 0 var(--primary)}
 .selo-assinatura>.ico{width:26px;height:26px;color:var(--primary-ink);margin-top:2px}
 .selo-assinatura b{display:block;font-size:15px}
 .selo-link{display:inline-block;margin-top:4px;font-size:12px;font-weight:700;color:var(--primary-ink)}
+
+
+/* =====================================================================
+   Melhorias de experiência do usuário (02/11/2026)
+   ===================================================================== */
+/* ---- Menu da gestão em grupos ---- */
+.nav-grupo{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--menu-fg-2);padding:14px 12px 4px;opacity:.85}
+.nav-grupo:first-child{padding-top:0}
+
+/* ---- Topo: indicador de conexão, busca rápida e sino ---- */
+#status-conexao{white-space:nowrap}
+.busca-rapida{position:relative;flex:0 1 300px;min-width:0}
+.busca-rapida input{padding:8px 12px;border-radius:99px;background:#fff}
+.busca-rapida-lista{position:absolute;top:calc(100% + 6px);left:0;right:0;min-width:260px;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(20,0,64,.18);z-index:70;overflow:hidden}
+.busca-rapida-lista button{display:flex;gap:10px;align-items:center;width:100%;text-align:left;padding:10px 12px;border-top:1px solid var(--border)}
+.busca-rapida-lista button:first-child{border-top:0}
+.busca-rapida-lista button.marcado,.busca-rapida-lista button:hover{background:var(--primary-soft)}
+.avisos-area{position:relative;flex:0 0 auto !important} /* a regra antiga "header div{flex:1}" esticava a área do sino */
+.btn-avisos{position:relative;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:18px;color:var(--fg)}
+.btn-avisos:hover{background:var(--muted)}
+.avisos-contador{pointer-events:none;position:absolute;top:2px;right:0;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--danger);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center}
+.avisos-painel{position:absolute;right:0;top:calc(100% + 8px);width:min(380px,calc(100vw - 24px));max-height:70vh;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(20,0,64,.22);z-index:70}
+.avisos-topo{display:flex;justify-content:space-between;align-items:baseline;padding:14px 16px;border-bottom:1px solid var(--border)}
+.aviso{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;padding:12px 16px;border-bottom:1px solid var(--border)}
+.aviso:hover{background:var(--muted)}
+.aviso.novo{background:var(--primary-soft)}
+.aviso.novo .aviso-texto b::after{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--primary);margin-left:6px;vertical-align:middle}
+.aviso .icone{width:34px;height:34px;flex-shrink:0}
+.aviso-texto b{display:block;font-size:14px;line-height:1.3}
+.avisos-permitir{margin:12px 16px 16px !important}
+@media(max-width:760px){
+  header{flex-wrap:wrap}
+  header>div:nth-child(2){flex:1 1 auto;min-width:0}
+  .busca-rapida{order:5;flex:1 1 100%}
+  #data-hora{display:none} /* no celular o relógio ocupa espaço demais */
+  #status-conexao{font-size:0;padding:5px} /* só a bolinha */
+  #status-conexao::first-letter{font-size:12px}
+  .avisos-painel{position:fixed;left:12px;right:12px;top:64px;width:auto}
+}
+
+/* ---- Avisos rápidos (toasts) e janela de confirmação ---- */
+.toasts{position:fixed;right:16px;bottom:16px;z-index:200;display:flex;flex-direction:column;gap:8px;max-width:min(420px,calc(100vw - 32px))}
+.toast{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:10px;background:var(--fg);color:#fff;box-shadow:0 10px 30px rgba(20,0,64,.3);font-size:14px;line-height:1.4;animation:toast-entra .25s ease-out;border-left:5px solid var(--success)}
+.toast.danger{border-left-color:#FF8A7A}
+.toast.warning{border-left-color:#F4B860}
+.toast.info{border-left-color:#7CC4EA}
+.toast span{flex:1}
+.toast-fechar{color:#fff;opacity:.7;font-size:14px}
+.toast.saindo{opacity:0;transform:translateY(8px);transition:.25s}
+@keyframes toast-entra{from{opacity:0;transform:translateY(10px)}}
+.dialogo-caixa{max-width:480px;margin-top:12vh;border-top:5px solid var(--primary)}
+.dialogo-caixa h2{font-size:19px}
+.dialogo-caixa p{margin:10px 0 4px;line-height:1.5;font-size:15px}
+#dialogo-campos small{margin-top:10px}
+.dialogo-acoes{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:18px}
+.dialogo-acoes .btn{margin-top:0}
+.btn.perigo,#dialogo-ok.perigo{background:var(--danger);color:#fff}
+.btn.perigo:hover,#dialogo-ok.perigo:hover{background:#4E0F07}
+.btn.perigo-leve{background:none;color:var(--danger);border:1px solid #E7B9AE}
+.btn.perigo-leve:hover{background:var(--danger-soft)}
+.acoes-separadas{justify-content:space-between}
+
+/* ---- Menu "⋯" de ações sensíveis ---- */
+.menu-acoes{position:relative;display:inline-block}
+.menu-acoes>summary{list-style:none;cursor:pointer;padding:6px 10px}
+.menu-acoes>summary::-webkit-details-marker{display:none}
+.menu-acoes-lista{position:fixed;min-width:200px;z-index:65 !important;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(20,0,64,.18);z-index:40;padding:6px}
+.menu-acoes-lista button{display:block;width:100%;text-align:left;padding:9px 12px;border-radius:6px;font-size:14px}
+.menu-acoes-lista button:hover{background:var(--muted)}
+.menu-acoes-lista button.perigo{color:var(--danger);background:none}
+.menu-acoes-lista button.perigo:hover{background:var(--danger-soft)}
+.celula-acoes{white-space:nowrap}
+.celula-acoes .btn+.menu-acoes{margin-left:6px}
+.filtros-lista{gap:10px;flex-wrap:wrap;justify-content:flex-start;margin:6px 0 12px}
+
+/* ---- Números honestos ---- */
+.nota-alerta{display:flex !important;gap:6px;align-items:center;margin-top:6px;font-weight:600}
+main .metrica .nota-alerta{color:var(--warning) !important} /* quadro claro */
+main .metrica:nth-child(odd) .nota-alerta{color:#FBE7C4 !important} /* quadro escuro */
+.aviso-largo{display:flex;gap:8px;align-items:center;white-space:normal;line-height:1.4;margin-bottom:14px;padding:8px 14px;border-radius:10px}
+
+/* ---- Portal dos Pais: status + "Precisa da sua atenção" no topo ---- */
+.pais-topo{margin-bottom:20px;align-items:stretch}
+@media(min-width:1024px){.pais-topo{grid-template-columns:1fr 1fr}}
+.atencao{border-top:5px solid var(--success)}
+.atencao.tem-itens{border-top-color:var(--warning)}
+.atencao-item{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--border)}
+.atencao-item:first-of-type{margin-top:8px}
+.atencao-item .icone{width:36px;height:36px;flex-shrink:0}
+.atencao-texto{flex:1;font-size:14px;line-height:1.4}
+.atencao-item .btn{flex-shrink:0}
+.atencao-ok{display:flex;gap:10px;align-items:center;margin-top:12px;font-size:15px;color:var(--success)}
+.item.vencida{opacity:.75;background:var(--muted)}
+.confirma-assinatura{margin:4px 0 10px}
+
+/* ---- Banners mais baixos: informam sem ocupar a primeira tela ---- */
+.banners{margin:4px 0 24px}
+.banner{min-height:132px;padding:18px 22px 24px}
+.banner-texto h3{font-size:22px}
+.banner-icone{font-size:56px}
+@media(max-width:760px){.banner{min-height:112px;padding:14px 16px 22px}.banner-texto h3{font-size:18px}.banner-texto small{font-size:13px}.banner-btn{margin-top:8px}.banner-icone{display:none}}
+
+/* ---- Chamada: no celular, um cartão por aluno com botões grandes ---- */
+.chamada-resumo{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:12px 0}
+.chamada-resumo>span{display:flex;gap:6px;flex-wrap:wrap}
+tr.sem-marcacao td:first-child{box-shadow:inset 4px 0 0 var(--warning)}
+.origem{display:flex !important;gap:4px;align-items:center;margin-top:4px;color:var(--success) !important;font-weight:600}
+.so-celular{display:none}
+.chamada-cards{gap:10px;margin-top:4px}
+.chamada-card{border:1px solid var(--border);border-radius:12px;padding:12px;background:#fff}
+.chamada-card.sem-marcacao{border-left:5px solid var(--warning)}
+.chamada-card .seg{display:grid;grid-template-columns:1fr 1fr;width:100%;margin-top:10px}
+.chamada-card .seg button{padding:14px 8px;font-size:16px;font-weight:600}
+.chamada-rodape .btn{max-width:280px}
+@media(max-width:760px){
+  .so-computador{display:none}
+  .so-celular{display:grid}
+  .chamada-rodape{position:sticky;bottom:0;background:linear-gradient(transparent,var(--card) 30%);padding:14px 0 4px;margin:0 -2px}
+  .chamada-rodape .btn{max-width:none;padding:14px}
+}
+
+/* ---- Busca Ativa: contato da família no caso ---- */
+.contatos-familia{margin-top:12px;padding:12px;border-radius:10px;background:var(--primary-soft)}
+.contato{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid #C8E2F1}
+.contato:first-of-type{border-top:0}
+.contato .btn{text-decoration:none;display:inline-flex;gap:6px;align-items:center;background:#fff}
+.contatos-vazio{display:flex !important;gap:6px;align-items:center;margin-top:10px;color:var(--warning) !important}
+
+/* ---- Foco visível em tudo que é clicável (teclado) ---- */
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--primary);outline-offset:2px}
+#ficha-filho,#chamada-cards .sem-marcacao,#chamada-linhas .sem-marcacao{scroll-margin-top:84px} /* rolar até um item sem ele ficar escondido atrás do cabeçalho fixo */

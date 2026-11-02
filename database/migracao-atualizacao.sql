@@ -175,7 +175,7 @@ ALTER TABLE autorizacoes ADD CONSTRAINT fk_aut_assinada_por FOREIGN KEY (aut_ass
 ALTER TABLE busca_ativa_registros ADD CONSTRAINT fk_bar_usuario FOREIGN KEY (bar_usuario_id) REFERENCES usuarios(usu_id);
 ALTER TABLE comunicado_leituras ADD CONSTRAINT fk_col_usuario FOREIGN KEY (col_usuario_id) REFERENCES usuarios(usu_id);
 -- "Assinada" agora é calculada pelo próprio banco a partir da data da assinatura: as duas nunca ficam diferentes
-ALTER TABLE autorizacoes MODIFY aut_assinada BOOLEAN AS (aut_assinada_em IS NOT NULL) STORED NOT NULL;
+ALTER TABLE autorizacoes MODIFY aut_assinada BOOLEAN AS (aut_assinada_em IS NOT NULL) STORED;
 -- Horário do evento como hora de verdade, e evento não pode terminar antes de começar
 UPDATE eventos SET eve_hora = NULL WHERE eve_hora = '';
 ALTER TABLE eventos MODIFY eve_hora TIME NULL, ADD CONSTRAINT chk_eve_periodo CHECK (eve_data_fim IS NULL OR eve_data_fim >= eve_data);
@@ -217,3 +217,10 @@ ALTER TABLE usuarios
   ADD COLUMN usu_2fa_ativo BOOLEAN NOT NULL DEFAULT FALSE;
 -- log_hash: cada linha guarda o hash da linha anterior + os próprios dados. Apagar ou alterar um log quebra a corrente (Logs → Conferir integridade).
 ALTER TABLE logs ADD COLUMN log_hash CHAR(64) NULL;
+
+-- Melhorias de experiência do usuário (02/11/2026)
+-- aut_valida_ate: último dia para assinar a autorização. Depois dele, ela aparece como "Vencida" e não pode mais ser assinada.
+--   As autorizações antigas ficam sem data (continuam podendo ser assinadas, como antes).
+ALTER TABLE autorizacoes ADD COLUMN aut_valida_ate DATE NULL AFTER aut_validade;
+-- usu_avisos_vistos_em: quando a pessoa abriu os avisos (sino no topo) pela última vez. O que aconteceu depois conta como "novo".
+ALTER TABLE usuarios ADD COLUMN usu_avisos_vistos_em DATETIME NULL;

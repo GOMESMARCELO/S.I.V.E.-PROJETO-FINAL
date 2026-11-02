@@ -326,7 +326,7 @@ app.post("/api/login", limitePorMinuto("login", 30), rota(async (req, res) => {
   await db.query("UPDATE usuarios SET usu_ultimo_acesso = NOW() WHERE usu_id = ?", [u.id]);
   await registrarLog(u, "login_sucesso", null);
   const ctx = await contextoDoUsuario(u);
-  res.json({ token: gerarToken(u), papel: u.papel, nome: u.nome, aluno_id: ctx.alunoPadrao, sala: ctx.salaPadrao, filhos: ctx.filhos, turmas: ctx.turmas,
+  res.json({ token: gerarToken(u), id: u.id, usuario: login, papel: u.papel, nome: u.nome, aluno_id: ctx.alunoPadrao, sala: ctx.salaPadrao, filhos: ctx.filhos, turmas: ctx.turmas,
     senha_temporaria: !!u.senha_temporaria || senhaFraca, senha_fraca: senhaFraca, aceite_ok: u.aceite_versao === POLITICA.versao,
     configurar_2fa: SEG.doisFatoresGestao && u.papel === "admin" && !u.dois_ativo });
 }));
@@ -459,11 +459,12 @@ async function executarSincronizacao() {
 let filaSync = Promise.resolve();
 const sincronizarBuscaAtiva = () => (filaSync = filaSync.catch(() => {}).then(executarSincronizacao));
 
-// Último dia que tem chamada registrada (ou hoje) — usado nos quadros quando hoje é fim de semana
+// Dia que os quadros mostram: hoje, se for dia de aula; no fim de semana, o último dia de aula com chamada registrada.
+// (Antes, um registro no sábado — ex.: passagem pelo portão — fazia o sistema abrir "hoje" com quase todos "sem registro".)
 async function dataReferencia() {
-  const [[r]] = await db.query(`SELECT DATE_FORMAT(MAX(pre_data), '%Y-%m-%d') AS ultimo, DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS hoje
-    FROM presencas WHERE pre_data <= CURDATE()`);
-  return { data: r.ultimo || r.hoje, hoje: r.hoje };
+  const [[r]] = await db.query(`SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS hoje, DAYOFWEEK(CURDATE()) IN (1, 7) AS fim_de_semana,
+    (SELECT DATE_FORMAT(MAX(pre_data), '%Y-%m-%d') FROM presencas WHERE pre_data <= CURDATE() AND DAYOFWEEK(pre_data) NOT IN (1, 7)) AS ultimo_dia_letivo`);
+  return { data: r.fim_de_semana ? r.ultimo_dia_letivo || r.hoje : r.hoje, hoje: r.hoje, fim_de_semana: !!r.fim_de_semana };
 }
 const percentual = (presentes, ausentes) => (presentes + ausentes) ? Math.round(presentes * 1000 / (presentes + ausentes)) / 10 : null;
 
@@ -485,7 +486,7 @@ app.get("/api/resumo", autenticar, apenasAdmin, rota(async (req, res) => {
   const [[oce]] = await db.query(`SELECT COUNT(*) AS n, COUNT(CASE WHEN oce_resp_assinada_em IS NULL THEN 1 END) AS sem_resp
     FROM ocorrencias_escolares WHERE oce_ges_assinada_em IS NULL`);
   res.json({
-    data: ref.data, eh_hoje: ref.data === ref.hoje, total_alunos: total.n,
+    data: ref.data, eh_hoje: ref.data === ref.hoje, fim_de_semana: ref.fim_de_semana, total_alunos: total.n,
     presentes: dia.presentes, ausentes: dia.ausentes, sem_registro: Math.max(0, total.n - dia.presentes - dia.ausentes),
     ocorrencias_dia: ocor.total, advertencias_dia: ocor.advertencias, acoes_dia: ocor.acoes,
     ocorrencias_gestao: oce.n, ocorrencias_sem_resp: oce.sem_resp,
@@ -729,8 +730,15 @@ app.put("/api/alunos/:alunoId/situacao", autenticar, apenasAdmin, rota(async (re
 // ---------- Logs de atividade (só administração) ----------
 app.get("/api/logs", autenticar, apenasAdmin, rota(async (req, res) => {
   const [linhas] = await db.query(`SELECT log_nome_usuario AS nome_usuario, log_papel AS papel, log_acao AS acao, log_detalhe AS detalhe, DATE_FORMAT(log_data_hora, '%d/%m/%Y %H:%i:%s') AS quando
-    FROM logs ORDER BY log_id DESC LIMIT 50`);
-  res.json(linhas);
+    FROM logs ORDER BY log_id DESC LIMIT 200`);
+  // Troca "aluno id 5" / "usuário id 3" pelo nome, só para mostrar na tela. O texto gravado não muda (a conferência de integridade continua valendo).
+  const ids = (re) => [...new Set(linhas.flatMap((l) => [...String(l.detalhe || "").matchAll(re)].map((m) => Number(m[1]))))];
+  const idsAlunos = ids(/aluno id (\d+)/g), idsUsuarios = ids(/usuário id (\d+)/g);
+  const alunos = new Map(idsAlunos.length ? (await db.query("SELECT alu_id, alu_nome FROM alunos WHERE alu_id IN (?)", [idsAlunos]))[0].map((a) => [a.alu_id, a.alu_nome]) : []);
+  const usuarios = new Map(idsUsuarios.length ? (await db.query("SELECT usu_id, usu_nome FROM usuarios WHERE usu_id IN (?)", [idsUsuarios]))[0].map((u) => [u.usu_id, u.usu_nome]) : []);
+  const legivel = (t) => String(t || "").replace(/aluno id (\d+)/g, (m, id) => alunos.get(Number(id)) || "aluno removido")
+    .replace(/usuário id (\d+)/g, (m, id) => usuarios.get(Number(id)) || "usuário removido").replace(/ocorrência id (\d+)/g, "ocorrência nº $1");
+  res.json(linhas.map((l) => ({ ...l, detalhe: l.detalhe ? legivel(l.detalhe) : l.detalhe })));
 }));
 
 // Confere a corrente de hashes dos logs: aponta o primeiro registro apagado ou alterado
@@ -756,7 +764,7 @@ app.get("/api/frequencia", autenticar, apenasAdmin, rota(async (req, res) => {
     [data, BUSCA_ATIVA.dias, data, data]);
   const presentes = alunos.filter((a) => a.status === "Presente").length;
   const ausentes = alunos.filter((a) => a.status === "Ausente").length;
-  res.json({ data, eh_hoje: data === ref.hoje, hoje: ref.hoje, dias_faltas: BUSCA_ATIVA.dias, limite_faltas: BUSCA_ATIVA.faltas,
+  res.json({ data, eh_hoje: data === ref.hoje, hoje: ref.hoje, fim_de_semana: ref.fim_de_semana && data === ref.data, dias_faltas: BUSCA_ATIVA.dias, limite_faltas: BUSCA_ATIVA.faltas,
     total: alunos.length, presentes, ausentes, sem_registro: alunos.length - presentes - ausentes, alunos });
 }));
 
@@ -774,7 +782,10 @@ app.get("/api/busca-ativa", autenticar, apenasAdmin, rota(async (req, res) => {
   const ids = casos.map((c) => c.id);
   const registros = ids.length ? (await db.query(`SELECT bua_id AS busca_id, bar_nome_usuario AS nome_usuario, bar_texto AS texto, DATE_FORMAT(bar_data_hora, '%d/%m/%Y %H:%i') AS quando
     FROM busca_ativa_registros WHERE bua_id IN (?) ORDER BY bar_id`, [ids]))[0] : [];
-  res.json({ criterio: BUSCA_ATIVA, casos: casos.map((c) => ({ ...c, registros: registros.filter((r) => r.busca_id === c.id) })) });
+  const alunosIds = [...new Set(casos.map((c) => c.aluno_id))];
+  const contatos = alunosIds.length ? (await db.query(`SELECT ar.alu_id AS aluno_id, r.res_nome AS nome, ar.alr_parentesco AS parentesco, r.res_telefone AS telefone, r.res_telefone2 AS telefone2,
+    r.res_email AS email, r.res_contato_preferido AS contato_preferido FROM aluno_responsavel ar JOIN responsaveis r ON r.res_id = ar.res_id WHERE ar.alu_id IN (?) ORDER BY r.res_nome`, [alunosIds]))[0] : [];
+  res.json({ criterio: BUSCA_ATIVA, casos: casos.map((c) => ({ ...c, registros: registros.filter((r) => r.busca_id === c.id), contatos: contatos.filter((x) => x.aluno_id === c.aluno_id) })) });
 }));
 
 app.post("/api/busca-ativa/:id/acompanhamento", autenticar, apenasAdmin, rota(async (req, res) => {
@@ -875,17 +886,19 @@ app.post("/api/saidas", autenticar, apenasAdmin, rota(async (req, res) => {
 
 // ---------- Minha Turma e chamada (só professores) ----------
 app.get("/api/minha-turma", autenticar, apenasProfessor, rota(async (req, res) => {
-  const [linhas] = await db.query(`SELECT a.alu_id AS id, a.alu_nome AS nome, p.pre_status AS status_hoje,
+  const [linhas] = await db.query(`SELECT a.alu_id AS id, a.alu_nome AS nome, p.pre_status AS status_hoje, p.pre_observacao AS obs_hoje,
     (SELECT COUNT(*) FROM pendencias q WHERE q.alu_id = a.alu_id AND q.pen_status = 'Aberta')
-      + (SELECT COUNT(*) FROM autorizacoes z WHERE z.alu_id = a.alu_id AND z.aut_assinada = FALSE) AS pendencias,
+      + (SELECT COUNT(*) FROM autorizacoes z WHERE z.alu_id = a.alu_id AND z.aut_assinada = FALSE AND (z.aut_valida_ate IS NULL OR z.aut_valida_ate >= CURDATE())) AS pendencias,
     (SELECT COUNT(*) FROM presencas f WHERE f.alu_id = a.alu_id AND f.pre_status = 'Ausente'
        AND f.pre_data > DATE_SUB(CURDATE(), INTERVAL ? DAY) AND f.pre_data <= CURDATE()) AS faltas,
     GROUP_CONCAT(DISTINCT CONCAT(r.res_nome, ' (', ar.alr_parentesco, ') ', IFNULL(r.res_telefone,'')) SEPARATOR ' • ') AS responsaveis
     FROM alunos a LEFT JOIN presencas p ON p.alu_id = a.alu_id AND p.pre_data = CURDATE()
     LEFT JOIN aluno_responsavel ar ON ar.alu_id = a.alu_id LEFT JOIN responsaveis r ON r.res_id = ar.res_id
-    WHERE a.alu_sala = ? AND a.alu_situacao = 'Ativo' GROUP BY a.alu_id, a.alu_nome, p.pre_status ORDER BY a.alu_nome`, [BUSCA_ATIVA.dias, req.usuario.sala]);
+    WHERE a.alu_sala = ? AND a.alu_situacao = 'Ativo' GROUP BY a.alu_id, a.alu_nome, p.pre_status, p.pre_observacao ORDER BY a.alu_nome`, [BUSCA_ATIVA.dias, req.usuario.sala]);
   const aoVivo = new Map((await statusAoVivo({ sala: req.usuario.sala })).map((s) => [s.id, s]));
-  res.json({ dias_faltas: BUSCA_ATIVA.dias, alunos: linhas.map((l) => ({ ...l, agora: aoVivo.get(l.id) || null })) });
+  // origem_hoje: "portao" quando a presença foi marcada pela entrada (câmera ou portaria) e o professor ainda não confirmou na chamada
+  res.json({ dias_faltas: BUSCA_ATIVA.dias, alunos: linhas.map((l) => ({ ...l, agora: aoVivo.get(l.id) || null,
+    origem_hoje: l.status_hoje ? (/^Entrada/.test(l.obs_hoje || "") ? "portao" : "chamada") : null })) });
 }));
 
 // Chamada de hoje: o professor marca Presente/Ausente só para os alunos da própria turma
@@ -962,7 +975,7 @@ app.get("/api/gestao-alunos", autenticar, apenasAdmin, rota(async (req, res) => 
     (SELECT COUNT(*) FROM comunicado_leituras l JOIN comunicados c ON c.com_id = l.com_id
        WHERE l.alu_id = a.alu_id AND (c.com_sala IS NULL OR c.com_sala = a.alu_sala)) AS com_lidos,
     (SELECT COUNT(*) FROM autorizacoes z WHERE z.alu_id = a.alu_id AND z.aut_assinada = TRUE) AS aut_assinadas,
-    (SELECT COUNT(*) FROM autorizacoes z WHERE z.alu_id = a.alu_id AND z.aut_assinada = FALSE) AS aut_pendentes,
+    (SELECT COUNT(*) FROM autorizacoes z WHERE z.alu_id = a.alu_id AND z.aut_assinada = FALSE AND (z.aut_valida_ate IS NULL OR z.aut_valida_ate >= CURDATE())) AS aut_pendentes,
     (SELECT COUNT(*) FROM pendencias p WHERE p.alu_id = a.alu_id AND p.pen_status = 'Aberta') AS pend_abertas,
     (SELECT GROUP_CONCAT(DISTINCT p.pen_tipo SEPARATOR ',') FROM pendencias p WHERE p.alu_id = a.alu_id AND p.pen_status = 'Aberta') AS pend_tipos,
     (SELECT COUNT(*) FROM advertencias o WHERE o.alu_id = a.alu_id AND o.adv_tipo = 'Advertencia') AS advertencias,
@@ -982,7 +995,9 @@ app.get("/api/alunos/:alunoId/ficha", autenticar, rota(async (req, res) => {
     FROM comunicados c LEFT JOIN comunicado_leituras l ON l.com_id = c.com_id AND l.alu_id = ?
     WHERE c.com_sala IS NULL OR c.com_sala = ? ORDER BY c.com_id DESC`, [aluno.id, aluno.sala]);
   const [autorizacoes] = await db.query(`SELECT aut_id AS id, aut_titulo AS titulo, aut_validade AS validade, aut_detalhe AS detalhe, aut_assinada AS assinada, aut_assinada_nome AS assinada_nome,
-    DATE_FORMAT(aut_assinada_em, '%d/%m/%Y %H:%i') AS assinada_em, aut_codigo AS codigo FROM autorizacoes WHERE alu_id = ? ORDER BY aut_id DESC`, [aluno.id]);
+    DATE_FORMAT(aut_assinada_em, '%d/%m/%Y %H:%i') AS assinada_em, aut_codigo AS codigo, DATE_FORMAT(aut_valida_ate, '%d/%m/%Y') AS valida_ate,
+    (aut_assinada = FALSE AND aut_valida_ate IS NOT NULL AND aut_valida_ate < CURDATE()) AS vencida
+    FROM autorizacoes WHERE alu_id = ? ORDER BY vencida, aut_assinada, aut_id DESC`, [aluno.id]);
   const [documentos] = await db.query(`SELECT doc_id AS id, doc_categoria AS categoria, doc_titulo AS titulo, doc_nome_original AS nome_original, doc_tamanho AS tamanho, doc_enviado_por_nome AS enviado_por_nome,
     DATE_FORMAT(doc_enviado_em, '%d/%m/%Y') AS enviado_em FROM documentos WHERE alu_id = ? ORDER BY doc_id DESC`, [aluno.id]);
   const [pendencias] = await db.query(`SELECT pen_id AS id, pen_tipo AS tipo, pen_descricao AS descricao, pen_status AS status, pen_criada_por_nome AS criada_por_nome, DATE_FORMAT(pen_criada_em, '%d/%m/%Y') AS criada_em,
@@ -993,7 +1008,7 @@ app.get("/api/alunos/:alunoId/ficha", autenticar, rota(async (req, res) => {
   res.json({
     aluno, responsaveis, categorias: DOCUMENTO_CATEGORIAS,
     comunicados: comunicados.map((c) => ({ ...c, lido: !!c.lido })),
-    autorizacoes: autorizacoes.map((a) => ({ ...a, assinada: !!a.assinada })),
+    autorizacoes: autorizacoes.map((a) => ({ ...a, assinada: !!a.assinada, vencida: !!a.vencida })),
     documentos, pendencias, ocorrencias,
     consentimento: await consentimentoDoAluno(aluno.id, req.usuario.papel !== "professor"),
     agora: (await statusAoVivo({ alunoId: aluno.id }))[0] || null,
@@ -1055,13 +1070,18 @@ app.post("/api/comunicados/:id/ler", autenticar, rota(async (req, res) => {
 // ---------- Autorizações digitais ----------
 // A gestão cria a autorização para uma turma ou para a escola toda (uma linha por aluno)
 app.post("/api/autorizacoes", autenticar, apenasAdmin, rota(async (req, res) => {
-  const titulo = (req.body.titulo || "").trim(), detalhe = (req.body.detalhe || "").trim().slice(0, 250), validade = (req.body.validade || "").trim().slice(0, 50);
+  const titulo = (req.body.titulo || "").trim(), detalhe = (req.body.detalhe || "").trim().slice(0, 250);
   const sala = (req.body.sala || "").trim() || null;
+  // Último dia para assinar (data de verdade, para o sistema saber quando venceu). O texto "Validade" continua existindo para descrever o evento.
+  const validaAte = req.body.valida_ate ? String(req.body.valida_ate) : null;
+  const [[h]] = await db.query("SELECT DATE_FORMAT(CURDATE(), '%Y-%m-%d') AS hoje");
+  if (validaAte && (!dataValida(validaAte) || validaAte < h.hoje)) return res.status(400).json({ erro: "O prazo para assinar precisa ser hoje ou uma data futura" });
+  const validade = ((req.body.validade || "").trim() || (validaAte ? `Assinar até ${validaAte.split("-").reverse().join("/")}` : "")).slice(0, 50);
   if (sala && !(await turmaExiste(sala))) return res.status(400).json({ erro: "Turma não encontrada" });
   if (!titulo || titulo.length > 100) return res.status(400).json({ erro: "Informe o título (até 100 caracteres)" });
   const grupo = crypto.randomBytes(6).toString("hex");
-  const [r] = await db.query(`INSERT INTO autorizacoes (aut_grupo, alu_id, aut_titulo, aut_validade, aut_detalhe, aut_criada_por_nome)
-    SELECT ?, alu_id, ?, ?, ?, ? FROM alunos WHERE alu_situacao = 'Ativo' AND (? IS NULL OR alu_sala = ?)`, [grupo, titulo, validade || null, detalhe || null, req.usuario.nome, sala, sala]);
+  const [r] = await db.query(`INSERT INTO autorizacoes (aut_grupo, alu_id, aut_titulo, aut_validade, aut_valida_ate, aut_detalhe, aut_criada_por_nome)
+    SELECT ?, alu_id, ?, ?, ?, ?, ? FROM alunos WHERE alu_situacao = 'Ativo' AND (? IS NULL OR alu_sala = ?)`, [grupo, titulo, validade || null, validaAte, detalhe || null, req.usuario.nome, sala, sala]);
   if (!r.affectedRows) return res.status(400).json({ erro: "Nenhum aluno encontrado para esse destino" });
   await registrarLog(req.usuario, "autorizacao_criada", `${titulo} (${r.affectedRows} alunos)`);
   res.status(201).json({ ok: true, alunos: r.affectedRows });
@@ -1069,6 +1089,7 @@ app.post("/api/autorizacoes", autenticar, apenasAdmin, rota(async (req, res) => 
 
 app.get("/api/autorizacoes-grupos", autenticar, apenasAdmin, rota(async (req, res) => {
   const [linhas] = await db.query(`SELECT aut_grupo AS grupo, MIN(aut_titulo) AS titulo, MIN(aut_detalhe) AS detalhe, MIN(aut_validade) AS validade,
+    DATE_FORMAT(MIN(aut_valida_ate), '%d/%m/%Y') AS valida_ate, (MIN(aut_valida_ate) < CURDATE()) AS vencida,
     DATE_FORMAT(MIN(aut_criada_em), '%d/%m/%Y') AS criada_em, MIN(aut_criada_por_nome) AS criada_por_nome,
     COUNT(*) AS total, COUNT(CASE WHEN aut_assinada THEN 1 END) AS assinadas
     FROM autorizacoes GROUP BY aut_grupo ORDER BY MIN(aut_id) DESC LIMIT 50`);
@@ -1085,13 +1106,18 @@ app.get("/api/autorizacoes-grupos/:grupo", autenticar, apenasAdmin, rota(async (
 // Assinatura digital: o responsável confirma com nome completo + senha. O sistema grava quem, quando e um código de verificação.
 app.post("/api/autorizacoes/:id/assinar", autenticar, rota(async (req, res) => {
   if (req.usuario.papel !== "pai") return res.status(403).json({ erro: "Somente o responsável pode assinar" });
-  const [[aut]] = await db.query("SELECT aut_id AS id, alu_id AS aluno_id, aut_titulo AS titulo, aut_assinada AS assinada FROM autorizacoes WHERE aut_id = ?", [req.params.id]);
+  const [[aut]] = await db.query("SELECT aut_id AS id, alu_id AS aluno_id, aut_titulo AS titulo, aut_assinada AS assinada, (aut_valida_ate IS NOT NULL AND aut_valida_ate < CURDATE()) AS vencida FROM autorizacoes WHERE aut_id = ?", [req.params.id]);
   if (!aut) return res.status(404).json({ erro: "Autorização não encontrada" });
   if (!req.usuario.filhos.includes(aut.aluno_id)) return res.status(403).json({ erro: "Você só pode assinar autorizações do seu próprio filho" });
   if (aut.assinada) return res.status(400).json({ erro: "Esta autorização já foi assinada" });
+  if (aut.vencida) return res.status(400).json({ erro: "O prazo para assinar esta autorização já terminou. Fale com a escola." });
+  // Assinar: a pessoa marca "Li e autorizo" e confirma com a senha (o nome vem do cadastro de quem está logado; digitar o nome completo não é mais exigido)
+  if (req.body.confirmo !== true && !req.body.nome) return res.status(400).json({ erro: "Marque “Li e autorizo” para assinar" });
   const [[u]] = await db.query("SELECT usu_nome AS nome, usu_senha AS senha FROM usuarios WHERE usu_id = ?", [req.usuario.id]);
-  if (!(await conferirSenha(req.body.senha, u.senha))) return res.status(400).json({ erro: "Senha incorreta" });
-  if (normalizar(req.body.nome) !== normalizar(u.nome)) return res.status(400).json({ erro: "Digite seu nome completo exatamente como está cadastrado" });
+  const chaveAss = `assinatura|${req.usuario.id}`, minutosAss = minutosBloqueado(chaveAss);
+  if (minutosAss) return res.status(429).json({ erro: `Muitas tentativas erradas. Tente de novo em ${minutosAss} minuto(s).` });
+  if (!(await conferirSenha(req.body.senha, u.senha))) { registrarFalha(chaveAss); return res.status(400).json({ erro: "Senha incorreta" }); }
+  tentativas.delete(chaveAss);
   const codigo = novoCodigo();
   await db.query("UPDATE autorizacoes SET aut_assinada_por = ?, aut_assinada_nome = ?, aut_assinada_em = NOW(), aut_codigo = ? WHERE aut_id = ?",
     [req.usuario.id, u.nome, codigo, aut.id]);
@@ -1428,8 +1454,8 @@ app.post("/api/alunos/:alunoId/consentimento", autenticar, rota(async (req, res)
   const chave = `assinatura|${req.usuario.id}`, minutos = minutosBloqueado(chave);
   if (minutos) return res.status(429).json({ erro: `Muitas tentativas erradas. Tente de novo em ${minutos} minuto(s).` });
   const [[u]] = await db.query("SELECT usu_nome AS nome, usu_senha AS senha FROM usuarios WHERE usu_id = ?", [req.usuario.id]);
+  if (req.body.confirmo !== true && !req.body.nome) return res.status(400).json({ erro: "Marque “Li o termo e confirmo minhas escolhas” para assinar" });
   if (!(await conferirSenha(req.body.senha, u.senha))) { registrarFalha(chave); return res.status(400).json({ erro: "Senha incorreta" }); }
-  if (normalizar(req.body.nome) !== normalizar(u.nome)) return res.status(400).json({ erro: "Digite seu nome completo exatamente como está cadastrado" });
   tentativas.delete(chave);
   const codigo = novoCodigo();
   const [novoCon] = await db.query("INSERT INTO consentimentos (alu_id, usu_id, con_versao, con_informacoes, con_imagem, con_monitoramento, con_assinado_nome, con_codigo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1911,6 +1937,74 @@ async function rotinaPeriodica() {
   }
 }
 
+// =====================================================================
+// AVISOS (sino no topo) — melhorias de experiência do usuário, 02/11/2026
+// =====================================================================
+// O responsável não precisa "procurar" novidades: o sino mostra o que aconteceu com o filho e o que espera por ele.
+// Nada novo é guardado: os avisos são montados na hora a partir do que já existe (entradas, saídas, autorizações, comunicados,
+// ocorrências, pendências e eventos). Só se guarda QUANDO a pessoa abriu o sino pela última vez (usu_avisos_vistos_em), para contar os novos.
+const AVISOS_DIAS = 14; // até quantos dias para trás os avisos informativos aparecem
+app.get("/api/avisos", autenticar, apenasPai, rota(async (req, res) => {
+  const filhos = req.usuario.filhos;
+  if (!filhos.length) return res.json({ novos: 0, itens: [] });
+  const [[u]] = await db.query("SELECT usu_avisos_vistos_em AS vistos FROM usuarios WHERE usu_id = ?", [req.usuario.id]);
+  const [alunos] = await db.query("SELECT alu_id AS id, alu_nome AS nome, alu_sala AS sala FROM alunos WHERE alu_id IN (?)", [filhos]);
+  const primeiro = new Map(alunos.map((a) => [a.id, a.nome.split(" ")[0]]));
+  const salas = [...new Set(alunos.map((a) => a.sala))];
+  const itens = [];
+  const add = (x) => itens.push({ ...x, quando: x.quando instanceof Date ? x.quando.toISOString() : x.quando });
+  // Entradas e saídas (últimos 3 dias)
+  const [movs] = await db.query(`SELECT * FROM (
+      SELECT 'Entrada' AS sentido, ac.alu_id AS aluno_id, ac.ace_data_hora AS quando, ac.ace_metodo AS metodo, COALESCE(c.cam_nome, ac.ace_sala, 'Portaria') AS local
+      FROM acessos ac LEFT JOIN cameras c ON c.cam_id = ac.cam_id WHERE ac.alu_id IN (?) AND ac.ace_data_hora >= CURDATE() - INTERVAL 2 DAY
+      UNION ALL
+      SELECT 'Saída', s.alu_id, s.sai_data_hora, s.sai_metodo, COALESCE(c.cam_nome, 'Secretaria')
+      FROM saidas s LEFT JOIN cameras c ON c.cam_id = s.cam_id WHERE s.alu_id IN (?) AND s.sai_data_hora >= CURDATE() - INTERVAL 2 DAY) m
+    ORDER BY quando DESC LIMIT 20`, [filhos, filhos]);
+  for (const m of movs) {
+    const hora = new Date(m.quando).toTimeString().slice(0, 5);
+    add({ tipo: m.sentido === "Entrada" ? "entrada" : "saida", aluno_id: m.aluno_id, quando: m.quando,
+      titulo: `${primeiro.get(m.aluno_id)} ${m.sentido === "Entrada" ? "entrou na escola" : "saiu da escola"} às ${hora}`,
+      texto: `${m.local}${m.metodo === "Facial" ? " • reconhecimento facial" : m.metodo === "Liberação" ? " • liberação na secretaria" : " • portaria"}`, destino: { tela: "pais" } });
+  }
+  // Autorizações esperando a assinatura (dentro do prazo)
+  const [auts] = await db.query(`SELECT aut_id AS id, alu_id AS aluno_id, aut_titulo AS titulo, aut_criada_em AS quando, DATE_FORMAT(aut_valida_ate, '%d/%m') AS ate,
+    DATEDIFF(aut_valida_ate, CURDATE()) AS dias FROM autorizacoes WHERE alu_id IN (?) AND aut_assinada = FALSE AND (aut_valida_ate IS NULL OR aut_valida_ate >= CURDATE())`, [filhos]);
+  for (const a of auts) add({ tipo: "autorizacao", acao: true, aluno_id: a.aluno_id, quando: a.quando, titulo: `Autorização para assinar: ${a.titulo}`,
+    texto: `${primeiro.get(a.aluno_id)}${a.ate ? ` • assine até ${a.ate}${a.dias === 0 ? " (hoje!)" : a.dias === 1 ? " (amanhã)" : ""}` : ""}`, destino: { tela: "pais", aba: "autorizacoes" } });
+  // Comunicados não lidos
+  const [coms] = await db.query(`SELECT c.com_id AS id, c.com_titulo AS titulo, c.com_criado_em AS quando, a.alu_id AS aluno_id
+    FROM comunicados c JOIN alunos a ON a.alu_id IN (?) AND (c.com_sala IS NULL OR c.com_sala = a.alu_sala)
+    LEFT JOIN comunicado_leituras l ON l.com_id = c.com_id AND l.alu_id = a.alu_id
+    WHERE l.com_id IS NULL AND c.com_criado_em >= NOW() - INTERVAL ? DAY ORDER BY c.com_id DESC`, [filhos, AVISOS_DIAS]);
+  const vistosCom = new Set();
+  for (const c of coms) { if (vistosCom.has(c.id)) continue; vistosCom.add(c.id);
+    add({ tipo: "comunicado", acao: true, aluno_id: c.aluno_id, quando: c.quando, titulo: `Novo comunicado: ${c.titulo}`, texto: "Toque para ler", destino: { tela: "pais", aba: "comunicados" } }); }
+  // Ocorrências esperando a ciência do responsável
+  const [ocs] = await db.query(`SELECT oce_id AS id, alu_id AS aluno_id, oce_assinada_em AS quando, oce_professor_nome AS professor FROM ocorrencias_escolares
+    WHERE alu_id IN (?) AND oce_resp_assinada_em IS NULL ORDER BY oce_id DESC`, [filhos]);
+  for (const o of ocs) add({ tipo: "ocorrencia", acao: true, aluno_id: o.aluno_id, quando: o.quando, titulo: `Ocorrência registrada com ${primeiro.get(o.aluno_id)}`,
+    texto: `Prof. ${o.professor} • leia e assine que tomou ciência`, destino: { tela: "ocorrencias" } });
+  // Documentos que a escola pediu
+  const [pens] = await db.query(`SELECT pen_id AS id, alu_id AS aluno_id, pen_descricao AS descricao, pen_criada_em AS quando FROM pendencias
+    WHERE alu_id IN (?) AND pen_status = 'Aberta' AND pen_tipo = 'Documento'`, [filhos]);
+  for (const p of pens) add({ tipo: "pendencia", acao: true, aluno_id: p.aluno_id, quando: p.quando, titulo: `A escola pediu um documento`, texto: `${p.descricao} • ${primeiro.get(p.aluno_id)}`, destino: { tela: "pais", aba: "documentos" } });
+  // Eventos nos próximos 3 dias
+  const [evs] = await db.query(`SELECT eve_id AS id, eve_titulo AS titulo, DATE_FORMAT(eve_data, '%d/%m') AS dia, TIME_FORMAT(eve_hora, '%H:%i') AS hora, eve_criado_em AS quando, DATEDIFF(eve_data, CURDATE()) AS dias
+    FROM eventos WHERE eve_data BETWEEN CURDATE() AND CURDATE() + INTERVAL 3 DAY AND (eve_sala IS NULL OR eve_sala IN (?)) ORDER BY eve_data`, [salas]);
+  for (const e of evs) add({ tipo: "evento", aluno_id: null, quando: e.quando, titulo: `${e.dias === 0 ? "Hoje" : e.dias === 1 ? "Amanhã" : "Em " + e.dias + " dias"}: ${e.titulo}`,
+    texto: `${e.dia}${e.hora ? " às " + e.hora : ""}`, destino: { tela: "calendario" } });
+  const vistos = u.vistos ? new Date(u.vistos).getTime() : 0;
+  itens.forEach((i) => { i.novo = new Date(i.quando).getTime() > vistos; });
+  // Primeiro o que pede uma ação; depois do mais recente para o mais antigo
+  itens.sort((a, b) => (b.acao ? 1 : 0) - (a.acao ? 1 : 0) || new Date(b.quando) - new Date(a.quando));
+  res.json({ novos: itens.filter((i) => i.novo).length, itens: itens.slice(0, 30) });
+}));
+app.post("/api/avisos/vistos", autenticar, apenasPai, rota(async (req, res) => {
+  await db.query("UPDATE usuarios SET usu_avisos_vistos_em = NOW() WHERE usu_id = ?", [req.usuario.id]);
+  res.json({ ok: true });
+}));
+
 app.post("/api/aceite-privacidade", autenticar, rota(async (req, res) => {
   await db.query("UPDATE usuarios SET usu_aceite_em = NOW(), usu_aceite_versao = ? WHERE usu_id = ?", [POLITICA.versao, req.usuario.id]);
   await registrarLog(req.usuario, "aceite_privacidade", `Política de privacidade versão ${POLITICA.versao}`);
@@ -1927,7 +2021,7 @@ app.get("/api/alunos/:alunoId/meus-dados", autenticar, proprioAlunoOuAdmin, rota
   const [advertencias] = await db.query("SELECT adv_tipo AS tipo, adv_descricao AS descricao, DATE_FORMAT(adv_data, '%Y-%m-%d') AS data, adv_registrada_por_nome AS registrada_por FROM advertencias WHERE alu_id = ? ORDER BY adv_data", [id]);
   const [ocorrenciasEscolares] = await db.query("SELECT DATE_FORMAT(oce_data, '%Y-%m-%d') AS data, TIME_FORMAT(oce_horario, '%H:%i') AS horario, oce_descricao AS descricao, oce_buscado_por AS buscado_por, oce_professor_nome AS professor, oce_resp_nome AS ciencia_responsavel, DATE_FORMAT(oce_resp_assinada_em, '%Y-%m-%d %H:%i') AS ciencia_em FROM ocorrencias_escolares WHERE alu_id = ? ORDER BY oce_data", [id]);
   const [pendencias] = await db.query("SELECT pen_tipo AS tipo, pen_descricao AS descricao, pen_status AS status, DATE_FORMAT(pen_criada_em, '%Y-%m-%d %H:%i') AS criada_em FROM pendencias WHERE alu_id = ? ORDER BY pen_id", [id]);
-  const [autorizacoes] = await db.query("SELECT aut_titulo AS titulo, aut_validade AS validade, aut_assinada AS assinada, aut_assinada_nome AS assinada_por, DATE_FORMAT(aut_assinada_em, '%Y-%m-%d %H:%i') AS assinada_em, aut_codigo AS codigo FROM autorizacoes WHERE alu_id = ? ORDER BY aut_id", [id]);
+  const [autorizacoes] = await db.query("SELECT aut_titulo AS titulo, aut_validade AS validade, DATE_FORMAT(aut_valida_ate, '%Y-%m-%d') AS valida_ate, aut_assinada AS assinada, aut_assinada_nome AS assinada_por, DATE_FORMAT(aut_assinada_em, '%Y-%m-%d %H:%i') AS assinada_em, aut_codigo AS codigo FROM autorizacoes WHERE alu_id = ? ORDER BY aut_id", [id]);
   const [comunicadosLidos] = await db.query("SELECT c.com_titulo AS titulo, DATE_FORMAT(l.col_lido_em, '%Y-%m-%d %H:%i') AS lido_em FROM comunicado_leituras l JOIN comunicados c ON c.com_id = l.com_id WHERE l.alu_id = ? ORDER BY l.col_lido_em", [id]);
   const [documentos] = await db.query("SELECT doc_categoria AS categoria, doc_titulo AS titulo, doc_nome_original AS nome_original, doc_tamanho AS tamanho_bytes, doc_enviado_por_nome AS enviado_por, DATE_FORMAT(doc_enviado_em, '%Y-%m-%d') AS enviado_em FROM documentos WHERE alu_id = ? ORDER BY doc_id", [id]);
   const [entradas] = await db.query("SELECT DATE_FORMAT(ace_data_hora, '%Y-%m-%d %H:%i:%s') AS quando, ace_sala AS local, ace_metodo AS metodo FROM acessos WHERE alu_id = ? ORDER BY ace_data_hora", [id]);

@@ -100,6 +100,7 @@ CREATE TABLE autorizacoes (
   alu_id INT NOT NULL,
   aut_titulo VARCHAR(100) NOT NULL,
   aut_validade VARCHAR(50),
+  aut_valida_ate DATE NULL, -- último dia para assinar (UX 02/11/2026): depois dele a autorização aparece como "Vencida" e não pode mais ser assinada
   aut_detalhe VARCHAR(250),
   aut_criada_em DATETIME DEFAULT CURRENT_TIMESTAMP,
   aut_criada_por_nome VARCHAR(100),
@@ -107,7 +108,7 @@ CREATE TABLE autorizacoes (
   aut_assinada_nome VARCHAR(100) NULL,
   aut_assinada_em DATETIME NULL,
   aut_codigo VARCHAR(20) NULL,
-  aut_assinada BOOLEAN AS (aut_assinada_em IS NOT NULL) STORED NOT NULL, -- calculada pelo banco: nunca fica diferente da data da assinatura
+  aut_assinada BOOLEAN AS (aut_assinada_em IS NOT NULL) STORED, -- calculada pelo banco: nunca fica diferente da data da assinatura
   INDEX idx_aut_grupo (aut_grupo),
   FOREIGN KEY (alu_id) REFERENCES alunos(alu_id)
 );
@@ -175,6 +176,7 @@ CREATE TABLE usuarios (
   usu_sessao_versao INT NOT NULL DEFAULT 0, -- sobe a cada Sair/troca de senha: logins antigos param de valer
   usu_2fa_segredo VARCHAR(200) NULL,        -- verificação em duas etapas (segredo criptografado)
   usu_2fa_ativo BOOLEAN NOT NULL DEFAULT FALSE,
+  usu_avisos_vistos_em DATETIME NULL,       -- quando a pessoa abriu os avisos (sino) pela última vez: o que veio depois conta como novo
   FOREIGN KEY (alu_id) REFERENCES alunos(alu_id),
   FOREIGN KEY (res_id) REFERENCES responsaveis(res_id),
   CONSTRAINT fk_usu_turma FOREIGN KEY (usu_sala) REFERENCES turmas(tur_nome) ON UPDATE CASCADE
@@ -434,8 +436,11 @@ INSERT INTO responsaveis (res_nome, res_telefone, res_foto, res_email) VALUES
 ('Ana Paula Silva','(11) 98765-4321','assets/responsavel-ana.jpg','anapaula.silva@email.com'),
 ('Carlos Henrique Silva','(11) 97654-1234','assets/responsavel-carlos.jpg',NULL),
 ('Cláudia Souza','(11) 95555-7788',NULL,NULL),
-('Marcos Lima','(11) 94444-2211',NULL,'marcos.lima@email.com');
-INSERT INTO aluno_responsavel VALUES (2,1,'Mãe'),(2,2,'Pai'),(1,3,'Mãe'),(5,4,'Pai');
+('Marcos Lima','(11) 94444-2211',NULL,'marcos.lima@email.com'),
+('Rosana Almeida','(11) 93333-5566',NULL,NULL),
+('Paulo Costa','(11) 92222-8899',NULL,'paulo.costa@email.com');
+-- Lucas (4) e Marina (3) estão na Busca Ativa: com os responsáveis cadastrados, o contato da família aparece no próprio caso
+INSERT INTO aluno_responsavel VALUES (2,1,'Mãe'),(2,2,'Pai'),(1,3,'Mãe'),(5,4,'Pai'),(4,5,'Mãe'),(3,6,'Pai');
 
 -- Câmeras simuladas: dois portões com reconhecimento facial e duas câmeras de área comum (o refeitório está desligado)
 INSERT INTO cameras (cam_nome, cam_local, cam_tipo, cam_reconhecimento, cam_ativa) VALUES
@@ -485,9 +490,13 @@ INSERT INTO eventos (eve_titulo, eve_descricao, eve_tipo, eve_data, eve_data_fim
 ('Semana da leitura', 'Cada turma visitou a biblioteca e escolheu um livro.', 'Evento', DATE_SUB(CURDATE(), INTERVAL 6 DAY), DATE_SUB(CURDATE(), INTERVAL 2 DAY), NULL, 'Biblioteca', NULL, FALSE, 1, 'Mariana Santos');
 
 -- Autorizações de exemplo: passeio (João e Ana Clara, pendente) e uso de imagem (João, já assinada pela mãe)
-INSERT INTO autorizacoes (aut_grupo, alu_id, aut_titulo, aut_validade, aut_detalhe, aut_criada_por_nome) VALUES
-('seedpasseio', 2, 'Passeio ao Museu Catavento', '12 de outubro', 'Transporte e lanche inclusos', 'Mariana Santos'),
-('seedpasseio', 1, 'Passeio ao Museu Catavento', '12 de outubro', 'Transporte e lanche inclusos', 'Mariana Santos');
+-- Datas por extenso em português ("8 de novembro") nos textos de exemplo
+SET lc_time_names = 'pt_BR';
+-- Passeio: assinar até a véspera (dentro do prazo). Zoológico: o prazo já passou, então aparece como "Vencida".
+INSERT INTO autorizacoes (aut_grupo, alu_id, aut_titulo, aut_validade, aut_valida_ate, aut_detalhe, aut_criada_por_nome) VALUES
+('seedpasseio', 2, 'Passeio ao Museu Catavento', CONCAT('Passeio em ', DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 8 DAY), '%e de %M')), DATE_ADD(CURDATE(), INTERVAL 7 DAY), 'Transporte e lanche inclusos', 'Mariana Santos'),
+('seedpasseio', 1, 'Passeio ao Museu Catavento', CONCAT('Passeio em ', DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 8 DAY), '%e de %M')), DATE_ADD(CURDATE(), INTERVAL 7 DAY), 'Transporte e lanche inclusos', 'Mariana Santos'),
+('seedzoo', 2, 'Visita ao zoológico', CONCAT('Visita em ', DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 4 DAY), '%e de %M')), DATE_SUB(CURDATE(), INTERVAL 5 DAY), 'Saída às 8h, retorno às 15h', 'Mariana Santos');
 INSERT INTO autorizacoes (aut_grupo, alu_id, aut_titulo, aut_validade, aut_detalhe, aut_criada_por_nome, aut_assinada_por, aut_assinada_nome, aut_assinada_em, aut_codigo) VALUES
 ('seedimagem', 2, 'Uso de imagem — Feira Cultural', 'Válida até dezembro', 'Fotos do evento no portal escolar', 'Mariana Santos', 2, 'Ana Paula Silva', DATE_SUB(NOW(), INTERVAL 3 DAY), 'A1B2C3D4E5F60718');
 

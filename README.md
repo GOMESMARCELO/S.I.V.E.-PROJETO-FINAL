@@ -138,6 +138,37 @@ O que o sistema faz para apoiar a escola nos deveres do Estatuto da Criança e d
 4. Volte como `mariana` e simule o João de novo: agora ele é reconhecido. No Portal dos Pais, a mãe vê "Saiu às ...".
 5. Tente entrar como `roberto` (60 dias sem acesso). Em seguida, como `mariana`, reative-o em **Usuários**.
 
+## Melhorias de experiência do usuário (02/11/2026)
+
+Avaliação de UX feita tela por tela, nos três perfis, e aplicada no sistema. O que mudou para cada pessoa:
+
+**Responsável (Portal dos Pais)**
+- O topo mostra primeiro o **Status agora** do filho e o bloco **"Precisa da sua atenção"**: autorizações para assinar, ocorrências esperando a ciência, documentos pedidos pela escola, comunicados não lidos e o termo de consentimento. Cada item tem o botão que leva direto até lá. O banner fica logo abaixo e é mais baixo.
+- **Sino de avisos** no topo: entradas e saídas do filho, autorizações, comunicados, ocorrências, documentos pedidos e eventos dos próximos 3 dias. Mostra quantos avisos são novos desde a última vez que o sino foi aberto e confere sozinho a cada minuto. Com permissão, o navegador avisa quando chega algo novo e o sistema está aberto em outra aba.
+- **Assinar ficou mais simples**: em autorizações e no termo de consentimento, basta marcar "Li e autorizo" e confirmar com a senha. O nome vem do cadastro de quem está logado e não precisa mais ser digitado.
+- **Autorização com prazo**: a gestão define o último dia para assinar. Depois dele, a autorização aparece como "Prazo encerrado" e não pode mais ser assinada.
+
+**Professor (Minha Turma)**
+- A **chamada vem primeiro**. No celular, cada aluno é um cartão com botões grandes de Presente e Ausente, e o botão Salvar fica fixo no fim da tela.
+- **Ninguém vem marcado por padrão**: só quem passou pelo portão hoje já vem como Presente, com a origem à vista ("entrou 07:31 • câmera"). Um contador mostra presentes, ausentes e quantos faltam marcar, e o botão "Marcar os restantes como presentes" agiliza. O sistema não salva enquanto faltar alguém.
+
+**Gestão**
+- **Menu em grupos**: Dia a dia, Acompanhamento, Comunicação e Administração. "Cadastro de Aluno" virou **"Alunos e turmas"** e "Logs" virou **"Registro de atividades"**.
+- **Números honestos**: a presença é calculada só sobre quem já tem registro, e o sistema mostra quantos alunos estão "sem registro". No fim de semana, os quadros mostram o último dia letivo.
+- **Alunos e turmas**: uma lista só, com filtro por turma e busca pelo nome (antes, uma tabela inteira para cada turma).
+- **Ações sensíveis** (desativar acesso, zerar duas etapas, mudar a situação do aluno, encerrar caso, excluir) ficam num menu "⋯" ou com a cor de perigo, e pedem confirmação explicando a consequência. A própria pessoa não vê "Desativar" na sua linha.
+- **Busca Ativa**: o caso mostra o **contato da família**, com botões de ligar, WhatsApp e e-mail.
+- **Registro de atividades** com nomes no lugar de "aluno id 5" e filtro por pessoa e texto. A troca acontece só na tela, então o texto gravado e a conferência de integridade não mudam.
+
+**Para todos**
+- **Busca rápida de aluno** no topo (gestão: todos os alunos; professor: a turma aberta). Atalho: tecla `/`.
+- **Avisos na própria tela** no lugar das caixas do navegador (`alert`/`confirm`/`prompt`), e janela de confirmação com a identidade visual.
+- **Indicador de conexão real** ("Conectado" / "Sem conexão") no lugar do selo "Sistema operacional", que ficava sempre verde.
+- **Fontes DM Sans e Manrope** guardadas no próprio projeto (`assets/fonts/`, licença SIL OFL 1.1). Antes, o sistema aparecia em Arial.
+- **Letras maiores**: os textos de apoio passaram de 12 px para 13 px. Também há foco visível para quem usa o teclado.
+
+**Banco de dados:** duas colunas novas, sem apagar nada. `autorizacoes.aut_valida_ate` guarda o último dia para assinar, e `usuarios.usu_avisos_vistos_em` guarda quando a pessoa abriu o sino pela última vez. Quem já tem o banco atualizado até 31/10/2026 roda só `database/migracao-2026-11-02.sql`. A coluna calculada `aut_assinada` deixou de usar `STORED NOT NULL` (ficou só `STORED`), e com isso o `sive.sql` passou a rodar também no MariaDB do XAMPP.
+
 ## Identidade visual
 
 Todas as cores ficam como variáveis no início de `css/style.css` (`:root`). Para trocar uma cor, mude só ali.
@@ -170,6 +201,8 @@ Outros usuários de demonstração (senha `123456`):
 - `marcos`: pai da Beatriz (já autorizou o reconhecimento facial)
 - `roberto`: professor há 75 dias sem acessar (é suspenso automaticamente; reative em Usuários)
 - `fernanda`: professora há 53 dias sem acessar (aparece em "perto do limite")
+
+Os dados de exemplo também trazem uma autorização no prazo (passeio) e uma vencida (zoológico), além dos responsáveis de Lucas e Marina, para o contato da família aparecer na Busca Ativa.
 
 ## Rotas da API
 Veja `API.md`.
