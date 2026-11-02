@@ -63,10 +63,10 @@ Usuários de teste (cadastrados em `database/sive.sql`):
 | POST   | /api/comunicados                           | gestão, professor | Publica `{ titulo, texto, sala? }` (professor: sempre a própria turma) |
 | GET    | /api/comunicados/:id/leituras              | gestão, professor | Quem leu e quem não leu                                            |
 | POST   | /api/comunicados/:id/ler                   | responsável      | Marca como lido para o filho                                       |
-| POST   | /api/autorizacoes                          | gestão           | Cria a autorização `{ titulo, detalhe, validade, sala? }` para a turma ou a escola toda |
+| POST   | /api/autorizacoes                          | gestão           | Cria a autorização `{ titulo, detalhe, validade?, valida_ate? (AAAA-MM-DD, último dia para assinar), sala? }` para a turma ou a escola toda |
 | GET    | /api/autorizacoes-grupos                   | gestão           | Autorizações enviadas, com quantas foram assinadas                 |
 | GET    | /api/autorizacoes-grupos/:grupo            | gestão           | Quem assinou, quando e o código de verificação                     |
-| POST   | /api/autorizacoes/:id/assinar              | responsável      | Assinatura digital `{ nome, senha }`: grava quem, quando e um código |
+| POST   | /api/autorizacoes/:id/assinar              | responsável      | Assinatura digital `{ confirmo: true, senha }` ("Li e autorizo" + senha): grava quem, quando e um código. Recusa se o prazo (`valida_ate`) já passou |
 | POST   | /api/documentos                            | gestão, professor (da turma), responsável (do filho) | Anexa documento `{ aluno_id, categoria, titulo, nome_arquivo, conteudo (base64), pendencia_id? }` |
 | GET    | /api/documentos/:id/arquivo                | quem pode ver o aluno | Baixa o arquivo                                               |
 | DELETE | /api/documentos/:id                        | gestão           | Exclui o documento e o arquivo                                     |
@@ -131,7 +131,7 @@ curl http://localhost:3000/api/alunos -H "Authorization: Bearer SEU_TOKEN_AQUI"
 |--------|---------------------------------------|-----------------------------------------------------------------------------------------------------|
 | GET    | /api/consentimento-termo              | Texto do termo (8 seções) e as 3 opções (informações, imagem, monitoramento). Pública               |
 | GET    | /api/alunos/:alunoId/consentimento    | Situação atual: `pendente`, `autorizado`, `parcial` ou `nao_autorizado`. Responsável (só o filho), gestão e professor da turma (o professor não vê nome de quem assinou, código nem histórico) |
-| POST   | /api/alunos/:alunoId/consentimento    | Só o responsável do próprio aluno. Recebe `{ informacoes, imagem, monitoramento, nome, senha }` (booleanos + confirmação) e devolve o código do comprovante. Alterar ou revogar = assinar de novo |
+| POST   | /api/alunos/:alunoId/consentimento    | Só o responsável do próprio aluno. Recebe `{ informacoes, imagem, monitoramento, confirmo: true, senha }` (booleanos + "Li o termo e confirmo") e devolve o código do comprovante. Alterar ou revogar = assinar de novo |
 | GET    | /api/consentimentos                   | Só gestão: situação e resumo de todos os alunos                                                     |
 
 Cada assinatura grava uma nova linha (histórico preservado); vale a mais recente da versão atual do termo. O histórico também sai em `meus-dados`.
@@ -211,6 +211,14 @@ e gera uma linha na tabela `assinaturas`: hash SHA-256 do conteúdo assinado + s
 |--------|------|-----------|
 | GET | /api/verificar/:codigo | `status`: `valida`, `alterada` (conteúdo ou registro mudou depois da assinatura), `anterior` (assinada antes do selo digital) ou `nao_encontrada`. Mostra o documento, o papel, o nome abreviado de quem assinou, data e hora e o hash |
 | GET | /api/verificar/:codigo/qr.svg | QR code que abre `/?verificar=CÓDIGO` (vai nos comprovantes) |
+
+## Avisos do responsável (sino no topo) — 02/11/2026
+| Método | Rota | Quem | Descrição |
+|--------|------|------|-----------|
+| GET    | /api/avisos         | responsável | Até 30 avisos dos filhos: entradas/saídas (3 dias), autorizações para assinar, comunicados não lidos, ocorrências sem ciência, documentos pedidos e eventos dos próximos 3 dias. Cada um com `novo`, `acao` e `destino` (tela/aba). `novos` = quantos chegaram desde a última abertura |
+| POST   | /api/avisos/vistos  | responsável | Marca que a pessoa abriu o sino agora (zera os novos) |
+
+Outras mudanças de 02/11/2026: `/api/login` devolve também `id` e `usuario`; `/api/frequencia` e `/api/resumo` devolvem `fim_de_semana`; `/api/minha-turma` devolve `origem_hoje` (`portao` ou `chamada`); `/api/busca-ativa` devolve `contatos` da família em cada caso; `/api/logs` devolve as últimas 200 ações, com nomes no lugar de "aluno id N"; a ficha devolve `valida_ate` e `vencida` em cada autorização.
 
 ## Sobre o token e a segurança
 

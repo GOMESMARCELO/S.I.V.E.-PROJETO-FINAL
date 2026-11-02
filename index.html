@@ -263,9 +263,9 @@
         <b style="display:block;margin-top:16px">Sua escolha para <span id="cons-aluno"></span></b>
         <small>Marque só o que você autoriza. O que ficar desmarcado é "não autorizo".</small>
         <div id="cons-opcoes"></div>
-        <small style="margin-top:14px">Para assinar, confirme seu nome completo e sua senha</small>
-        <input id="cons-nome" placeholder="Nome completo" autocomplete="off" required>
-        <input id="cons-senha" type="password" placeholder="Sua senha" autocomplete="current-password" required style="margin-top:8px">
+        <label class="termo-aceite confirma-assinatura"><input type="checkbox" id="cons-confirmo"> <span><b>Li o termo e confirmo minhas escolhas.</b> A assinatura usa o nome do seu cadastro.</span></label>
+        <small style="margin-top:10px">Para assinar, confirme com a sua senha</small>
+        <input id="cons-senha" type="password" placeholder="Sua senha" autocomplete="current-password" required style="margin-top:4px;max-width:320px">
         <p id="cons-erro" class="pill danger oculto" style="margin-top:8px"></p>
         <button class="btn" type="submit">Assinar e continuar</button>
         <button class="btn outline" id="cons-depois" type="button" style="margin-top:8px">Responder depois</button>
@@ -297,9 +297,27 @@
         <button id="btn-menu" aria-label="Abrir menu" data-ico="menu"></button>
         <div><h1 id="titulo"></h1><small id="data-hora"></small></div>
         <select id="seletor-contexto" class="oculto seletor-contexto"></select>
-        <span class="pill success">● Sistema operacional</span>
+        <div id="busca-rapida" class="busca-rapida oculto" role="search">
+          <input id="busca-rapida-campo" type="search" placeholder="Buscar aluno... (tecla /)" aria-label="Buscar aluno" autocomplete="off">
+          <div id="busca-rapida-lista" class="busca-rapida-lista oculto" role="listbox" aria-label="Alunos encontrados"></div>
+        </div>
+        <div class="avisos-area oculto" id="avisos-area">
+          <button type="button" id="btn-avisos" class="botao-icone btn-avisos" aria-label="Avisos" aria-expanded="false" data-ico="sino"></button>
+          <span class="contador avisos-contador oculto" id="avisos-contador" aria-hidden="true"></span>
+          <div id="avisos-painel" class="avisos-painel oculto" role="dialog" aria-label="Avisos"></div>
+        </div>
+        <span id="status-conexao" class="pill success" title="O sistema está respondendo">● Conectado</span>
       </header>
       <main id="tela"></main>
+    </div>
+  </div>
+  <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+  <div id="dialogo" class="modal oculto" role="alertdialog" aria-modal="true" aria-labelledby="dialogo-titulo" aria-describedby="dialogo-texto">
+    <div class="modal-caixa dialogo-caixa">
+      <h2 id="dialogo-titulo"></h2>
+      <p id="dialogo-texto"></p>
+      <div id="dialogo-campos"></div>
+      <div class="dialogo-acoes"><button type="button" class="btn outline pequeno" id="dialogo-cancelar">Cancelar</button><button type="button" class="btn pequeno" id="dialogo-ok">Confirmar</button></div>
     </div>
   </div>
   <script src="js/app.js"></script>

@@ -41,6 +41,9 @@ SEGURANÇA DO LOGIN
 BANCO JÁ EXISTENTE (atualização)
 Se o seu banco foi criado com uma versão anterior, rode database/migracao-atualizacao.sql
 (depois de um backup). Ele não apaga dados.
+Se o seu banco JÁ ESTAVA atualizado até 31/10/2026, rode só database/migracao-2026-11-02.sql
+(duas colunas novas: prazo das autorizações e avisos vistos). Também não apaga dados.
+XAMPP (MariaDB): o sive.sql agora roda nele também.
 
 LOGIN
 O sistema pede login. Três tipos de usuário, já cadastrados no banco (senhas de DEMONSTRAÇÃO: no primeiro login
@@ -169,3 +172,13 @@ FASE 5 — CÂMERAS E RECONHECIMENTO FACIAL (SIMULADOS) E STATUS AO VIVO
   Sem isso, a imagem é descartada e ninguém é identificado. O sistema não guarda fotos nem biometria.
 - Portal dos Pais: "Status agora" mostra se o filho entrou ou saiu, a que horas e por qual portão.
 - Roteiro de apresentação: veja o README.md, seção "Fase 5".
+
+MELHORIAS DE EXPERIÊNCIA DO USUÁRIO (02/11/2026)
+- Banco: rode database/migracao-2026-11-02.sql (ou o sive.sql de novo, que apaga e recria tudo). Não precisa de npm install.
+- Responsável: o topo do Portal mostra o filho agora e "Precisa da sua atenção". O sino no topo traz os avisos.
+  Assinar = marcar "Li e autorizo" + senha (não precisa mais digitar o nome).
+- Professor: a chamada vem primeiro; no celular, um cartão por aluno. Ninguém vem marcado "por padrão".
+- Gestão: menu em grupos, busca de aluno no topo (tecla /), "Alunos e turmas" em uma lista só com filtro,
+  ações sensíveis no menu "⋯" com confirmação, contato da família na Busca Ativa e autorização com prazo para assinar.
+- Detalhes de cada mudança: README.md, seção "Melhorias de experiência do usuário".
+
