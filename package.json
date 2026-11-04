@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "backup": "node backup.js"
+    "backup": "node backup.js",
+    "escolas": "node escolas.js"
   },
   "dependencies": {
     "express": "^4.21.2",

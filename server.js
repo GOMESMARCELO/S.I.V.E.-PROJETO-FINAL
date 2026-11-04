@@ -295,7 +295,7 @@ app.post("/api/login", limitePorMinuto("login", 30), rota(async (req, res) => {
     return res.status(429).json({ erro: `Muitas tentativas erradas. Tente de novo em ${minutos} minuto(s).` });
   }
   await verificarInatividade(); // confere os 60 dias antes de deixar entrar
-  const [linhas] = await db.query("SELECT usu_id AS id, usu_papel AS papel, alu_id AS aluno_id, usu_sala AS sala, usu_nome AS nome, usu_senha_temporaria AS senha_temporaria, usu_senha AS senha, usu_aceite_versao AS aceite_versao, usu_ativo AS ativo, usu_inativado_motivo AS motivo, res_id AS res_id, usu_sessao_versao AS sessao, usu_2fa_ativo AS dois_ativo, usu_2fa_segredo AS dois_segredo FROM usuarios WHERE usu_usuario = ?", [String(usuario || "")]);
+  const [linhas] = await db.query("SELECT usu_id AS id, usu_papel AS papel, alu_id AS aluno_id, usu_sala AS sala, usu_nome AS nome, usu_senha_temporaria AS senha_temporaria, usu_senha AS senha, usu_aceite_versao AS aceite_versao, usu_ativo AS ativo, usu_inativado_motivo AS motivo, res_id AS res_id, usu_sessao_versao AS sessao, usu_2fa_ativo AS dois_ativo, usu_2fa_segredo AS dois_segredo, usu_tutorial_visto_em AS tutorial_visto FROM usuarios WHERE usu_usuario = ?", [String(usuario || "")]);
   const u = linhas[0];
   const senhaOk = await conferirSenha(senha, u ? u.senha : HASH_FALSO);
   if (u && senhaOk && !u.ativo && u.motivo === "inatividade") { // senha certa, mas o acesso foi suspenso por 60 dias sem uso
@@ -328,7 +328,7 @@ app.post("/api/login", limitePorMinuto("login", 30), rota(async (req, res) => {
   const ctx = await contextoDoUsuario(u);
   res.json({ token: gerarToken(u), id: u.id, usuario: login, papel: u.papel, nome: u.nome, aluno_id: ctx.alunoPadrao, sala: ctx.salaPadrao, filhos: ctx.filhos, turmas: ctx.turmas,
     senha_temporaria: !!u.senha_temporaria || senhaFraca, senha_fraca: senhaFraca, aceite_ok: u.aceite_versao === POLITICA.versao,
-    configurar_2fa: SEG.doisFatoresGestao && u.papel === "admin" && !u.dois_ativo });
+    configurar_2fa: SEG.doisFatoresGestao && u.papel === "admin" && !u.dois_ativo, tutorial_visto: !!u.tutorial_visto });
 }));
 
 // Lê o token, confere no banco se o usuário continua ativo e diz quem está fazendo a requisição.
@@ -1296,6 +1296,81 @@ app.get("/api/verificar/:codigo/qr.svg", limitePorMinuto("qr", 60), rota(async (
   const svg = await QRCode.toString(`${req.protocol}://${req.get("host")}/?verificar=${codigo}`, { type: "svg", margin: 1, color: { dark: "#140040", light: "#FFFFFF" } });
   res.type("image/svg+xml").send(svg);
 }));
+// ---------- Página inicial: ficha "Quero o S.I.V.E. na minha escola" (pública, sem login) ----------
+// A escola interessada preenche os dados e recebe um protocolo. A equipe S.I.V.E. consulta os pedidos com: npm run escolas
+const UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ");
+const REDES = ["municipal", "estadual", "federal", "privada"];
+const ETAPAS = ["Educação Infantil", "Fundamental I (1º ao 5º ano)", "Fundamental II (6º ao 9º ano)", "Ensino Médio"];
+const HORARIOS = ["manha", "tarde", "qualquer"];
+const soNumeros = (v) => String(v || "").replace(/\D/g, "");
+// CNPJ: os dois últimos números são calculados a partir dos 12 primeiros (dígitos verificadores, regra da Receita Federal)
+function cnpjValido(cnpj) {
+  if (!/^\d{14}$/.test(cnpj) || /^(\d)\1{13}$/.test(cnpj)) return false;
+  const digito = (base) => {
+    let soma = 0, peso = base.length - 7;
+    for (const n of base) { soma += Number(n) * peso--; if (peso < 2) peso = 9; }
+    const resto = soma % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+  const d1 = digito(cnpj.slice(0, 12)), d2 = digito(cnpj.slice(0, 12) + d1);
+  return cnpj.endsWith(`${d1}${d2}`);
+}
+// Busca o endereço pelo CEP (ViaCEP). Passa pelo servidor porque a página só pode falar com o próprio S.I.V.E. (segurança do navegador).
+// Se a internet ou o ViaCEP falharem, a pessoa preenche o endereço à mão.
+app.get("/api/cep/:cep", limitePorMinuto("cep", 30), rota(async (req, res) => {
+  const cep = soNumeros(req.params.cep);
+  if (cep.length !== 8) return res.status(400).json({ erro: "O CEP tem 8 números." });
+  let r;
+  try { r = await (await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: AbortSignal.timeout(4000) })).json(); }
+  catch { return res.status(502).json({ erro: "Não foi possível buscar o CEP agora. Preencha o endereço, por favor." }); }
+  if (!r || r.erro) return res.status(404).json({ erro: "CEP não encontrado. Confira os números ou preencha o endereço." });
+  res.json({ logradouro: r.logradouro || "", bairro: r.bairro || "", cidade: r.localidade || "", uf: r.uf || "" });
+}));
+app.post("/api/escolas-interessadas", limitePorMinuto("escola", 5), rota(async (req, res) => {
+  const b = req.body || {};
+  // Campo escondido (só robôs preenchem): finge que deu certo e não grava nada
+  if (b.site) return res.json({ protocolo: `SIVE-${new Date().getFullYear()}-${String(crypto.randomInt(10000, 99999))}` });
+  const texto = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+  const d = {
+    nome: texto(b.nome, 150), cnpj: soNumeros(b.cnpj), rede: b.rede, alunos: Number(b.alunos),
+    etapas: (Array.isArray(b.etapas) ? b.etapas : []).filter((e) => ETAPAS.includes(e)),
+    cep: soNumeros(b.cep), logradouro: texto(b.logradouro, 150), numero: texto(b.numero, 10), complemento: texto(b.complemento, 60),
+    bairro: texto(b.bairro, 80), cidade: texto(b.cidade, 80), uf: String(b.uf || "").toUpperCase(),
+    contato_nome: texto(b.contato_nome, 100), contato_cargo: texto(b.contato_cargo, 60), email: texto(b.email, 120).toLowerCase(),
+    telefone: soNumeros(b.telefone), horario: HORARIOS.includes(b.horario) ? b.horario : "qualquer", mensagem: String(b.mensagem || "").trim().slice(0, 600),
+  };
+  // Cada erro diz qual campo está errado, para a tela levar a pessoa direto até ele
+  const erro = (campo, msg) => res.status(400).json({ erro: msg, campo });
+  if (d.nome.length < 3) return erro("nome", "Informe o nome da escola.");
+  if (!cnpjValido(d.cnpj)) return erro("cnpj", "CNPJ inválido. Confira os 14 números.");
+  if (!REDES.includes(d.rede)) return erro("rede", "Escolha a rede da escola.");
+  if (!d.etapas.length) return erro("etapas", "Marque pelo menos uma etapa de ensino.");
+  if (!Number.isInteger(d.alunos) || d.alunos < 1 || d.alunos > 100000) return erro("alunos", "Informe quantos alunos a escola tem (aproximadamente).");
+  if (d.cep.length !== 8) return erro("cep", "O CEP tem 8 números.");
+  if (d.logradouro.length < 3) return erro("logradouro", "Informe a rua ou avenida.");
+  if (!d.numero) return erro("numero", "Informe o número (ou S/N).");
+  if (d.bairro.length < 2) return erro("bairro", "Informe o bairro.");
+  if (d.cidade.length < 2) return erro("cidade", "Informe a cidade.");
+  if (!UFS.includes(d.uf)) return erro("uf", "Escolha o estado (UF).");
+  if (d.contato_nome.split(" ").length < 2) return erro("contato_nome", "Informe o nome e o sobrenome de quem vamos procurar.");
+  if (d.contato_cargo.length < 2) return erro("contato_cargo", "Informe o cargo (ex.: diretora, coordenador).");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email)) return erro("email", "E-mail inválido.");
+  if (!/^[1-9]{2}9?\d{8}$/.test(d.telefone)) return erro("telefone", "Telefone inválido. Use DDD + número (ex.: 11 98765-4321).");
+  if (b.aceite !== true) return erro("aceite", "Para entrarmos em contato, marque que concorda com o uso dos dados.");
+  // A mesma escola pediu há pouco tempo e o pedido ainda está aberto: devolve o protocolo que ela já tem
+  const [[antes]] = await db.query(`SELECT esi_protocolo AS protocolo, DATE_FORMAT(esi_criado_em, '%d/%m/%Y') AS em FROM escolas_interessadas
+    WHERE esi_cnpj = ? AND esi_status IN ('novo','em_contato') AND esi_criado_em >= NOW() - INTERVAL 30 DAY ORDER BY esi_id DESC LIMIT 1`, [d.cnpj]);
+  if (antes) return res.json({ protocolo: antes.protocolo, repetido: true, em: antes.em });
+  const [r] = await db.query(`INSERT INTO escolas_interessadas (esi_nome, esi_cnpj, esi_rede, esi_etapas, esi_alunos, esi_cep, esi_logradouro, esi_numero,
+    esi_complemento, esi_bairro, esi_cidade, esi_uf, esi_contato_nome, esi_contato_cargo, esi_email, esi_telefone, esi_horario, esi_mensagem, esi_aceite_em, esi_ip)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),?)`,
+    [d.nome, d.cnpj, d.rede, d.etapas.join(", "), d.alunos, d.cep, d.logradouro, d.numero, d.complemento || null, d.bairro, d.cidade, d.uf,
+      d.contato_nome, d.contato_cargo, d.email, d.telefone, d.horario, d.mensagem || null, req.ip]);
+  const protocolo = `SIVE-${new Date().getFullYear()}-${String(r.insertId).padStart(5, "0")}`;
+  await db.query("UPDATE escolas_interessadas SET esi_protocolo = ? WHERE esi_id = ?", [protocolo, r.insertId]);
+  console.log(`🏫 Nova escola interessada: ${d.nome} (${d.cidade}/${d.uf}) — protocolo ${protocolo}`);
+  res.status(201).json({ protocolo });
+}));
 // ---------- Ocorrências do professor (registro do dia, com assinatura digital do professor) ----------
 // O professor registra e consulta só a própria turma. A turma gravada é a do aluno no dia do registro.
 // O responsável vê as ocorrências do filho e assina que tomou ciência; enquanto não assina, a ocorrência conta como "nova".
@@ -2002,6 +2077,12 @@ app.get("/api/avisos", autenticar, apenasPai, rota(async (req, res) => {
 }));
 app.post("/api/avisos/vistos", autenticar, apenasPai, rota(async (req, res) => {
   await db.query("UPDATE usuarios SET usu_avisos_vistos_em = NOW() WHERE usu_id = ?", [req.usuario.id]);
+  res.json({ ok: true });
+}));
+
+// Tutorial do primeiro acesso: a pessoa concluiu ou pulou, e ele não aparece mais sozinho (em nenhum aparelho)
+app.post("/api/tutorial/visto", autenticar, rota(async (req, res) => {
+  await db.query("UPDATE usuarios SET usu_tutorial_visto_em = NOW() WHERE usu_id = ?", [req.usuario.id]);
   res.json({ ok: true });
 }));
 

@@ -212,11 +212,18 @@ e gera uma linha na tabela `assinaturas`: hash SHA-256 do conteúdo assinado + s
 | GET | /api/verificar/:codigo | `status`: `valida`, `alterada` (conteúdo ou registro mudou depois da assinatura), `anterior` (assinada antes do selo digital) ou `nao_encontrada`. Mostra o documento, o papel, o nome abreviado de quem assinou, data e hora e o hash |
 | GET | /api/verificar/:codigo/qr.svg | QR code que abre `/?verificar=CÓDIGO` (vai nos comprovantes) |
 
+## Ficha "Quero o S.I.V.E. na minha escola" (pública, sem login) — 03/11/2026
+| Método | Rota | O que faz |
+|--------|------|-----------|
+| GET  | /api/cep/:cep | Endereço pelo CEP (consulta o ViaCEP pelo servidor). Devolve `logradouro`, `bairro`, `cidade`, `uf`. 404 = CEP não existe; 502 = sem internet (a pessoa preenche à mão). Limite: 30 por minuto |
+| POST | /api/escolas-interessadas | Grava o pedido. Corpo: `nome`, `cnpj`, `rede` (`municipal`, `estadual`, `federal`, `privada`), `alunos`, `etapas` (lista), `cep`, `logradouro`, `numero`, `complemento`, `bairro`, `cidade`, `uf`, `contato_nome`, `contato_cargo`, `email`, `telefone`, `horario` (`manha`, `tarde`, `qualquer`), `mensagem`, `aceite: true`. Devolve 201 `{ protocolo }`. Mesmo CNPJ com pedido aberto nos últimos 30 dias: 200 `{ protocolo, repetido: true, em }`. Erro: 400 `{ erro, campo }`, com o nome do campo errado. Limite: 5 por minuto |
+
 ## Avisos do responsável (sino no topo) — 02/11/2026
 | Método | Rota | Quem | Descrição |
 |--------|------|------|-----------|
 | GET    | /api/avisos         | responsável | Até 30 avisos dos filhos: entradas/saídas (3 dias), autorizações para assinar, comunicados não lidos, ocorrências sem ciência, documentos pedidos e eventos dos próximos 3 dias. Cada um com `novo`, `acao` e `destino` (tela/aba). `novos` = quantos chegaram desde a última abertura |
 | POST   | /api/avisos/vistos  | responsável | Marca que a pessoa abriu o sino agora (zera os novos) |
+| POST   | /api/tutorial/visto | todos | Marca que a pessoa concluiu ou pulou o tutorial do primeiro acesso. `/api/login` devolve `tutorial_visto` |
 
 Outras mudanças de 02/11/2026: `/api/login` devolve também `id` e `usuario`; `/api/frequencia` e `/api/resumo` devolvem `fim_de_semana`; `/api/minha-turma` devolve `origem_hoje` (`portao` ou `chamada`); `/api/busca-ativa` devolve `contatos` da família em cada caso; `/api/logs` devolve as últimas 200 ações, com nomes no lugar de "aluno id N"; a ficha devolve `valida_ate` e `vencida` em cada autorização.
 
