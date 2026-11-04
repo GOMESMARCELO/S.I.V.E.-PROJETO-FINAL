@@ -19,6 +19,7 @@
         <nav class="lp-nav" aria-label="Seções da página">
           <a href="#o-que-faz">O que faz</a><a href="#para-quem">Para quem</a><a href="#seguranca">Segurança</a><a href="#perguntas">Perguntas</a>
         </nav>
+        <button type="button" class="lp-btn lp-btn-escola" data-cadastro-escola><span data-ico="escola"></span> Para escolas</button>
         <a href="#entrar" class="lp-btn lp-btn-cheio">Entrar</a>
       </div>
     </header>
@@ -36,7 +37,8 @@
             <li><span data-ico="confere"></span> Assinatura digital de ocorrências e autorizações</li>
             <li><span data-ico="confere"></span> Feito de acordo com a LGPD e o ECA</li>
           </ul>
-          <div class="lp-acoes"><a href="#o-que-faz" class="lp-btn lp-btn-cheio">Conhecer o sistema</a><a href="#entrar" class="lp-btn lp-btn-linha">Já tenho acesso</a></div>
+          <div class="lp-acoes"><button type="button" class="lp-btn lp-btn-cheio" data-cadastro-escola>Quero o S.I.V.E. na minha escola</button><a href="#entrar" class="lp-btn lp-btn-linha">Já tenho acesso</a></div>
+          <a href="#o-que-faz" class="lp-link-conhecer">Conhecer o sistema &darr;</a>
         </div>
 
         <!-- Ilustração do login (não funciona aqui: o botão leva à página de login de verdade) e cartões do sistema em volta, sem cobrir -->
@@ -134,6 +136,7 @@
         <details class="lp-faq"><summary>Como funciona a assinatura digital?</summary><p>Quem assina confirma com a própria senha do sistema. O S.I.V.E. guarda a data, a hora, uma impressão digital (SHA-256) do texto assinado e um selo criptográfico. Cada assinatura tem um código e um QR code: qualquer pessoa confere a autenticidade em "Verificar assinatura", e qualquer alteração feita depois é detectada.</p></details>
         <details class="lp-faq"><summary>O reconhecimento facial é obrigatório?</summary><p>Não. Ele só funciona para alunos cujo responsável autorizou no Termo de Consentimento, só nos portões e sem guardar fotos. O responsável pode revogar quando quiser.</p></details>
         <details class="lp-faq"><summary>Os dados dos alunos estão seguros?</summary><p>Sim. O acesso é separado por perfil, os documentos ficam criptografados e cada acesso fica registrado, como pede a LGPD.</p></details>
+        <details class="lp-faq"><summary>Como levo o S.I.V.E. para a minha escola?</summary><p>Clique em "Quero o S.I.V.E. na minha escola" e preencha a ficha com os dados da escola e de quem devemos procurar. Você recebe um número de protocolo na hora, e a nossa equipe entra em contato para apresentar o sistema e combinar a implantação.</p></details>
         <details class="lp-faq"><summary>Esqueci minha senha. E agora?</summary><p>Procure a secretaria da escola: a gestão gera uma senha provisória, e você cria uma nova no primeiro acesso.</p></details>
         </div>
       </div>
@@ -142,8 +145,8 @@
     <section class="lp-chamada">
       <div class="lp-faixa lp-estreita">
         <h2>Pronto para começar o dia com tudo sob controle?</h2>
-        <p>Entre com o seu usuário e acompanhe a escola em tempo real.</p>
-        <a href="#entrar" class="lp-btn lp-btn-claro">Acessar o S.I.V.E.</a>
+        <p>Sua escola ainda não usa o S.I.V.E.? Faça o cadastro e a nossa equipe entra em contato.</p>
+        <div class="lp-chamada-acoes"><button type="button" class="lp-btn lp-btn-claro" data-cadastro-escola>Quero o S.I.V.E. na minha escola</button><a href="#entrar" class="lp-btn lp-btn-linha">Já tenho acesso</a></div>
       </div>
     </section>
 
@@ -151,6 +154,7 @@
       <div class="lp-faixa lp-rodape-grade">
         <div><img src="assets/logo-sive-branco.png" alt="S.I.V.E." class="lp-rodape-logo"><p>Vigilância escolar inteligente: segurança, presença e comunicação em um só lugar.</p></div>
         <div><b>Navegue</b><a href="#o-que-faz">O que faz</a><a href="#para-quem">Para quem</a><a href="#seguranca">Segurança</a><a href="#perguntas">Perguntas frequentes</a></div>
+        <div><b>Para escolas</b><a href="#contratar" data-cadastro-escola>Cadastrar minha escola</a><a href="#perguntas">Como funciona a contratação</a></div>
         <div><b>Acesso</b><a href="#entrar">Entrar no sistema</a><a href="#verificar">Verificar assinatura</a><a href="#seguranca">Privacidade e LGPD</a></div>
       </div>
       <p class="lp-copy">© <span id="lp-ano"></span> S.I.V.E. — Sistema Inteligente de Vigilância Escolar</p>
@@ -286,7 +290,8 @@
       <div class="user">
         <span class="avatar" id="user-iniciais"></span>
         <div><b id="user-nome"></b><small id="user-papel"></small></div>
-        <button id="btn-privacidade" title="Política de privacidade" aria-label="Política de privacidade" class="botao-icone" data-ico="cadeado" style="margin-left:auto"></button>
+        <button id="btn-tutorial" title="Rever o tutorial" aria-label="Rever o tutorial" class="botao-icone" data-ico="ajuda" style="margin-left:auto"></button>
+        <button id="btn-privacidade" title="Política de privacidade" aria-label="Política de privacidade" class="botao-icone" data-ico="cadeado"></button>
         <button id="btn-trocar-senha" title="Trocar senha" aria-label="Trocar senha" class="botao-icone" data-ico="chave"></button>
         <button id="btn-sair" title="Sair" aria-label="Sair" class="botao-icone" data-ico="sair"></button>
       </div>
@@ -312,6 +317,77 @@
     </div>
   </div>
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+  <!-- ===== Tutorial do primeiro acesso (os passos de cada perfil ficam em PASSOS_TUTORIAL, no app.js) ===== -->
+  <div id="tutorial" class="tutorial oculto" role="dialog" aria-modal="true" aria-labelledby="tutorial-titulo" aria-describedby="tutorial-texto">
+    <div id="tutorial-foco" class="tutorial-foco"></div>
+    <div id="tutorial-caixa" class="tutorial-caixa">
+      <div aria-live="polite">
+        <small id="tutorial-passo"></small>
+        <h2 id="tutorial-titulo"></h2>
+        <p id="tutorial-texto"></p>
+      </div>
+      <div class="tutorial-progresso"><span id="tutorial-barra"></span></div>
+      <div class="tutorial-acoes">
+        <button type="button" class="link-texto" id="tutorial-pular">Pular tutorial</button>
+        <button type="button" class="btn outline pequeno" id="tutorial-voltar">Voltar</button>
+        <button type="button" class="btn pequeno" id="tutorial-proximo">Próximo</button>
+      </div>
+    </div>
+  </div>
+  <!-- ===== Ficha "Quero o S.I.V.E. na minha escola" (página inicial, sem login). Os pedidos ficam em escolas_interessadas: npm run escolas ===== -->
+  <div id="cadastro-escola" class="modal oculto" role="dialog" aria-modal="true" aria-labelledby="ce-titulo">
+    <div class="modal-caixa ce-caixa">
+      <button type="button" class="ce-fechar" id="ce-fechar" aria-label="Fechar">&times;</button>
+      <div id="ce-ficha">
+        <div class="ce-cabeca"><span class="logo-icon" data-ico="escola"></span><div><h2 id="ce-titulo">Quero o S.I.V.E. na minha escola</h2>
+          <small>Preencha a ficha e a nossa equipe entra em contato para apresentar o sistema. Leva cerca de 3 minutos.</small></div></div>
+        <form id="form-escola" novalidate>
+          <fieldset><legend>1. Dados da escola</legend>
+            <div class="ce-grade">
+              <label class="ce-largo">Nome da escola *<input id="ce-nome" name="nome" maxlength="150" autocomplete="organization" required></label>
+              <label>CNPJ *<input id="ce-cnpj" name="cnpj" inputmode="numeric" maxlength="18" placeholder="00.000.000/0000-00" required></label>
+              <label>Rede *<select id="ce-rede" name="rede" required><option value="">Escolha...</option><option value="municipal">Pública municipal</option><option value="estadual">Pública estadual</option><option value="federal">Pública federal</option><option value="privada">Privada</option></select></label>
+              <label>Número de alunos (aproximado) *<input id="ce-alunos" name="alunos" type="number" min="1" max="100000" inputmode="numeric" required></label>
+            </div>
+            <div class="ce-etapas" id="ce-etapas" role="group" aria-label="Etapas de ensino"><small>Etapas que a escola atende *</small><label><input type="checkbox" name="etapas" value="Educação Infantil"> Educação Infantil</label><label><input type="checkbox" name="etapas" value="Fundamental I (1º ao 5º ano)"> Fundamental I (1º ao 5º ano)</label><label><input type="checkbox" name="etapas" value="Fundamental II (6º ao 9º ano)"> Fundamental II (6º ao 9º ano)</label><label><input type="checkbox" name="etapas" value="Ensino Médio"> Ensino Médio</label></div>
+          </fieldset>
+          <fieldset><legend>2. Endereço</legend>
+            <div class="ce-grade">
+              <label>CEP *<input id="ce-cep" name="cep" inputmode="numeric" maxlength="9" placeholder="00000-000" autocomplete="postal-code" required><small id="ce-cep-aviso" class="ce-dica" aria-live="polite">Preenchemos o endereço pelo CEP.</small></label>
+              <label class="ce-largo">Rua / avenida *<input id="ce-logradouro" name="logradouro" maxlength="150" autocomplete="address-line1" required></label>
+              <label>Número *<input id="ce-numero" name="numero" maxlength="10" required></label>
+              <label>Complemento<input id="ce-complemento" name="complemento" maxlength="60" autocomplete="address-line2"></label>
+              <label>Bairro *<input id="ce-bairro" name="bairro" maxlength="80" required></label>
+              <label>Cidade *<input id="ce-cidade" name="cidade" maxlength="80" autocomplete="address-level2" required></label>
+              <label>Estado (UF) *<select id="ce-uf" name="uf" autocomplete="address-level1" required><option value="">UF</option><option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option><option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option><option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option><option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option><option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option><option>SE</option><option>TO</option></select></label>
+            </div>
+          </fieldset>
+          <fieldset><legend>3. Com quem falamos</legend>
+            <div class="ce-grade">
+              <label class="ce-largo">Nome completo *<input id="ce-contato_nome" name="contato_nome" maxlength="100" autocomplete="name" required></label>
+              <label>Cargo *<input id="ce-contato_cargo" name="contato_cargo" maxlength="60" placeholder="Ex.: diretora, coordenador" autocomplete="organization-title" required></label>
+              <label>E-mail *<input id="ce-email" name="email" type="email" maxlength="120" autocomplete="email" required></label>
+              <label>Telefone / WhatsApp *<input id="ce-telefone" name="telefone" type="tel" inputmode="numeric" maxlength="15" placeholder="(11) 98765-4321" autocomplete="tel" required></label>
+              <label>Melhor horário para contato<select id="ce-horario" name="horario"><option value="qualquer">Qualquer horário</option><option value="manha">Manhã</option><option value="tarde">Tarde</option></select></label>
+              <label class="ce-largo">Quer contar algo? (opcional)<textarea id="ce-mensagem" name="mensagem" rows="3" maxlength="600" placeholder="Ex.: queremos começar no próximo semestre; temos duas unidades."></textarea></label>
+            </div>
+            <label class="ce-site" aria-hidden="true">Site<input name="site" tabindex="-1" autocomplete="off"></label>
+          </fieldset>
+          <label class="termo-aceite ce-aceite"><input type="checkbox" id="ce-aceite" name="aceite"> <span>Concordo que a equipe S.I.V.E. use estes dados <b>só para entrar em contato</b> sobre a contratação do sistema. Posso pedir a exclusão a qualquer momento (LGPD).</span></label>
+          <p id="ce-erro" class="pill danger oculto" role="alert"></p>
+          <div class="ce-acoes"><button type="button" class="btn outline" id="ce-cancelar">Cancelar</button><button type="submit" class="btn" id="ce-enviar">Enviar cadastro</button></div>
+        </form>
+      </div>
+      <div id="ce-pronto" class="ce-pronto oculto" aria-live="polite">
+        <span class="ce-pronto-ico" data-ico="confere"></span>
+        <h2 id="ce-pronto-titulo">Cadastro recebido!</h2>
+        <p id="ce-pronto-texto"></p>
+        <div class="ce-protocolo"><small>Seu protocolo</small><b id="ce-protocolo"></b></div>
+        <small>Guarde este número. Se precisar falar com a gente, é só informá-lo.</small>
+        <button type="button" class="btn" id="ce-ok">Voltar para o site</button>
+      </div>
+    </div>
+  </div>
   <div id="dialogo" class="modal oculto" role="alertdialog" aria-modal="true" aria-labelledby="dialogo-titulo" aria-describedby="dialogo-texto">
     <div class="modal-caixa dialogo-caixa">
       <h2 id="dialogo-titulo"></h2>

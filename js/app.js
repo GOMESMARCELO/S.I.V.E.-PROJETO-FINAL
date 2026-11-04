@@ -192,6 +192,7 @@ const ICONES = {
   setaEsq: { anim: "anda", svg: '<path d="m15 18-6-6 6-6"/>' },
   setaDir: { anim: "anda", svg: '<path d="m9 18 6-6-6-6"/>' },
   sair: { anim: "anda", svg: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>' },
+  ajuda: { anim: "balanca", svg: '<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>' },
   sino: { anim: "balanca", svg: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>' },
   mais: { anim: "pulsa", svg: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>' },
   mensagem: { anim: "pula", svg: '<path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.6A8.4 8.4 0 1 1 21 11.5z"/>' },
@@ -268,6 +269,7 @@ function mostrarPaginaInicial() {
     return;
   }
   if (login) { window.scrollTo(0, 0); document.getElementById("login-usuario").focus(); return; }
+  if (location.hash === "#contratar") { cadastroEscola.abrir(); return; }
   const secao = location.hash.length > 1 && document.querySelector(location.hash);
   if (secao) secao.scrollIntoView(); else window.scrollTo(0, 0);
 }
@@ -297,6 +299,108 @@ async function conferirAssinatura() {
       ${linha("Impressão digital do conteúdo (SHA-256)", `<small style="word-break:break-all;font-family:monospace">${esc(r.hash)}</small>`)}</table></div>` : ""}</div>`;
 }
 document.getElementById("form-verificar").onsubmit = (e) => { e.preventDefault(); conferirAssinatura(); };
+
+// ---------- Ficha "Quero o S.I.V.E. na minha escola" (página inicial, sem login) ----------
+// Abre por qualquer botão com data-cadastro-escola ou pelo endereço /#contratar (link que dá para mandar para outra escola).
+const cadastroEscola = (() => {
+  const $ = (id) => document.getElementById(id);
+  const modal = $("cadastro-escola"), form = $("form-escola"), erro = $("ce-erro");
+  let voltarFoco = null;
+  const numeros = (v) => v.replace(/\D/g, "");
+  // Máscaras: a pessoa digita só os números e os pontos e traços aparecem sozinhos
+  const mascaras = {
+    "ce-cnpj": (v) => numeros(v).slice(0, 14).replace(/^(\d{2})(\d)/, "$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2").replace(/(\d{4})(\d)/, "$1-$2"),
+    "ce-cep": (v) => numeros(v).slice(0, 8).replace(/^(\d{5})(\d)/, "$1-$2"),
+    "ce-telefone": (v) => { const n = numeros(v).slice(0, 11); return n.length > 10 ? n.replace(/^(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3") : n.replace(/^(\d{2})(\d{0,4})(\d{0,4})/, (m, a, b, c) => `(${a}) ${b}${c ? "-" + c : ""}`).replace(/^\((\d{0,2})\) $/, "$1"); },
+  };
+  for (const [id, f] of Object.entries(mascaras)) $(id).addEventListener("input", (e) => { e.target.value = f(e.target.value); });
+  // Mesma conta do servidor (dígitos verificadores): avisa do CNPJ errado antes de enviar
+  const cnpjValido = (c) => {
+    if (!/^\d{14}$/.test(c) || /^(\d)\1{13}$/.test(c)) return false;
+    const dig = (b) => { let soma = 0, peso = b.length - 7; for (const n of b) { soma += +n * peso--; if (peso < 2) peso = 9; } const r = soma % 11; return r < 2 ? 0 : 11 - r; };
+    const d1 = dig(c.slice(0, 12)), d2 = dig(c.slice(0, 12) + d1);
+    return c.endsWith(`${d1}${d2}`);
+  };
+  const limparErro = () => { erro.classList.add("oculto"); form.querySelectorAll("[aria-invalid]").forEach((c) => c.removeAttribute("aria-invalid")); $("ce-etapas").classList.remove("invalido"); };
+  const mostrarErro = (msg, campo) => {
+    erro.textContent = msg; erro.classList.remove("oculto");
+    const el = campo === "etapas" ? $("ce-etapas").querySelector("input") : $(`ce-${campo}`);
+    if (campo === "etapas") $("ce-etapas").classList.add("invalido");
+    if (el) { el.setAttribute("aria-invalid", "true"); el.focus(); el.scrollIntoView({ block: "center", behavior: "smooth" }); }
+  };
+  form.addEventListener("input", (e) => { if (e.target.hasAttribute("aria-invalid") || e.target.closest("#ce-etapas")) limparErro(); });
+
+  // Endereço pelo CEP: quando os 8 números estão digitados, preenche rua, bairro, cidade e UF (o número a pessoa completa)
+  let ultimoCep = "";
+  $("ce-cep").addEventListener("input", async (e) => {
+    const cep = numeros(e.target.value), aviso = $("ce-cep-aviso");
+    if (cep.length !== 8 || cep === ultimoCep) return;
+    ultimoCep = cep; aviso.textContent = "Buscando o endereço..."; aviso.className = "ce-dica";
+    try {
+      const r = await fetch(`/api/cep/${cep}`), d = await r.json();
+      if (!r.ok) throw new Error(d.erro);
+      for (const k of ["logradouro", "bairro", "cidade", "uf"]) if (d[k]) $(`ce-${k}`).value = d[k];
+      aviso.textContent = "Endereço encontrado. Confira e complete o número.";
+      $(d.logradouro ? "ce-numero" : "ce-logradouro").focus();
+    } catch (err) { aviso.textContent = err.message || "Não foi possível buscar o CEP. Preencha o endereço."; aviso.className = "ce-dica ce-dica-aviso"; }
+  });
+
+  function abrir() {
+    voltarFoco = document.activeElement;
+    $("ce-ficha").classList.remove("oculto"); $("ce-pronto").classList.add("oculto"); limparErro();
+    modal.classList.remove("oculto"); document.body.classList.add("sem-rolagem");
+    modal.scrollTop = 0; setTimeout(() => $("ce-nome").focus(), 50);
+  }
+  function fechar() {
+    modal.classList.add("oculto"); document.body.classList.remove("sem-rolagem");
+    if (location.hash === "#contratar") history.replaceState(null, "", location.pathname + location.search);
+    if (voltarFoco && voltarFoco.focus) voltarFoco.focus();
+  }
+  document.addEventListener("click", (e) => { const b = e.target.closest("[data-cadastro-escola]"); if (b) { e.preventDefault(); abrir(); } });
+  $("ce-fechar").onclick = $("ce-cancelar").onclick = $("ce-ok").onclick = fechar;
+  modal.addEventListener("mousedown", (e) => { if (e.target === modal) fechar(); });
+  modal.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") return fechar();
+    if (e.key !== "Tab") return; // o Tab fica dentro da janela
+    const focaveis = [...modal.querySelectorAll("button, input:not([tabindex='-1']), select, textarea")].filter((el) => el.offsetParent !== null);
+    const [primeiro, ultimo] = [focaveis[0], focaveis[focaveis.length - 1]];
+    if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+    else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault(); limparErro();
+    const f = new FormData(form), dados = Object.fromEntries(f);
+    dados.etapas = f.getAll("etapas"); dados.aceite = $("ce-aceite").checked;
+    // Conferências rápidas aqui; o servidor confere tudo de novo
+    const obrigatorios = [["nome", "Informe o nome da escola."], ["cnpj", "Informe o CNPJ."], ["rede", "Escolha a rede da escola."], ["alunos", "Informe quantos alunos a escola tem (aproximadamente)."],
+      ["cep", "Informe o CEP."], ["logradouro", "Informe a rua ou avenida."], ["numero", "Informe o número (ou S/N)."], ["bairro", "Informe o bairro."], ["cidade", "Informe a cidade."],
+      ["uf", "Escolha o estado (UF)."], ["contato_nome", "Informe o nome de quem vamos procurar."], ["contato_cargo", "Informe o cargo."], ["email", "Informe o e-mail."], ["telefone", "Informe o telefone."]];
+    for (const [campo, msg] of obrigatorios) {
+      if (!String(dados[campo] || "").trim()) return mostrarErro(msg, campo);
+      if (campo === "cnpj" && !cnpjValido(numeros(dados.cnpj))) return mostrarErro("CNPJ inválido. Confira os 14 números.", "cnpj");
+      if (campo === "alunos" && !dados.etapas.length) return mostrarErro("Marque pelo menos uma etapa de ensino.", "etapas");
+    }
+    if (!$("ce-email").checkValidity()) return mostrarErro("E-mail inválido.", "email");
+    if (!dados.aceite) return mostrarErro("Para entrarmos em contato, marque que concorda com o uso dos dados.", "aceite");
+    const botao = $("ce-enviar"); botao.disabled = true; botao.textContent = "Enviando...";
+    try {
+      const r = await fetch("/api/escolas-interessadas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dados) });
+      const res = await r.json().catch(() => ({}));
+      if (!r.ok) return mostrarErro(res.erro || "Não foi possível enviar agora. Tente de novo.", res.campo);
+      $("ce-protocolo").textContent = res.protocolo;
+      $("ce-pronto-titulo").textContent = res.repetido ? "Já recebemos o pedido desta escola" : "Cadastro recebido!";
+      const nome = (dados.contato_nome || "").trim().split(/\s+/)[0];
+      $("ce-pronto-texto").textContent = res.repetido
+        ? `O pedido foi feito em ${res.em} e continua com a nossa equipe. Vamos falar com vocês em breve, ${nome}.`
+        : `Obrigado, ${nome}! A equipe S.I.V.E. vai entrar em contato em até 2 dias úteis pelo telefone ou e-mail informado.`;
+      $("ce-ficha").classList.add("oculto"); $("ce-pronto").classList.remove("oculto"); modal.scrollTop = 0; $("ce-ok").focus();
+      if (!res.repetido) { form.reset(); ultimoCep = ""; $("ce-cep-aviso").textContent = "Preenchemos o endereço pelo CEP."; }
+    } catch { mostrarErro("Sem conexão com o servidor. Confira a internet e tente de novo."); }
+    finally { botao.disabled = false; botao.textContent = "Enviar cadastro"; }
+  });
+  return { abrir };
+})();
 
 addEventListener("hashchange", mostrarPaginaInicial);
 mostrarPaginaInicial();
@@ -433,6 +537,7 @@ function telaCarregando() {
 }
 function sair() {
   usuarioLogado = null;
+  fecharTutorial();
   clearInterval(timerTela); clearInterval(timerBanner); clearInterval(timerAvisos);
   buscaAlunos = null; document.getElementById("avisos-area").classList.add("oculto"); document.getElementById("busca-rapida").classList.add("oculto");
   cacheBanner.forEach((url) => URL.revokeObjectURL(url)); cacheBanner.clear();
@@ -463,9 +568,11 @@ function entrarNoApp() {
   document.getElementById("user-nome").textContent = usuarioLogado.nome.trim().split(/\s+/)[0];
   document.getElementById("user-papel").textContent = papelLabel(usuarioLogado.papel);
   document.getElementById("user-iniciais").textContent = iniciais(usuarioLogado.nome);
-  const telaInicial = { admin: "secretaria", pai: "pais", professor: "turma" }[usuarioLogado.papel];
   iniciarAvisos(); iniciarBuscaRapida();
-  atualizarContexto().finally(() => mostrar(telaInicial));
+  atualizarContexto().finally(async () => {
+    await mostrar(TELA_INICIAL[usuarioLogado.papel]);
+    if (usuarioLogado && !usuarioLogado.tutorial_visto) iniciarTutorial();
+  });
 }
 
 // ---------- Sino de avisos (responsável): o que aconteceu com o filho e o que espera por você ----------
@@ -1576,11 +1683,17 @@ function desenharMonFacial() {
     await recarregarMonitoramento(true);
   });
 }
+// Vídeo SIMULADO de cada câmera (assets/cameras): desenhado, 10 s em loop, pessoas de longe e sem rosto. Câmera nova usa a cena do seu tipo.
+function videoDaCamera(c) {
+  const cena = /refeit/i.test(c.nome) ? "refeitorio" : c.tipo === "Entrada" ? "portao-entrada" : c.tipo === "Saída" ? "portao-saida" : "patio";
+  const parado = matchMedia("(prefers-reduced-motion: reduce)").matches; // quem pediu menos movimento vê só a imagem parada
+  return `<video src="assets/cameras/${cena}.mp4" poster="assets/cameras/${cena}.jpg" muted loop playsinline ${parado ? "" : "autoplay"} preload="auto" aria-hidden="true" tabindex="-1"></video>`;
+}
 function desenharMonCameras() {
   const alunos = dados.mon.alunos.map((a) => `<option value="${a.id}">${esc(a.nome)} — ${esc(a.sala)}</option>`).join("");
   document.getElementById("mon-cams").innerHTML = dados.mon.cameras.map((c) => `<article class="cam ${c.ativa ? "" : "desligada"}" data-cam="${c.id}">
     <div class="cam-video" role="img" aria-label="Imagem simulada da câmera ${esc(c.nome)}">
-      ${c.ativa ? `<span class="cam-rec">● REC</span>` : `<span class="cam-sem-sinal">${ico("semSinal")} Sem sinal</span>`}
+      ${c.ativa ? `${videoDaCamera(c)}<span class="cam-rec">● REC</span>` : `<span class="cam-sem-sinal">${ico("semSinal")} Sem sinal</span>`}
       <span class="cam-nome">${esc(c.nome)}</span><span class="cam-hora"></span>
       <div class="cam-alerta oculto" data-cam-alerta="${c.id}"></div></div>
     <div class="cam-info"><div class="linha" style="gap:6px;flex-wrap:wrap"><small>${ico("local")} ${esc(c.local)}</small><span>${pill(c.tipo, "neutral")} ${c.reconhecimento ? pill("Facial", "info") : ""}</span></div>
@@ -2836,6 +2949,136 @@ function desenharMenu() {
 function fecharMenu() { menu.classList.remove("aberto"); overlay.classList.remove("aberto"); }
 document.getElementById("btn-menu").onclick = () => { menu.classList.add("aberto"); overlay.classList.add("aberto"); };
 document.getElementById("overlay").onclick = fecharMenu;
+
+// ---------- Tutorial do primeiro acesso: um tour pelas telas do perfil, com a opção de pular ----------
+// Aparece uma vez por pessoa (usu_tutorial_visto_em). Quem fecha o navegador no meio vê de novo; quem pula ou conclui, não.
+// Cada passo destaca um elemento real da tela (alvo). Passo "opcional" sai do tour se o elemento não existir para aquela pessoa.
+const TELA_INICIAL = { admin: "secretaria", pai: "pais", professor: "turma" };
+const TUTORIAL_INICIO = {
+  admin: "Em menos de 1 minuto, você conhece as principais telas da gestão.",
+  professor: "Em menos de 1 minuto, você aprende a fazer a chamada e conhece as telas da sua turma.",
+  pai: "Em menos de 1 minuto, você aprende a acompanhar o seu filho pelo sistema.",
+};
+const PASSOS_TUTORIAL = {
+  admin: [
+    { alvo: '#nav [data-id="secretaria"]', titulo: "Central do Dia", texto: "Comece o dia por aqui. Esta tela resume a escola e mostra os alertas que precisam de atenção." },
+    { alvo: '#nav [data-id="seguranca"]', titulo: "Monitoramento", texto: "Acompanhe os portões e as câmeras, veja quem está na escola e libere as saídas." },
+    { alvo: '#nav [data-id="busca"]', titulo: "Busca Ativa", texto: "Os alunos com muitas faltas aparecem aqui, com o contato da família para ligar, chamar no WhatsApp ou mandar e-mail." },
+    { alvo: '#nav [data-id="comunicados"]', titulo: "Comunicados", texto: "Publique avisos para as famílias e veja quem já leu." },
+    { alvo: '#nav [data-id="autorizacoes"]', titulo: "Autorizações", texto: "Peça a assinatura digital dos responsáveis, defina o último dia para assinar e acompanhe quem já assinou." },
+    { alvo: '#nav [data-id="cadastro"]', titulo: "Alunos e turmas", texto: "Cadastre os alunos um a um ou importe uma turma inteira por planilha." },
+    { alvo: '#nav [data-id="usuarios"]', titulo: "Usuários", texto: "Crie os acessos de professores e responsáveis. O sistema gera uma senha provisória, que você repassa à pessoa." },
+    { alvo: "#busca-rapida", opcional: true, titulo: "Busca rápida", texto: "Digite o nome de um aluno para abrir a ficha dele. O atalho é a tecla /." },
+  ],
+  professor: [
+    { alvo: ".card.chamada > .linha", opcional: true, titulo: "Chamada de hoje", texto: "Esta é a sua principal tarefa do dia. Quem passou pelo portão já vem como Presente. Marque Presente ou Ausente para os outros alunos." },
+    { alvo: "#chamada-salvar", opcional: true, titulo: "Salvar a chamada", texto: "Quando todos estiverem marcados, clique aqui. O sistema só salva quando não falta nenhum aluno." },
+    { alvo: "#seletor-contexto", opcional: true, titulo: "Trocar de turma", texto: "Você tem mais de uma turma. Escolha aqui qual quer ver." },
+    { alvo: '#nav [data-id="ocorrencias"]', titulo: "Ocorrências", texto: "Registre o que aconteceu com um aluno. O responsável lê o registro e assina que tomou ciência." },
+    { alvo: '#nav [data-id="comunicados"]', titulo: "Comunicados", texto: "Publique avisos para as famílias da sua turma." },
+    { alvo: '#nav [data-id="calendario"]', titulo: "Calendário", texto: "Veja os eventos da escola e crie eventos para a sua turma." },
+    { alvo: '#nav [data-id="protecao"]', titulo: "Proteção", texto: "Registre aqui uma suspeita de maus-tratos. O registro é sigiloso: a família nunca vê." },
+    { alvo: "#busca-rapida", opcional: true, titulo: "Busca rápida", texto: "Digite o nome de um aluno da turma para abrir a ficha dele. O atalho é a tecla /." },
+  ],
+  pai: [
+    { alvo: "#status-agora", opcional: true, titulo: "Status agora", texto: "Mostra se o seu filho está na escola, desde que horas e por qual portão entrou. Atualiza sozinho." },
+    { alvo: ".card.atencao", opcional: true, titulo: "Precisa da sua atenção", texto: "Tudo o que espera uma resposta sua fica aqui: autorizações, ocorrências, documentos e comunicados. Cada item tem um botão que leva direto ao lugar certo." },
+    { alvo: "#btn-avisos", opcional: true, titulo: "Sino de avisos", texto: "Mostra as entradas e saídas do seu filho e as novidades da escola. O número indica quantos avisos são novos." },
+    { alvo: "#seletor-contexto", opcional: true, titulo: "Trocar de filho", texto: "Você tem mais de um filho na escola. Escolha aqui quem quer acompanhar." },
+    { alvo: '#nav [data-id="ocorrencias"]', titulo: "Ocorrências", texto: "Leia os registros feitos pelo professor e assine que tomou ciência." },
+    { alvo: '#nav [data-id="calendario"]', titulo: "Calendário", texto: "Veja os eventos da escola e da turma do seu filho." },
+    { alvo: '#nav [data-id="perfil"]', titulo: "Meu perfil", texto: "Atualize o telefone e o e-mail para a escola conseguir falar com você. Também é aqui que você baixa os dados do seu filho." },
+  ],
+};
+let tutorial = null; // enquanto o tour está aberto: { passos, atual, voltarFoco }
+const alvoDoPasso = (p) => { const el = p.alvo && document.querySelector(p.alvo); return el && el.getClientRects().length ? el : null; };
+async function iniciarTutorial() {
+  if (tutorial) return;
+  fecharMenu();
+  const inicial = TELA_INICIAL[usuarioLogado.papel];
+  if (tela !== inicial) await mostrar(inicial); // os passos apontam para a tela inicial do perfil
+  if (!usuarioLogado || tutorial) return;
+  tutorial = { atual: 0, voltarFoco: document.activeElement, passos: [
+    { titulo: `Boas-vindas ao S.I.V.E., ${usuarioLogado.nome.trim().split(/\s+/)[0]}!`, texto: TUTORIAL_INICIO[usuarioLogado.papel] },
+    ...PASSOS_TUTORIAL[usuarioLogado.papel].filter((p) => !p.opcional || alvoDoPasso(p)),
+    { alvo: "#btn-tutorial", titulo: "Tudo pronto!", texto: "Para rever este tutorial quando quiser, clique neste botão de ajuda, no fim do menu." },
+  ] };
+  document.getElementById("tutorial").classList.remove("oculto");
+  await irParaPasso(0);
+}
+async function irParaPasso(i) {
+  const t = tutorial, p = t.passos[i], $ = (id) => document.getElementById(id), ultimo = i === t.passos.length - 1;
+  t.atual = i;
+  $("tutorial-passo").textContent = `Passo ${i + 1} de ${t.passos.length}`;
+  $("tutorial-titulo").textContent = p.titulo; $("tutorial-texto").textContent = p.texto;
+  $("tutorial-barra").style.width = `${((i + 1) / t.passos.length) * 100}%`;
+  $("tutorial-voltar").classList.toggle("oculto", i === 0);
+  $("tutorial-pular").classList.toggle("oculto", ultimo);
+  $("tutorial-proximo").textContent = i === 0 ? "Começar" : ultimo ? "Concluir" : "Próximo";
+  // No celular o menu fica escondido: abre só nos passos que apontam para ele e espera a animação terminar
+  const el = p.alvo && document.querySelector(p.alvo), noMenu = el && el.closest("#menu") && !matchMedia("(min-width:1024px)").matches;
+  if (noMenu && !menu.classList.contains("aberto")) {
+    menu.classList.add("aberto"); overlay.classList.add("aberto");
+    await new Promise((ok) => setTimeout(ok, 320));
+    if (tutorial !== t || t.atual !== i) return;
+  } else if (!noMenu) fecharMenu();
+  const alvo = alvoDoPasso(p);
+  if (alvo && !alvo.closest("header")) alvo.scrollIntoView({ block: "center" }); // o topo é fixo: já está à vista
+  desenharTutorial();
+  $("tutorial-proximo").focus({ preventScroll: true });
+}
+// Recorta o destaque em volta do alvo e põe a caixa de texto no primeiro lado onde ela cabe
+function desenharTutorial() {
+  if (!tutorial) return;
+  const foco = document.getElementById("tutorial-foco"), caixa = document.getElementById("tutorial-caixa");
+  const alvo = alvoDoPasso(tutorial.passos[tutorial.atual]), w = caixa.offsetWidth, h = caixa.offsetHeight, m = 12, d = 16;
+  const limita = (v, max) => Math.max(m, Math.min(v, max));
+  const lugar = (el, x, y) => Object.assign(el.style, { left: `${x}px`, top: `${y}px` });
+  const tamanho = (el, largura, altura) => Object.assign(el.style, { width: `${largura}px`, height: `${altura}px` });
+  if (!alvo) { lugar(foco, innerWidth / 2, innerHeight / 2); tamanho(foco, 0, 0); return lugar(caixa, (innerWidth - w) / 2, (innerHeight - h) / 2); }
+  const r = alvo.getBoundingClientRect(), maxX = innerWidth - w - m, maxY = innerHeight - h - m;
+  lugar(foco, r.left - 6, r.top - 6); tamanho(foco, r.width + 12, r.height + 12);
+  if (r.right + d + w <= innerWidth - m) lugar(caixa, r.right + d, limita(r.top, maxY));
+  else if (r.bottom + d + h <= innerHeight - m) lugar(caixa, limita(r.left, maxX), r.bottom + d);
+  else if (r.top - d - h >= m) lugar(caixa, limita(r.left, maxX), r.top - d - h);
+  else if (r.left - d - w >= m) lugar(caixa, r.left - d - w, limita(r.top, maxY));
+  else lugar(caixa, (innerWidth - w) / 2, maxY);
+}
+function fecharTutorial() {
+  if (!tutorial) return;
+  const { voltarFoco } = tutorial;
+  tutorial = null;
+  document.getElementById("tutorial").classList.add("oculto");
+  fecharMenu(); menu.scrollTop = 0; // os passos rolam o menu até o item destacado
+  if (voltarFoco && voltarFoco.focus) voltarFoco.focus({ preventScroll: true });
+}
+function encerrarTutorial(pulou) {
+  fecharTutorial();
+  window.scrollTo(0, 0);
+  if (!usuarioLogado.tutorial_visto) {
+    usuarioLogado.tutorial_visto = true;
+    localStorage.setItem("sive-usuario", JSON.stringify(usuarioLogado));
+    api("/api/tutorial/visto", { method: "POST", body: "{}" }).catch(() => { /* neste aparelho já não aparece de novo */ });
+  }
+  avisar(pulou ? "Tutorial pulado. Para ver depois, use o botão de ajuda no fim do menu." : "Tutorial concluído. Bom uso do S.I.V.E.!");
+}
+document.getElementById("tutorial-pular").onclick = () => encerrarTutorial(true);
+document.getElementById("tutorial-voltar").onclick = () => irParaPasso(tutorial.atual - 1);
+document.getElementById("tutorial-proximo").onclick = () => (tutorial.atual === tutorial.passos.length - 1 ? encerrarTutorial(false) : irParaPasso(tutorial.atual + 1));
+document.getElementById("btn-tutorial").onclick = seguro(iniciarTutorial);
+document.getElementById("tutorial").onkeydown = (e) => {
+  e.stopPropagation(); // os atalhos do sistema (como a tecla /) não valem durante o tour
+  if (e.key === "Escape") encerrarTutorial(true);
+  if (e.key === "ArrowRight") document.getElementById("tutorial-proximo").click();
+  if (e.key === "ArrowLeft" && tutorial.atual > 0) irParaPasso(tutorial.atual - 1);
+  if (e.key === "Tab") { // o foco fica dentro da caixa
+    const botoes = [...document.querySelectorAll("#tutorial-caixa button")].filter((b) => !b.classList.contains("oculto"));
+    const i = botoes.indexOf(document.activeElement), n = botoes.length;
+    e.preventDefault(); botoes[(i + (e.shiftKey ? n - 1 : 1)) % n].focus();
+  }
+};
+addEventListener("resize", desenharTutorial);
+addEventListener("scroll", desenharTutorial, { capture: true, passive: true });
 
 // ---------- Data e hora no cabeçalho (atualiza sozinha a cada segundo) ----------
 function atualizarRelogio() {

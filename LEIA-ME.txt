@@ -44,6 +44,10 @@ Se o seu banco foi criado com uma versão anterior, rode database/migracao-atual
 Se o seu banco JÁ ESTAVA atualizado até 31/10/2026, rode só database/migracao-2026-11-02.sql
 (duas colunas novas: prazo das autorizações e avisos vistos). Também não apaga dados.
 XAMPP (MariaDB): o sive.sql agora roda nele também.
+Se o seu banco JÁ ESTAVA atualizado até 02/11/2026, rode só database/migracao-2026-11-03.sql
+(tabela nova das escolas interessadas). Também não apaga dados.
+Se o seu banco JÁ ESTAVA atualizado até 03/11/2026, rode só database/migracao-2026-11-04.sql
+(uma coluna nova: quem já viu o tutorial do primeiro acesso). Também não apaga dados. Sem ela, o login não funciona.
 
 LOGIN
 O sistema pede login. Três tipos de usuário, já cadastrados no banco (senhas de DEMONSTRAÇÃO: no primeiro login
@@ -172,6 +176,8 @@ FASE 5 — CÂMERAS E RECONHECIMENTO FACIAL (SIMULADOS) E STATUS AO VIVO
   Sem isso, a imagem é descartada e ninguém é identificado. O sistema não guarda fotos nem biometria.
 - Portal dos Pais: "Status agora" mostra se o filho entrou ou saiu, a que horas e por qual portão.
 - Roteiro de apresentação: veja o README.md, seção "Fase 5".
+- Vídeos das câmeras (04/11/2026): cada câmera ligada mostra uma cena da escola em loop (assets/cameras/).
+  São desenhos animados por script (ferramentas/gerar-videos-cameras.py), sem rostos e sem filmagem real.
 
 MELHORIAS DE EXPERIÊNCIA DO USUÁRIO (02/11/2026)
 - Banco: rode database/migracao-2026-11-02.sql (ou o sive.sql de novo, que apaga e recria tudo). Não precisa de npm install.
@@ -181,4 +187,13 @@ MELHORIAS DE EXPERIÊNCIA DO USUÁRIO (02/11/2026)
 - Gestão: menu em grupos, busca de aluno no topo (tecla /), "Alunos e turmas" em uma lista só com filtro,
   ações sensíveis no menu "⋯" com confirmação, contato da família na Busca Ativa e autorização com prazo para assinar.
 - Detalhes de cada mudança: README.md, seção "Melhorias de experiência do usuário".
+
+FICHA DE CADASTRO PARA ESCOLAS (03/11/2026)
+- Banco: rode database/migracao-2026-11-03.sql (cria a tabela escolas_interessadas). Não precisa de npm install.
+- Na página inicial: botão "Quero o S.I.V.E. na minha escola" (também "Para escolas" no topo e no rodapé).
+  Abre uma janela com a ficha: escola, CNPJ, endereço (preenchido pelo CEP) e quem procurar. A escola recebe um protocolo.
+- Link direto para a ficha: http://localhost:3000/#contratar
+- Para ver os pedidos:  npm run escolas        (lista)
+                        npm run escolas -- --csv  (planilha escolas-interessadas.csv)
+                        npm run escolas -- --status SIVE-2026-00001 em_contato
 

@@ -32,6 +32,7 @@ Cada tabela tem uma sigla de 3 letras e **toda coluna começa com a sigla da sua
 | consentimentos | CON | comunicacoes_conselho | CCT |
 | eventos | EVE | cameras | CAM |
 | reconhecimentos | REC | configuracoes | CFG |
+| assinaturas | ASS | escolas_interessadas | ESI |
 
 Exemplo: `alunos` tem `alu_id`, `alu_nome`, `alu_sala`, `alu_matricula`. A API continua devolvendo os mesmos campos de antes (`id`, `nome`, `sala`...): o servidor traduz os nomes ao consultar o banco.
 
@@ -109,6 +110,8 @@ O que o sistema faz para apoiar a escola nos deveres do Estatuto da Criança e d
 ## Fase 5 — câmeras, reconhecimento facial (simulados) e status ao vivo
 
 > **Simulação:** nenhuma câmera de verdade está ligada ao sistema. A tela Monitoramento mostra "câmeras" animadas e botões que simulam a passagem de um aluno, para demonstrar as regras e os registros.
+>
+> **Vídeos das câmeras (04/11/2026):** cada câmera ligada mostra um vídeo de 10 s em loop (`assets/cameras/`): portão de entrada, portão de saída, pátio e refeitório. As cenas são **desenhadas por um script** (`ferramentas/gerar-videos-cameras.py`), não são filmagens: as pessoas aparecem de longe e sem rosto, com aparência de câmera de segurança. Uma câmera nova usa a cena do seu tipo (Entrada, Saída ou Área comum). Quem configurou o computador para "reduzir movimento" vê só a imagem parada.
 
 **Monitoramento** (gestão)
 - Painel com: alunos na escola agora, câmeras online, reconhecidos hoje e imagens descartadas.
@@ -168,6 +171,50 @@ Avaliação de UX feita tela por tela, nos três perfis, e aplicada no sistema. 
 - **Letras maiores**: os textos de apoio passaram de 12 px para 13 px. Também há foco visível para quem usa o teclado.
 
 **Banco de dados:** duas colunas novas, sem apagar nada. `autorizacoes.aut_valida_ate` guarda o último dia para assinar, e `usuarios.usu_avisos_vistos_em` guarda quando a pessoa abriu o sino pela última vez. Quem já tem o banco atualizado até 31/10/2026 roda só `database/migracao-2026-11-02.sql`. A coluna calculada `aut_assinada` deixou de usar `STORED NOT NULL` (ficou só `STORED`), e com isso o `sive.sql` passou a rodar também no MariaDB do XAMPP.
+
+## Ficha de cadastro para escolas interessadas (03/11/2026)
+
+A página inicial ganhou o botão **"Quero o S.I.V.E. na minha escola"** (no destaque, no topo como "Para escolas", na chamada final e no rodapé). Ele abre uma janela com a ficha de cadastro, sem login. O endereço `/#contratar` abre a ficha direto, então dá para mandar esse link para outra escola.
+
+**O que a ficha pede**
+- **Escola:** nome, CNPJ, rede (municipal, estadual, federal ou privada), número aproximado de alunos e etapas atendidas.
+- **Endereço:** CEP, rua, número, complemento, bairro, cidade e UF. Ao digitar o CEP, o endereço é preenchido pelo ViaCEP. Se não houver internet, a pessoa preenche à mão.
+- **Contato:** nome, cargo, e-mail, telefone/WhatsApp e melhor horário, além de uma mensagem opcional.
+- **Concordância:** a caixa de concordância com o uso dos dados só para contato (LGPD).
+
+**Como a ficha confere os dados**
+- O CNPJ é conferido pelos dígitos verificadores, na tela e de novo no servidor.
+- CNPJ, CEP e telefone ganham pontos e traços sozinhos.
+- Quando um campo está errado, a mensagem diz qual é e o cursor vai até ele.
+
+**O que acontece ao enviar**
+- A escola recebe um protocolo na hora (ex.: `SIVE-2026-00001`).
+- Se a mesma escola (mesmo CNPJ) mandar de novo em até 30 dias, recebe o mesmo protocolo e não cria um pedido repetido.
+
+**Proteções contra abuso:** limite de 5 envios por minuto por computador e um campo escondido que só robôs preenchem.
+
+**Onde ficam os pedidos:** na tabela nova `escolas_interessadas` (sigla ESI). Ela não aparece no painel da escola, porque é o cadastro comercial da empresa S.I.V.E. A equipe consulta pelo terminal:
+
+```
+npm run escolas                                   # pedidos em aberto
+npm run escolas -- --todos                        # todos
+npm run escolas -- --csv                          # gera escolas-interessadas.csv (abre no Excel)
+npm run escolas -- --status SIVE-2026-00001 em_contato   # novo, em_contato, contratou ou desistiu
+```
+
+Banco já existente: rode `database/migracao-2026-11-03.sql` (só cria a tabela nova, não mexe em nada).
+
+## Tutorial do primeiro acesso (04/11/2026)
+
+Na primeira vez que a pessoa entra, depois da troca de senha e dos termos, um tour guiado apresenta o sistema. Cada passo escurece a tela e destaca um elemento real, com um texto curto ao lado.
+
+- **Um tour para cada perfil:** a gestão conhece as telas principais, o professor aprende a fazer a chamada e o responsável vê o Status agora, o "Precisa da sua atenção" e o sino. Os passos ficam em `PASSOS_TUTORIAL`, no `js/app.js`.
+- **Pular:** o botão "Pular tutorial" aparece em todos os passos, menos no último. A tecla Esc faz o mesmo.
+- **Aparece uma vez por pessoa:** quem conclui ou pula não vê de novo, em nenhum aparelho (`usuarios.usu_tutorial_visto_em`). Quem fecha o navegador no meio vê de novo no próximo acesso.
+- **Rever:** o botão de ajuda (?), no fim do menu, abre o tour quando a pessoa quiser.
+- **Celular:** o menu abre sozinho nos passos que apontam para ele. Passos de algo que a pessoa não tem (por exemplo, trocar de filho com um filho só) saem do tour.
+
+**Banco de dados:** uma coluna nova, sem apagar nada. Quem já tem o banco atualizado até 03/11/2026 roda só `database/migracao-2026-11-04.sql`. Sem ela, o login não funciona. Quem já usa o sistema também vê o tutorial uma vez.
 
 ## Identidade visual
 
