@@ -26,5 +26,16 @@
   },
   "retencao": {
     "logs_anos": 2
+  },
+  "email": {
+    "modo": "simulado",
+    "url_base": "https://endereco-do-sistema.com.br",
+    "remetente": "S.I.V.E. <nao-responda@seudominio.com.br>",
+    "smtp": {
+      "host": "",
+      "porta": 587,
+      "usuario": "",
+      "senha": ""
+    }
   }
 }

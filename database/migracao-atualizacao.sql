@@ -263,3 +263,41 @@ CREATE TABLE IF NOT EXISTS escolas_interessadas (
 -- Tutorial do primeiro acesso (04/11/2026)
 -- usu_tutorial_visto_em: quando a pessoa concluiu ou pulou o tutorial. Vazio: ele aparece ao entrar.
 ALTER TABLE usuarios ADD COLUMN usu_tutorial_visto_em DATETIME NULL;
+
+-- Painel de Acessibilidade (04/11/2026)
+-- usu_acessibilidade: ajustes da própria pessoa, em JSON (texto, contraste, daltonismo...). Vazio: nada escolhido.
+ALTER TABLE usuarios ADD COLUMN usu_acessibilidade VARCHAR(200) NULL;
+
+-- Recuperação de senha e ficha de orçamento simplificada (05/11/2026)
+-- usu_senha_pedida_em: a pessoa usou "Esqueci minha senha" (vira um pedido para a gestão). Vazio: nenhum pedido em aberto.
+ALTER TABLE usuarios ADD COLUMN usu_senha_pedida_em DATETIME NULL;
+
+-- A ficha "Solicitar orçamento" pede só escola, cidade, UF, alunos e contato. Os pedidos antigos continuam com os dados que têm.
+ALTER TABLE escolas_interessadas
+  MODIFY esi_cnpj CHAR(14) NULL,
+  MODIFY esi_rede ENUM('municipal','estadual','federal','privada') NULL,
+  MODIFY esi_etapas VARCHAR(120) NULL,
+  MODIFY esi_cep CHAR(8) NULL,
+  MODIFY esi_logradouro VARCHAR(150) NULL,
+  MODIFY esi_numero VARCHAR(10) NULL,
+  MODIFY esi_bairro VARCHAR(80) NULL,
+  MODIFY esi_contato_cargo VARCHAR(60) NULL;
+
+-- Recuperação de senha por e-mail (05/11/2026)
+-- usu_email: e-mail da conta, para recuperar a senha. Em responsáveis sem este campo, vale o e-mail do cadastro (res_email).
+-- usu_recuperacao_hash: hash do código do link enviado por e-mail (o código em si não é guardado).
+-- usu_recuperacao_expira: até quando o link vale.
+ALTER TABLE usuarios
+  ADD COLUMN usu_email VARCHAR(120) NULL,
+  ADD COLUMN usu_recuperacao_hash CHAR(64) NULL,
+  ADD COLUMN usu_recuperacao_expira DATETIME NULL,
+  ADD INDEX idx_usu_recuperacao (usu_recuperacao_hash);
+
+-- Três opções na verificação em duas etapas (05/11/2026)
+-- usu_2fa_metodo: como a pessoa recebe o código. usu_2fa_destino: e-mail ou celular (vazio no aplicativo).
+-- usu_2fa_codigo_hash / usu_2fa_codigo_expira: código enviado por e-mail, SMS ou WhatsApp (o código em si não é guardado).
+ALTER TABLE usuarios
+  ADD COLUMN usu_2fa_metodo ENUM('app','email','sms','whatsapp') NOT NULL DEFAULT 'app',
+  ADD COLUMN usu_2fa_destino VARCHAR(120) NULL,
+  ADD COLUMN usu_2fa_codigo_hash CHAR(64) NULL,
+  ADD COLUMN usu_2fa_codigo_expira DATETIME NULL;

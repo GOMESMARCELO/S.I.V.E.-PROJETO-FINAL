@@ -176,20 +176,11 @@ Avaliação de UX feita tela por tela, nos três perfis, e aplicada no sistema. 
 
 A página inicial ganhou o botão **"Quero o S.I.V.E. na minha escola"** (no destaque, no topo como "Para escolas", na chamada final e no rodapé). Ele abre uma janela com a ficha de cadastro, sem login. O endereço `/#contratar` abre a ficha direto, então dá para mandar esse link para outra escola.
 
-**O que a ficha pede**
-- **Escola:** nome, CNPJ, rede (municipal, estadual, federal ou privada), número aproximado de alunos e etapas atendidas.
-- **Endereço:** CEP, rua, número, complemento, bairro, cidade e UF. Ao digitar o CEP, o endereço é preenchido pelo ViaCEP. Se não houver internet, a pessoa preenche à mão.
-- **Contato:** nome, cargo, e-mail, telefone/WhatsApp e melhor horário, além de uma mensagem opcional.
-- **Concordância:** a caixa de concordância com o uso dos dados só para contato (LGPD).
-
-**Como a ficha confere os dados**
-- O CNPJ é conferido pelos dígitos verificadores, na tela e de novo no servidor.
-- CNPJ, CEP e telefone ganham pontos e traços sozinhos.
-- Quando um campo está errado, a mensagem diz qual é e o cursor vai até ele.
+**O que a ficha pede (simplificada em 05/11/2026):** nome da escola, cidade, UF, número aproximado de alunos, nome de quem pede, e-mail, telefone/WhatsApp e a caixa de concordância com o uso dos dados só para contato (LGPD). O botão de envio é **"Solicitar orçamento"**. CNPJ, endereço, rede, etapas e cargo são combinados depois, na conversa com a equipe; os pedidos antigos continuam com esses dados.
 
 **O que acontece ao enviar**
 - A escola recebe um protocolo na hora (ex.: `SIVE-2026-00001`).
-- Se a mesma escola (mesmo CNPJ) mandar de novo em até 30 dias, recebe o mesmo protocolo e não cria um pedido repetido.
+- Se a mesma pessoa (mesmo e-mail) pedir de novo para a mesma escola em até 30 dias, recebe o mesmo protocolo e não cria um pedido repetido.
 
 **Proteções contra abuso:** limite de 5 envios por minuto por computador e um campo escondido que só robôs preenchem.
 
@@ -215,6 +206,55 @@ Na primeira vez que a pessoa entra, depois da troca de senha e dos termos, um to
 - **Celular:** o menu abre sozinho nos passos que apontam para ele. Passos de algo que a pessoa não tem (por exemplo, trocar de filho com um filho só) saem do tour.
 
 **Banco de dados:** uma coluna nova, sem apagar nada. Quem já tem o banco atualizado até 03/11/2026 roda só `database/migracao-2026-11-04.sql`. Sem ela, o login não funciona. Quem já usa o sistema também vê o tutorial uma vez.
+
+## Acessibilidade e Libras (04/11/2026)
+
+**VLibras** (tradutor de Libras do governo federal, [vlibras.gov.br](https://vlibras.gov.br))
+- O botão aparece em todas as páginas, menos na tela Proteção. O avatar traduz o texto em que a pessoa clica.
+- Basta o script `vlibras-plugin.js`, carregado no fim do `index.html`. Ele só desenha o botão: o avatar é baixado quando a pessoa clica. Se o serviço do governo cair, o sistema continua funcionando, só sem o botão.
+- A CSP do `server.js` libera apenas os endereços usados: `vlibras.gov.br`, a pasta oficial do projeto no jsDelivr e `traducao2.vlibras.gov.br`.
+- **Privacidade:** o texto clicado é enviado ao servidor de tradução do governo. Nada é enviado antes de a pessoa ativar o avatar e clicar. Na tela **Proteção**, que é sigilosa, o botão some, o avatar fecha e o pedido de tradução é barrado (`ajustarVLibras`, no `js/app.js`).
+
+**HTML5 semântico**
+- Marcos da página (`header`, `nav`, `main`, `footer`), um `main` por tela e hierarquia de títulos `h1` > `h2` > `h3`.
+- Link "Pular para o conteúdo" (primeira tecla Tab) e botão "Pausar animações" na página inicial.
+- Campos com rótulo de verdade (`label`), erros anunciados pelo leitor de tela (`role="alert"`), título da aba muda a cada tela e o foco vai para o conteúdo ao trocar de tela.
+- Conferido com axe-core (WCAG 2.2 A e AA) nas páginas públicas e nas telas internas dos três perfis, e com o validador do W3C. O único aviso restante do axe vem do botão do próprio VLibras.
+
+## Recuperação de senha e login (05/11/2026)
+
+**Banco de dados:** rode, nesta ordem, `database/migracao-2026-11-05.sql`, `database/migracao-2026-11-05-email.sql` e `database/migracao-2026-11-05-2fa.sql`, **antes** de reiniciar o servidor.
+
+- **Esqueci minha senha:** a pessoa informa o usuário e recebe no e-mail um link de uso único, válido por 30 minutos, para criar a senha nova. Ao salvar, os logins abertos são encerrados.
+- **Quem não tem e-mail** (ou se o envio falhar): o pedido aparece para a gestão na Central do Dia e em **Usuários**. A gestão confirma quem pediu e usa **Gerar senha nova**.
+- **De onde vem o e-mail:** o campo E-mail da conta, em **Usuários** (cadastro ou menu "⋯"). Para responsáveis, vale também o e-mail do perfil.
+- A resposta da tela é sempre a mesma, exista ou não o usuário. Limite de 5 pedidos por minuto por computador e um link a cada 2 minutos por conta. O banco guarda só o hash do código.
+- A verificação em duas etapas continua valendo depois da senha nova.
+- **Envio de verdade:** sem configuração, o envio é **simulado** e o link aparece só no terminal do servidor. Para ligar, rode `npm install`, preencha `email` no `config.json` (modelo em `config.example.json`): `modo: "smtp"`, `url_base` (endereço público do sistema, com https), `remetente` e os dados de `smtp` do serviço escolhido. Reinicie o servidor.
+- **Olhinho:** os campos de senha do login e da troca de senha têm um botão para mostrar o que foi digitado; a senha volta a ficar escondida ao enviar.
+- **Validando senha:** ao entrar, o botão mostra uma animação (parada para quem desliga o movimento) e o leitor de tela anuncia "Validando senha".
+
+## Verificação em duas etapas: três opções (05/11/2026)
+
+Ao configurar a verificação, a gestão escolhe entre **Google Authenticator** (recomendado), **e-mail** ou **SMS/WhatsApp**. Nas duas últimas, o código tem 6 números, vale 10 minutos e funciona uma vez; o banco guarda só um HMAC dele.
+
+- O e-mail usa a mesma configuração da recuperação de senha.
+- **SMS e WhatsApp estão simulados:** o código aparece só no terminal do servidor, e a tela avisa isso. Para ligar de verdade, é preciso contratar um fornecedor e colocar a chamada em `enviarMensagemTelefone`, no `email.js`.
+- Para mudar de método, outra pessoa da gestão usa **Zerar duas etapas** em Usuários.
+
+## Página Quem Somos (05/11/2026)
+
+O bloco "O que é o S.I.V.E." saiu da home e virou a página `#quem-somos`, com as dores e os objetivos do projeto, baseados no documento de planejamento (Entrega Parcial 1).
+
+## Leitura em voz alta no jeito do NVDA (05/11/2026)
+
+A leitura do Painel de Acessibilidade lê na hora o que está sob o mouse ou com o foco (tecla Tab), interrompe a fala anterior e diz o tipo do elemento ("botão", "link", "caixa de seleção, marcada"). A tecla **Ctrl** interrompe. O texto vai em trechos curtos, em velocidade 1,4.
+
+O que foi digitado nos campos nunca é lido. A voz continua sendo só a instalada no aparelho, e a tela Proteção continua sem leitura. Isso não substitui o NVDA de verdade: quem usa leitor de tela continua usando o próprio programa.
+
+## Depoimentos da home (05/11/2026)
+
+A seção **Depoimentos** traz exemplos ilustrativos, com pessoas e retratos fictícios (`assets/depoimentos/`), e um aviso visível dizendo isso. Para usar depoimentos reais: peça autorização de cada pessoa, troque nome, texto e foto no `index.html` e retire o aviso `.lp-depoimentos-aviso`. Não retire o aviso enquanto os textos forem fictícios.
 
 ## Identidade visual
 

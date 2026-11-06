@@ -4,12 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#140040">
+  <meta name="description" content="S.I.V.E.: frequência, portaria, ocorrências, comunicados e autorizações da escola em um só sistema, para gestão, docentes e famílias.">
   <title>S.I.V.E. — Vigilância Escolar Inteligente</title>
   <link rel="icon" type="image/png" href="assets/favicon.png">
   <link rel="apple-touch-icon" href="assets/favicon.png">
+  <script src="js/preferencias.js"></script>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <a href="#conteudo" class="pular-conteudo" id="pular-conteudo">Pular para o conteúdo</a>
   <div id="tela-login" class="lp">
     <!-- ===== Página de apresentação (vem antes do sistema). Os botões "Entrar" abrem a página de login (#entrar). ===== -->
     <div id="lp-home">
@@ -17,7 +20,7 @@
       <div class="lp-faixa">
         <a href="#inicio" class="lp-marca"><img src="assets/logo-sive.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar"></a>
         <nav class="lp-nav" aria-label="Seções da página">
-          <a href="#o-que-faz">O que faz</a><a href="#para-quem">Para quem</a><a href="#seguranca">Segurança</a><a href="#perguntas">Perguntas</a>
+          <a href="#quem-somos">Quem Somos</a><a href="#o-que-faz">O que faz</a><a href="#para-quem">Para quem</a><a href="#seguranca">Segurança</a><a href="#perguntas">Perguntas</a>
         </nav>
         <button type="button" class="lp-btn lp-btn-escola" data-cadastro-escola><span data-ico="escola"></span> Para escolas</button>
         <a href="#entrar" class="lp-btn lp-btn-cheio">Entrar</a>
@@ -25,32 +28,56 @@
     </header>
 
     <div class="lp-progresso" id="lp-progresso" aria-hidden="true"></div>
-    <section class="lp-hero" id="inicio">
+    <main id="conteudo">
+    <section class="lp-hero" id="inicio" aria-labelledby="lp-titulo-principal">
       <span class="lp-bolha b1" aria-hidden="true"></span><span class="lp-bolha b2" aria-hidden="true"></span><span class="lp-bolha b3" aria-hidden="true"></span>
       <div class="lp-faixa lp-hero-grade">
         <div class="lp-hero-texto">
           <p class="lp-selo"><span data-ico="escudoOk"></span> Vigilância escolar inteligente</p>
-          <h1>A escola inteira <span class="lp-troca" id="lp-troca">segura e conectada</span> em um só sistema</h1>
-          <p class="lp-sub">Frequência, portaria, ocorrências, comunicados e autorizações no mesmo lugar. Gestão, professores e famílias acessam a mesma informação, de qualquer lugar, pelo navegador.</p>
+          <h1 id="lp-titulo-principal">A escola inteira<br><span class="lp-troca" id="lp-troca">segura e conectada</span><br>em um só sistema</h1>
+          <p class="lp-sub">Frequência, portaria, ocorrências, comunicados e autorizações no mesmo lugar. Gestão, docentes e famílias acessam a mesma informação, de qualquer lugar, pelo navegador.</p>
           <ul class="lp-checks">
             <li><span data-ico="confere"></span> Sem instalação: funciona no computador e no celular</li>
             <li><span data-ico="confere"></span> Assinatura digital de ocorrências e autorizações</li>
             <li><span data-ico="confere"></span> Feito de acordo com a LGPD e o ECA</li>
           </ul>
           <div class="lp-acoes"><button type="button" class="lp-btn lp-btn-cheio" data-cadastro-escola>Quero o S.I.V.E. na minha escola</button><a href="#entrar" class="lp-btn lp-btn-linha">Já tenho acesso</a></div>
-          <a href="#o-que-faz" class="lp-link-conhecer">Conhecer o sistema &darr;</a>
         </div>
 
-        <!-- Ilustração do login (não funciona aqui: o botão leva à página de login de verdade) e cartões do sistema em volta, sem cobrir -->
+        <!-- Ilustração da Central do Dia, a primeira tela da gestão (dados fictícios), e cartões do sistema em volta, sem cobrir -->
         <div class="lp-vitrine">
           <div class="lp-chip c1" aria-hidden="true"><span data-ico="confere"></span><div><b>Chamada feita</b><small>2º Ano B • 24 presentes</small></div></div>
           <div class="lp-chip c2" aria-hidden="true"><span data-ico="olho"></span><div><b>Entrada às 07:32</b><small>Portão principal</small></div></div>
-          <div class="lp-mock">
-            <img src="assets/logo-sive.png" alt="" class="lp-mock-logo">
-            <b>Acesse o S.I.V.E.</b>
-            <small>Usuário</small><span class="lp-mock-campo"></span>
-            <small>Senha</small><span class="lp-mock-campo"></span>
-            <a href="#entrar" class="lp-mock-btn">Entrar</a>
+          <div class="lp-mock" aria-hidden="true">
+            <div class="lp-mock-menu">
+              <img src="assets/logo-sive-branco.png" alt="" class="lp-mock-logo">
+              <span class="lp-mock-grupo">Dia a dia</span>
+              <span class="lp-mock-item ativo"><span data-ico="casa"></span>Central do Dia</span>
+              <span class="lp-mock-item"><span data-ico="presenca"></span>Frequência</span>
+              <span class="lp-mock-item"><span data-ico="olho"></span>Monitoramento</span>
+              <span class="lp-mock-grupo">Acompanhamento</span>
+              <span class="lp-mock-item"><span data-ico="lupa"></span>Busca Ativa</span>
+              <span class="lp-mock-item"><span data-ico="escudo"></span>Proteção</span>
+              <span class="lp-mock-grupo">Comunicação</span>
+              <span class="lp-mock-item"><span data-ico="megafone"></span>Comunicados</span>
+              <span class="lp-mock-item"><span data-ico="caneta"></span>Autorizações</span>
+            </div>
+            <div class="lp-mock-tela">
+              <div class="lp-mock-topo"><b>Central do Dia</b><span data-ico="sino"></span><span class="pill success">● Conectado</span></div>
+              <div class="lp-mock-corpo">
+                <small class="lp-mock-destaque">Visão geral</small>
+                <b class="lp-mock-ola">Bom dia, Mariana</b>
+                <div class="lp-mock-metricas">
+                  <div><span data-ico="familia"></span><small>Total de Alunos</small><b>312</b><small>alunos cadastrados</small></div>
+                  <div><span data-ico="confere"></span><small>Presentes hoje</small><b>298</b><small>14 ausentes</small></div>
+                  <div><span data-ico="prancheta"></span><small>Ocorrências</small><b>4</b><small>aguardando a gestão</small></div>
+                </div>
+                <b class="lp-mock-secao">Atenção necessária</b>
+                <div class="lp-mock-alerta"><span class="danger" data-ico="aviso"></span><div><b>Crianças em busca ativa</b><small>Por excesso de faltas</small></div><b>3</b></div>
+                <div class="lp-mock-alerta"><span class="warning" data-ico="pasta"></span><div><b>Documentos recebidos</b><small>Enviados pelos responsáveis</small></div><b>2</b></div>
+                <div class="lp-mock-alerta"><span class="info" data-ico="caneta"></span><div><b>Autorizações recebidas</b><small>Assinadas nas últimas 24h</small></div><b>5</b></div>
+              </div>
+            </div>
           </div>
           <div class="lp-chip c3" aria-hidden="true"><span data-ico="caneta"></span><div><b>Ocorrência assinada</b><small>pela família e pela gestão</small></div></div>
           <div class="lp-chip c4" aria-hidden="true"><span data-ico="megafone"></span><div><b>Comunicado lido</b><small>22 de 24 famílias</small></div></div>
@@ -59,80 +86,83 @@
     </section>
 
     <section class="lp-ticker" aria-label="Recursos do sistema">
-      <div class="lp-ticker-trilho">
-        <span><i data-ico="presenca"></i> Chamada online</span><span><i data-ico="lupa"></i> Busca Ativa</span><span><i data-ico="olho"></i> Reconhecimento nos portões</span><span><i data-ico="prancheta"></i> Ocorrências assinadas</span><span><i data-ico="megafone"></i> Comunicados</span><span><i data-ico="caneta"></i> Autorizações digitais</span><span><i data-ico="familia"></i> Portal dos Pais</span><span><i data-ico="escudo"></i> Proteção da criança</span><span><i data-ico="cadeado"></i> LGPD</span>
-      </div>
+      <ul class="lp-ticker-trilho">
+        <li><i data-ico="presenca"></i> Chamada online</li><li><i data-ico="lupa"></i> Busca Ativa</li><li><i data-ico="olho"></i> Reconhecimento nos portões</li><li><i data-ico="prancheta"></i> Ocorrências assinadas</li><li><i data-ico="megafone"></i> Comunicados</li><li><i data-ico="caneta"></i> Autorizações digitais</li><li><i data-ico="familia"></i> Portal dos Pais</li><li><i data-ico="escudo"></i> Proteção da criança</li><li><i data-ico="cadeado"></i> LGPD</li>
+      </ul>
+      <button type="button" class="lp-pausar" id="lp-pausar" aria-pressed="false">Pausar animações</button>
     </section>
 
-    <section class="lp-secao">
-      <div class="lp-faixa">
-        <p class="lp-sobretitulo">Agora, na sua escola</p>
-        <h2 class="lp-titulo">Cada pessoa vê o que precisa, no mesmo instante</h2>
-        <div class="lp-grade lp-g4">
-          <article class="lp-card lp-revela"><span class="lp-avatar">SE</span><b>Secretaria</b><p>Abre a Central do Dia e já sabe quem faltou, quais documentos chegaram e quais ocorrências esperam assinatura.</p></article>
-          <article class="lp-card lp-revela"><span class="lp-avatar">PR</span><b>Professora</b><p>Faz a chamada, registra uma ocorrência e assina com um clique. A família e a gestão recebem na hora.</p></article>
-          <article class="lp-card lp-revela"><span class="lp-avatar">PO</span><b>Portaria</b><p>Confere quem está autorizado a buscar o aluno e registra a entrada e a saída pelas câmeras dos portões.</p></article>
-          <article class="lp-card lp-revela"><span class="lp-avatar">FA</span><b>Família</b><p>Acompanha a frequência do filho, lê os comunicados e assina autorizações e ocorrências pelo celular.</p></article>
-        </div>
-        <p class="lp-nota-centro">Uma única base de dados, atualizada para todos ao mesmo tempo.</p>
-      </div>
-    </section>
-
-
-    <section class="lp-secao lp-azul" id="o-que-e">
-      <div class="lp-faixa lp-estreita">
-        <h2 class="lp-titulo">O que é o S.I.V.E.</h2>
-        <p class="lp-texto"><b>O S.I.V.E. (Sistema Inteligente de Vigilância Escolar) é um sistema online que reúne a rotina de segurança e de comunicação da escola em um só lugar.</b> Ele substitui cadernos de chamada, bilhetes na agenda, fichas de ocorrência em papel e listas de quem pode buscar cada aluno.</p>
-        <p class="lp-texto">Como tudo fica na mesma base, a informação não se perde entre a sala de aula, a secretaria e a casa do aluno: uma falta vira alerta de Busca Ativa, uma ocorrência chega à família para assinatura e a gestão acompanha tudo pela Central do Dia.</p>
-      </div>
-    </section>
-
-
-    <section class="lp-secao" id="o-que-faz">
+    <section class="lp-secao" id="o-que-faz" aria-labelledby="lp-secao-3">
       <div class="lp-faixa">
         <p class="lp-sobretitulo">O que o sistema faz</p>
-        <h2 class="lp-titulo">Tudo o que a rotina da escola pede</h2>
+        <h2 class="lp-titulo" id="lp-secao-3">Tudo o que a rotina da escola pede</h2>
         <div class="lp-grade lp-g3">
-          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="presenca"></span><b>Nenhuma falta passa despercebida</b><p>Chamada online, frequência por turma e Busca Ativa automática.</p><ul><li>Chamada pelo professor</li><li>Relatório mensal em PDF e planilha</li><li>Alerta de faltas seguidas</li></ul></article>
-          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="olho"></span><b>Portões monitorados</b><p>Entrada e saída registradas pelas câmeras, só para quem a família autorizou.</p><ul><li>Reconhecimento facial nos portões</li><li>Quem está na escola agora</li><li>Liberação de saída pela portaria</li></ul></article>
-          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="prancheta"></span><b>Ocorrências com assinatura</b><p>O professor registra, a família toma ciência e a gestão arquiva.</p><ul><li>Assinatura digital confirmada com senha</li><li>Código de verificação</li><li>Arquivo por mês</li></ul></article>
-          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="megafone"></span><b>Comunicação que chega</b><p>Comunicados com confirmação de leitura e autorizações digitais.</p><ul><li>Comunicados por turma</li><li>Autorizações assinadas pelo celular</li><li>Calendário e banners de eventos</li></ul></article>
-          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="familia"></span><b>Portal dos Pais</b><p>A família acompanha o filho de qualquer lugar.</p><ul><li>Frequência, entradas e saídas</li><li>Documentos e pendências</li><li>Aviso de ocorrências novas</li></ul></article>
-          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="escudo"></span><b>Proteção da criança</b><p>Casos sensíveis tratados com sigilo, como pede o ECA.</p><ul><li>Registro sigiloso de casos</li><li>Comunicação ao Conselho Tutelar</li><li>Histórico protegido</li></ul></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="presenca"></span><h3>Nenhuma falta passa despercebida</h3><p>Chamada online, frequência por turma e Busca Ativa automática.</p><ul><li>Chamada pelo docente</li><li>Relatório mensal em PDF e planilha</li><li>Alerta de faltas seguidas</li></ul></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="olho"></span><h3>Portões monitorados</h3><p>Entrada e saída registradas pelas câmeras, só para quem a família autorizou.</p><ul><li>Reconhecimento facial nos portões</li><li>Quem está na escola agora</li><li>Liberação de saída pela portaria</li></ul></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="prancheta"></span><h3>Ocorrências com assinatura</h3><p>O docente registra, a família toma ciência e a gestão arquiva.</p><ul><li>Assinatura digital confirmada com senha</li><li>Código de verificação</li><li>Arquivo por mês</li></ul></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="megafone"></span><h3>Comunicação que chega</h3><p>Comunicados com confirmação de leitura e autorizações digitais.</p><ul><li>Comunicados por turma</li><li>Autorizações assinadas pelo celular</li><li>Calendário e banners de eventos</li></ul></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="familia"></span><h3>Portal dos Pais</h3><p>A família acompanha o filho de qualquer lugar.</p><ul><li>Frequência, entradas e saídas</li><li>Documentos e pendências</li><li>Aviso de ocorrências novas</li></ul></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="escudo"></span><h3>Proteção da criança</h3><p>Casos sensíveis tratados com sigilo, como pede o ECA.</p><ul><li>Registro sigiloso de casos</li><li>Comunicação ao Conselho Tutelar</li><li>Histórico protegido</li></ul></article>
         </div>
       </div>
     </section>
 
-    <section class="lp-secao lp-azul" id="para-quem">
+    <section class="lp-secao lp-azul" id="para-quem" aria-labelledby="lp-secao-4">
       <div class="lp-faixa">
         <p class="lp-sobretitulo">Para quem</p>
-        <h2 class="lp-titulo">Um sistema, três jeitos de usar</h2>
+        <h2 class="lp-titulo" id="lp-secao-4">Um sistema, três jeitos de usar</h2>
         <div class="lp-grade lp-g3">
-          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="casa"></span><b>Gestão e secretaria</b><p>Central do Dia com indicadores, cadastro de alunos, documentos, usuários e logs de auditoria.</p></article>
-          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="livro"></span><b>Professores</b><p>Minha Turma com chamada e contatos, comunicados, ocorrências e calendário da turma.</p></article>
-          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="pessoa"></span><b>Responsáveis</b><p>Portal dos Pais com a vida escolar do filho, assinaturas e consentimentos.</p></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="casa"></span><h3>Gestão e secretaria</h3><p>Central do Dia com indicadores, cadastro de alunos, documentos, usuários e logs de auditoria.</p></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="livro"></span><h3>Docentes</h3><p>Minha Turma com chamada e contatos, comunicados, ocorrências e calendário da turma.</p></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="pessoa"></span><h3>Responsáveis</h3><p>Portal dos Pais com a vida escolar do filho, assinaturas e consentimentos.</p></article>
         </div>
       </div>
     </section>
 
-    <section class="lp-secao" id="seguranca">
-      <div class="lp-faixa lp-estreita">
-        <h2 class="lp-titulo">Segurança e privacidade desde o início</h2>
-        <p class="lp-texto">Dados de crianças pedem cuidado redobrado. No S.I.V.E., cada perfil vê só o que precisa, os documentos ficam criptografados, cada acesso fica registrado e o reconhecimento facial só funciona com o consentimento do responsável, que pode revogá-lo a qualquer momento (LGPD, arts. 11 e 14).</p>
-        <div class="lp-grade lp-g3 lp-selos">
-          <div><span data-ico="cadeado"></span> Arquivos criptografados</div>
-          <div><span data-ico="atividade"></span> Registro de cada acesso</div>
-          <div><span data-ico="termo"></span> Consentimento dos responsáveis</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="lp-secao lp-suave" id="perguntas">
+    <!-- Exemplos ilustrativos: troque por depoimentos reais, com autorização de cada pessoa, e retire o aviso .lp-depoimentos-aviso -->
+    <section class="lp-secao lp-suave" id="depoimentos" aria-labelledby="lp-secao-depoimentos">
       <div class="lp-faixa">
-        <h2 class="lp-titulo">Perguntas frequentes</h2>
+        <p class="lp-sobretitulo">Depoimentos</p>
+        <h2 class="lp-titulo" id="lp-secao-depoimentos">O que a escola ganha no dia a dia</h2>
+        <p class="lp-depoimentos-aviso"><span data-ico="aviso"></span> Exemplos ilustrativos, com pessoas fictícias, criados para mostrar o uso do sistema.</p>
+        <div class="lp-grade lp-g3">
+          <figure class="lp-card lp-revela lp-depoimento">
+            <p class="lp-estrelas" role="img" aria-label="5 de 5 estrelas">★★★★★</p>
+            <blockquote><p>Abro a Central do Dia e já vejo quem faltou, quais documentos chegaram e o que espera a minha assinatura. Adorei ter tudo em um lugar só.</p></blockquote>
+            <figcaption><img src="assets/depoimentos/gestao.svg" alt="" width="52" height="52"><span><b>Helena Moura</b><small>Diretora escolar (exemplo)</small></span></figcaption>
+          </figure>
+          <figure class="lp-card lp-revela lp-depoimento">
+            <p class="lp-estrelas" role="img" aria-label="5 de 5 estrelas">★★★★★</p>
+            <blockquote><p>Faço a chamada pelo celular e registro uma ocorrência com um clique. A família e a gestão recebem na hora, e eu ganho tempo para a aula.</p></blockquote>
+            <figcaption><img src="assets/depoimentos/docente.svg" alt="" width="52" height="52"><span><b>Rafael Teixeira</b><small>Docente (exemplo)</small></span></figcaption>
+          </figure>
+          <figure class="lp-card lp-revela lp-depoimento">
+            <p class="lp-estrelas" role="img" aria-label="5 de 5 estrelas">★★★★★</p>
+            <blockquote><p>Acompanho a frequência do meu filho, leio os comunicados e assino as autorizações pelo celular. Não preciso mais de bilhete na mochila.</p></blockquote>
+            <figcaption><img src="assets/depoimentos/familia.svg" alt="" width="52" height="52"><span><b>Juliana Prado</b><small>Mãe de aluno (exemplo)</small></span></figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="lp-secao" id="seguranca" aria-labelledby="lp-secao-5">
+      <div class="lp-faixa">
+        <h2 class="lp-titulo" id="lp-secao-5">Segurança e privacidade desde o início</h2>
+        <p class="lp-texto">Dados de crianças pedem cuidado redobrado. No S.I.V.E., cada perfil vê só o que precisa, os documentos ficam criptografados, cada acesso fica registrado e o reconhecimento facial só funciona com o consentimento do responsável, que pode revogá-lo a qualquer momento (LGPD, arts. 11 e 14).</p>
+        <ul class="lp-grade lp-g3 lp-selos">
+          <li><span data-ico="cadeado"></span> Arquivos criptografados</li>
+          <li><span data-ico="atividade"></span> Registro de cada acesso</li>
+          <li><span data-ico="termo"></span> Consentimento dos responsáveis</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="lp-secao lp-suave" id="perguntas" aria-labelledby="lp-secao-6">
+      <div class="lp-faixa">
+        <h2 class="lp-titulo" id="lp-secao-6">Perguntas frequentes</h2>
         <div class="lp-faq-grade">
         <details class="lp-faq"><summary>Preciso instalar alguma coisa?</summary><p>Não. O S.I.V.E. funciona no navegador do computador ou do celular. Basta entrar com o usuário e a senha fornecidos pela escola.</p></details>
-        <details class="lp-faq"><summary>Quem pode acessar o sistema?</summary><p>A gestão da escola, os professores (cada um vê a própria turma) e os responsáveis (cada um vê o próprio filho).</p></details>
+        <details class="lp-faq"><summary>Quem pode acessar o sistema?</summary><p>A gestão da escola, os docentes (cada um vê a própria turma) e os responsáveis (cada um vê o próprio filho).</p></details>
         <details class="lp-faq"><summary>Como funciona a assinatura digital?</summary><p>Quem assina confirma com a própria senha do sistema. O S.I.V.E. guarda a data, a hora, uma impressão digital (SHA-256) do texto assinado e um selo criptográfico. Cada assinatura tem um código e um QR code: qualquer pessoa confere a autenticidade em "Verificar assinatura", e qualquer alteração feita depois é detectada.</p></details>
         <details class="lp-faq"><summary>O reconhecimento facial é obrigatório?</summary><p>Não. Ele só funciona para alunos cujo responsável autorizou no Termo de Consentimento, só nos portões e sem guardar fotos. O responsável pode revogar quando quiser.</p></details>
         <details class="lp-faq"><summary>Os dados dos alunos estão seguros?</summary><p>Sim. O acesso é separado por perfil, os documentos ficam criptografados e cada acesso fica registrado, como pede a LGPD.</p></details>
@@ -142,57 +172,143 @@
       </div>
     </section>
 
-    <section class="lp-chamada">
+    <section class="lp-chamada" aria-labelledby="lp-secao-7">
       <div class="lp-faixa lp-estreita">
-        <h2>Pronto para começar o dia com tudo sob controle?</h2>
+        <h2 id="lp-secao-7">Pronto para começar o dia com tudo sob controle?</h2>
         <p>Sua escola ainda não usa o S.I.V.E.? Faça o cadastro e a nossa equipe entra em contato.</p>
         <div class="lp-chamada-acoes"><button type="button" class="lp-btn lp-btn-claro" data-cadastro-escola>Quero o S.I.V.E. na minha escola</button><a href="#entrar" class="lp-btn lp-btn-linha">Já tenho acesso</a></div>
       </div>
     </section>
+    </main>
+
+    <!-- ===== Página "Quem Somos" (#quem-somos): usa o mesmo cabeçalho e rodapé do site. Texto baseado no planejamento do projeto ===== -->
+    <main id="lp-quem-somos" class="oculto" hidden>
+      <section class="lp-secao lp-azul" aria-labelledby="qs-titulo">
+        <div class="lp-faixa">
+          <p class="lp-sobretitulo">Quem Somos</p>
+          <h1 class="lp-titulo" id="qs-titulo">A rotina da escola em um só lugar</h1>
+          <p class="lp-texto"><b>O S.I.V.E. (Sistema Inteligente de Vigilância Escolar) é um sistema online que reúne a rotina de segurança e de comunicação da escola.</b> Ele nasceu como Trabalho de Conclusão de Curso em Desenvolvimento de Sistemas, no Senai, a partir de uma pergunta simples: como ajudar a escola a saber, com segurança, o que acontece com cada aluno?</p>
+          <p class="lp-texto">Como tudo fica na mesma base, a informação não se perde entre a sala de aula, a secretaria e a casa do aluno: uma falta vira alerta de Busca Ativa, uma ocorrência chega à família para assinatura e a gestão acompanha tudo pela Central do Dia.</p>
+        </div>
+      </section>
+
+      <section class="lp-secao" aria-labelledby="qs-dores">
+        <div class="lp-faixa">
+          <p class="lp-sobretitulo">As dores que encontramos</p>
+          <h2 class="lp-titulo" id="qs-dores">O que atrapalha o dia a dia da escola</h2>
+          <p class="lp-texto">As escolas precisam acompanhar a frequência, falar com as famílias, controlar a entrada e a saída das crianças e guardar documentos e autorizações. Quando isso fica em papel, planilhas e conversas de aplicativo, surgem estes problemas:</p>
+          <div class="lp-grade lp-g3">
+            <article class="lp-card"><span class="lp-ico" data-ico="pasta"></span><h3>Informação espalhada</h3><p>Cadernos de chamada, planilhas e conversas de aplicativo guardam partes diferentes da mesma história.</p></article>
+            <article class="lp-card"><span class="lp-ico" data-ico="megafone"></span><h3>Avisos sem confirmação</h3><p>Com bilhetes na agenda, é difícil saber quem realmente recebeu um aviso da escola.</p></article>
+            <article class="lp-card"><span class="lp-ico" data-ico="caneta"></span><h3>Autorizações em papel</h3><p>Fica difícil saber quem autorizou um passeio e encontrar esse registro depois.</p></article>
+            <article class="lp-card"><span class="lp-ico" data-ico="lupa"></span><h3>Faltas que passam despercebidas</h3><p>Sem um controle organizado, demora para perceber quais alunos estão faltando demais.</p></article>
+            <article class="lp-card"><span class="lp-ico" data-ico="olho"></span><h3>Entrada e saída sem controle</h3><p>Listas em papel dificultam conferir quem pode buscar cada aluno.</p></article>
+            <article class="lp-card"><span class="lp-ico" data-ico="prancheta"></span><h3>Ocorrências em fichas</h3><p>Fichas de papel se perdem e não mostram quem registrou nem quando a família ficou sabendo.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="lp-secao lp-suave" aria-labelledby="qs-objetivos">
+        <div class="lp-faixa">
+          <p class="lp-sobretitulo">Nossos objetivos</p>
+          <h2 class="lp-titulo" id="qs-objetivos">Por que desenvolvemos o S.I.V.E.</h2>
+          <p class="lp-texto"><b>Objetivo geral:</b> desenvolver um sistema web que integre cadastro, frequência, comunicação, autorizações digitais e segurança escolar, com acesso diferenciado para a gestão, os docentes e os responsáveis.</p>
+          <ul class="lp-objetivos">
+            <li><span data-ico="confere"></span> Cadastrar alunos, responsáveis e usuários, com níveis de acesso por perfil.</li>
+            <li><span data-ico="confere"></span> Registrar a chamada diária e identificar automaticamente os alunos com muitas faltas (Busca Ativa).</li>
+            <li><span data-ico="confere"></span> Dar à gestão uma visão geral da escola, com indicadores e uma tabela de gestão dos alunos.</li>
+            <li><span data-ico="confere"></span> Centralizar comunicados, documentos, pendências e ocorrências na ficha de cada aluno.</li>
+            <li><span data-ico="confere"></span> Substituir autorizações em papel por autorizações digitais com assinatura registrada.</li>
+            <li><span data-ico="confere"></span> Registrar quem fez cada ação no sistema.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="lp-secao" aria-labelledby="qs-equipe">
+        <div class="lp-faixa">
+          <h2 class="lp-titulo" id="qs-equipe">Quem faz o S.I.V.E.</h2>
+          <p class="lp-texto"><b>Equipe:</b> Marcelo, Kelly, Viviane, Sophia e José Ferreira Junior. <b>Orientação:</b> professores Phillipe e Ana Beatriz.</p>
+        </div>
+      </section>
+
+      <section class="lp-chamada" aria-labelledby="qs-chamada">
+        <div class="lp-faixa lp-estreita">
+          <h2 id="qs-chamada">Quer ver o S.I.V.E. na sua escola?</h2>
+          <p>Peça um orçamento e a nossa equipe entra em contato.</p>
+          <div class="lp-chamada-acoes"><button type="button" class="lp-btn lp-btn-claro" data-cadastro-escola>Quero o S.I.V.E. na minha escola</button></div>
+        </div>
+      </section>
+    </main>
 
     <footer class="lp-rodape">
       <div class="lp-faixa lp-rodape-grade">
         <div><img src="assets/logo-sive-branco.png" alt="S.I.V.E." class="lp-rodape-logo"><p>Vigilância escolar inteligente: segurança, presença e comunicação em um só lugar.</p></div>
-        <div><b>Navegue</b><a href="#o-que-faz">O que faz</a><a href="#para-quem">Para quem</a><a href="#seguranca">Segurança</a><a href="#perguntas">Perguntas frequentes</a></div>
-        <div><b>Para escolas</b><a href="#contratar" data-cadastro-escola>Cadastrar minha escola</a><a href="#perguntas">Como funciona a contratação</a></div>
-        <div><b>Acesso</b><a href="#entrar">Entrar no sistema</a><a href="#verificar">Verificar assinatura</a><a href="#seguranca">Privacidade e LGPD</a></div>
+        <nav aria-labelledby="rodape-navegue"><h2 id="rodape-navegue">Navegue</h2><a href="#quem-somos">Quem Somos</a><a href="#o-que-faz">O que faz</a><a href="#para-quem">Para quem</a><a href="#seguranca">Segurança</a><a href="#perguntas">Perguntas frequentes</a></nav>
+        <nav aria-labelledby="rodape-escolas"><h2 id="rodape-escolas">Para escolas</h2><a href="#contratar" data-cadastro-escola>Cadastrar minha escola</a><a href="#perguntas">Como funciona a contratação</a></nav>
+        <nav aria-labelledby="rodape-acesso"><h2 id="rodape-acesso">Acesso</h2><a href="#entrar">Entrar no sistema</a><a href="#verificar">Verificar assinatura</a><a href="#seguranca">Privacidade e LGPD</a></nav>
       </div>
       <p class="lp-copy">© <span id="lp-ano"></span> S.I.V.E. — Sistema Inteligente de Vigilância Escolar</p>
+      <a href="#inicio" class="lp-topo-btn" id="lp-topo-btn" aria-label="Voltar ao topo"><span data-ico="setaCima"></span></a>
     </footer>
-    <a href="#inicio" class="lp-topo-btn" id="lp-topo-btn" aria-label="Voltar ao topo"><span data-ico="setaCima"></span></a>
     </div>
 
     <!-- ===== Página de login: só o usuário e a senha ===== -->
-    <div id="lp-entrar" class="lp-entrar oculto">
+    <main id="lp-entrar" class="lp-entrar oculto" hidden>
       <span class="lp-bolha b1" aria-hidden="true"></span><span class="lp-bolha b2" aria-hidden="true"></span>
       <div class="lp-entrar-caixa">
         <a href="#inicio" class="lp-voltar">&larr; Voltar para o site</a>
         <form id="form-login" class="card login-caixa">
           <img class="lp-entrar-logo" src="assets/logo-sive.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar">
-          <b class="lp-login-titulo">Acesse o S.I.V.E.</b>
-          <small style="margin-bottom:14px">Gestão, professores e responsáveis entram por aqui.</small>
-          <small>Usuário</small>
+          <h1 class="lp-login-titulo">Acesse o S.I.V.E.</h1>
+          <small style="margin-bottom:14px">Gestão, docentes e responsáveis entram por aqui.</small>
+          <label class="campo-rotulo" for="login-usuario">Usuário</label>
           <input id="login-usuario" autocomplete="username" required>
-          <small style="margin-top:12px">Senha</small>
+          <label class="campo-rotulo" for="login-senha" style="margin-top:12px">Senha</label>
           <input id="login-senha" type="password" autocomplete="current-password" required>
-          <div id="login-2fa" class="oculto" style="margin-top:12px"><small>Código do aplicativo autenticador (6 números)</small>
+          <div id="login-2fa" class="oculto" style="margin-top:12px"><label class="campo-rotulo" for="login-codigo">Código do aplicativo autenticador (6 números)</label>
             <input id="login-codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}"></div>
-          <p id="login-erro" class="pill danger oculto" style="margin-top:12px"></p>
-          <button class="btn" type="submit">Entrar</button>
+          <p id="login-erro" role="alert" class="pill danger oculto" style="margin-top:12px"></p>
+          <p id="login-status" class="so-leitor" role="status"></p>
+          <p id="login-aviso" class="pill success aviso-largo oculto" role="status" style="margin-top:12px">Senha alterada. Entre com a senha nova.</p>
+          <button class="btn" type="submit" id="login-entrar">Entrar</button>
+          <button type="button" class="link-texto" id="link-esqueci">Esqueci minha senha</button>
           <button type="button" class="link-texto" id="link-privacidade"><span data-ico="cadeado"></span> Política de privacidade e proteção de dados</button>
         </form>
+        <form id="form-recuperar" class="card login-caixa oculto">
+          <img class="lp-entrar-logo" src="assets/logo-sive.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar">
+          <h1 class="lp-login-titulo">Recuperar senha</h1>
+          <small style="margin-bottom:14px">Informe o seu usuário. Enviamos um link para o e-mail cadastrado. Sem e-mail cadastrado, a gestão da escola recebe o pedido.</small>
+          <label class="campo-rotulo" for="rec-usuario">Usuário</label>
+          <input id="rec-usuario" autocomplete="username" required>
+          <p id="rec-ok" role="status" class="pill success aviso-largo oculto" style="margin-top:12px">Pedido registrado. Se este usuário existir, enviamos um link para o e-mail cadastrado, válido por 30 minutos. Confira também o spam. Sem e-mail cadastrado, procure a secretaria da escola.</p>
+          <p id="rec-erro" role="alert" class="pill danger oculto" style="margin-top:12px;white-space:normal"></p>
+          <button class="btn" type="submit" id="rec-enviar">Pedir senha nova</button>
+          <button type="button" class="link-texto" id="rec-voltar">Voltar para o login</button>
+        </form>
+        <form id="form-redefinir" class="card login-caixa oculto">
+          <img class="lp-entrar-logo" src="assets/logo-sive.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar">
+          <h1 class="lp-login-titulo">Criar senha nova</h1>
+          <small id="red-dica" style="margin-bottom:14px">Pelo menos 8 caracteres, com letras e números. Não use o seu usuário nem sequências como 12345678.</small>
+          <label class="campo-rotulo" for="red-senha">Nova senha</label>
+          <input id="red-senha" type="password" required minlength="8" maxlength="128" autocomplete="new-password" aria-describedby="red-dica">
+          <label class="campo-rotulo" for="red-confirmar" style="margin-top:12px">Confirmar nova senha</label>
+          <input id="red-confirmar" type="password" required minlength="8" maxlength="128" autocomplete="new-password">
+          <p id="red-erro" role="alert" class="pill danger oculto" style="margin-top:12px;white-space:normal"></p>
+          <button class="btn" type="submit" id="red-enviar">Salvar senha nova</button>
+          <button type="button" class="link-texto" id="red-voltar">Voltar para o login</button>
+        </form>
       </div>
-    </div>
+    </main>
 
     <!-- ===== Verificar assinatura (pública, sem login): é o que o QR code dos comprovantes abre ===== -->
-    <div id="lp-verificar" class="lp-entrar oculto">
+    <main id="lp-verificar" class="lp-entrar oculto" hidden>
       <span class="lp-bolha b1" aria-hidden="true"></span><span class="lp-bolha b2" aria-hidden="true"></span>
       <div class="lp-entrar-caixa" style="max-width:520px">
         <a href="/" class="lp-voltar">&larr; Voltar para o site</a>
         <div class="card login-caixa">
           <img class="lp-entrar-logo" src="assets/logo-sive.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar">
-          <b class="lp-login-titulo">Verificar assinatura</b>
-          <small style="margin-bottom:14px">Digite o código de verificação que aparece no documento ou no comprovante, ou leia o QR code.</small>
+          <h1 class="lp-login-titulo">Verificar assinatura</h1>
+          <label class="campo-rotulo" for="ver-codigo" style="margin-bottom:14px">Digite o código de verificação que aparece no documento ou no comprovante, ou leia o QR code.</label>
           <form id="form-verificar" class="linha" style="gap:8px">
             <input id="ver-codigo" maxlength="20" required placeholder="Ex.: 3F9A0C7E12B45D68" autocomplete="off" spellcheck="false" style="text-transform:uppercase;letter-spacing:1px">
             <button class="btn" type="submit" style="width:auto;margin-top:0;padding:10px 18px">Verificar</button>
@@ -200,66 +316,88 @@
           <div id="ver-resultado" aria-live="polite"></div>
         </div>
       </div>
-    </div>
+    </main>
   </div>
 
-  <div id="tela-senha" class="oculto">
+  <main id="tela-senha" class="oculto" hidden>
     <form id="form-senha" class="card login-caixa">
       <div class="logo" style="justify-content:center;margin-bottom:24px">
-        <span class="logo-icon" data-ico="chave"></span><div><b>Trocar senha</b><small id="senha-subtitulo"></small></div>
+        <span class="logo-icon" data-ico="chave"></span><div><h1>Trocar senha</h1><small id="senha-subtitulo"></small></div>
       </div>
-      <small>Senha atual</small>
-      <input id="senha-atual" type="password" required>
-      <small style="margin-top:12px">Nova senha</small>
-      <input id="senha-nova" type="password" required minlength="8" maxlength="128" autocomplete="new-password">
-      <small style="margin-top:4px">Pelo menos 8 caracteres, com letras e números. Não use o seu usuário nem sequências como 12345678.</small>
-      <small style="margin-top:12px">Confirmar nova senha</small>
+      <label class="campo-rotulo" for="senha-atual">Senha atual</label>
+      <input id="senha-atual" type="password" autocomplete="current-password" required>
+      <label class="campo-rotulo" for="senha-nova" style="margin-top:12px">Nova senha</label>
+      <input id="senha-nova" type="password" required minlength="8" maxlength="128" autocomplete="new-password" aria-describedby="senha-dica">
+      <small id="senha-dica" style="margin-top:4px">Pelo menos 8 caracteres, com letras e números. Não use o seu usuário nem sequências como 12345678.</small>
+      <label class="campo-rotulo" for="senha-confirmar" style="margin-top:12px">Confirmar nova senha</label>
       <input id="senha-confirmar" type="password" required minlength="8" maxlength="128" autocomplete="new-password">
-      <p id="senha-erro" class="pill danger oculto" style="margin-top:12px"></p>
+      <p id="senha-erro" role="alert" class="pill danger oculto" style="margin-top:12px"></p>
       <button class="btn" type="submit">Salvar nova senha</button>
       <button class="btn outline oculto" id="senha-cancelar" type="button" style="margin-top:8px">Cancelar</button>
     </form>
-  </div>
+  </main>
 
   <!-- Verificação em duas etapas: a gestão configura o aplicativo autenticador no primeiro acesso -->
-  <div id="tela-2fa" class="oculto">
+  <main id="tela-2fa" class="oculto" hidden>
     <section class="card login-caixa" style="max-width:440px">
       <div class="logo" style="justify-content:center;margin-bottom:16px">
-        <span class="logo-icon" data-ico="escudoOk"></span><div><b>Verificação em duas etapas</b><small>Proteção extra para a conta da gestão</small></div>
+        <span class="logo-icon" data-ico="escudoOk"></span><div><h1>Verificação em duas etapas</h1><small>Proteção extra para a conta da gestão</small></div>
       </div>
-      <small>1. Instale no celular um aplicativo autenticador (Google Authenticator, Microsoft Authenticator ou outro).</small>
-      <small style="margin-top:6px">2. No aplicativo, toque em "adicionar" e leia o QR code abaixo.</small>
-      <div id="dois-qr" style="width:200px;margin:12px auto;background:#fff;padding:6px;border-radius:8px"></div>
-      <small style="text-align:center">Sem câmera? Digite a chave: <b id="dois-segredo" style="word-break:break-all"></b></small>
-      <small style="margin-top:12px">3. Digite o código de 6 números que aparece no aplicativo.</small>
-      <input id="dois-codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
-      <p id="dois-erro" class="pill danger oculto" style="margin-top:12px;white-space:normal"></p>
+      <fieldset class="dois-opcoes">
+        <legend>Como você quer receber o código?</legend>
+        <label class="dois-opcao"><input type="radio" name="dois-metodo" value="app" checked><span><b>Google Authenticator</b><small>Aplicativo no celular. É a opção mais segura.</small></span></label>
+        <label class="dois-opcao"><input type="radio" name="dois-metodo" value="email"><span><b>E-mail</b><small>O código chega na sua caixa de entrada.</small></span></label>
+        <label class="dois-opcao"><input type="radio" name="dois-metodo" value="telefone"><span><b>SMS ou WhatsApp</b><small>O código chega no seu celular.</small></span></label>
+      </fieldset>
+      <div id="dois-app">
+        <small>1. Instale no celular o Google Authenticator (ou outro aplicativo autenticador).</small>
+        <small style="margin-top:6px">2. No aplicativo, toque em "adicionar" e leia o QR code abaixo.</small>
+        <div id="dois-qr" style="width:200px;margin:12px auto;background:#fff;padding:6px;border-radius:8px"></div>
+        <small style="text-align:center">Sem câmera? Digite a chave: <b id="dois-segredo" style="word-break:break-all"></b></small>
+      </div>
+      <div id="dois-email" class="oculto">
+        <label class="campo-rotulo" for="dois-email-campo">Seu e-mail</label>
+        <input id="dois-email-campo" type="email" maxlength="120" autocomplete="email">
+      </div>
+      <div id="dois-telefone" class="oculto">
+        <label class="campo-rotulo" for="dois-canal">Receber por</label>
+        <select id="dois-canal"><option value="sms">SMS</option><option value="whatsapp">WhatsApp</option></select>
+        <label class="campo-rotulo" for="dois-telefone-campo" style="margin-top:12px">Celular com DDD</label>
+        <input id="dois-telefone-campo" type="tel" inputmode="numeric" maxlength="15" placeholder="(11) 98765-4321" autocomplete="tel">
+      </div>
+      <button class="btn outline oculto" type="button" id="dois-enviar">Enviar código</button>
+      <p id="dois-aviso" role="status" class="pill info aviso-largo oculto" style="margin-top:12px"></p>
+      <div id="dois-codigo-caixa">
+        <label class="campo-rotulo" for="dois-codigo" id="dois-codigo-rotulo" style="margin-top:12px">3. Digite o código de 6 números que aparece no aplicativo.</label>
+        <input id="dois-codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+      </div>
+      <p id="dois-erro" role="alert" class="pill danger oculto" style="margin-top:12px;white-space:normal"></p>
       <button class="btn" type="button" id="dois-ativar">Ativar e continuar</button>
       <button class="btn outline" type="button" id="dois-sair" style="margin-top:8px">Sair</button>
     </section>
-  </div>
+  </main>
 
-  <div id="tela-termo" class="oculto">
+  <main id="tela-termo" class="oculto" hidden>
     <section class="card termo-caixa">
       <div class="logo" style="margin-bottom:12px">
-        <span class="logo-icon" data-ico="cadeado"></span><div><b>Privacidade e proteção de dados</b><small id="termo-versao"></small></div>
+        <span class="logo-icon" data-ico="cadeado"></span><div><h1>Privacidade e proteção de dados</h1><small id="termo-versao"></small></div>
       </div>
       <p id="termo-aviso" class="pill info oculto" style="margin-bottom:12px;white-space:normal"></p>
       <div id="termo-texto" class="termo-texto"></div>
       <form id="form-termo" class="oculto">
         <label class="termo-aceite"><input type="checkbox" id="termo-check"> <span>Li a política de privacidade e concordo com o tratamento dos dados descrito nela. Se sou responsável por um aluno, declaro que sou pai, mãe ou responsável legal.</span></label>
-        <p id="termo-erro" class="pill danger oculto" style="margin-top:8px"></p>
+        <p id="termo-erro" role="alert" class="pill danger oculto" style="margin-top:8px"></p>
         <button class="btn" type="submit">Aceitar e continuar</button>
         <button class="btn outline" id="termo-sair" type="button" style="margin-top:8px">Sair</button>
       </form>
       <button class="btn outline oculto" id="termo-voltar" type="button">Voltar</button>
     </section>
-  </div>
+  </main>
 
-  <div id="tela-consent" class="oculto">
+  <main id="tela-consent" class="oculto" hidden>
     <section class="card termo-caixa">
       <div class="logo" style="margin-bottom:12px">
-        <span class="logo-icon" data-ico="termo"></span><div><b>Termo de consentimento</b><small id="cons-versao"></small></div>
+        <span class="logo-icon" data-ico="termo"></span><div><h1>Termo de consentimento</h1><small id="cons-versao"></small></div>
       </div>
       <p id="cons-aviso" class="pill info" style="margin-bottom:12px;white-space:normal"></p>
       <div id="cons-texto" class="termo-texto"></div>
@@ -268,14 +406,14 @@
         <small>Marque só o que você autoriza. O que ficar desmarcado é "não autorizo".</small>
         <div id="cons-opcoes"></div>
         <label class="termo-aceite confirma-assinatura"><input type="checkbox" id="cons-confirmo"> <span><b>Li o termo e confirmo minhas escolhas.</b> A assinatura usa o nome do seu cadastro.</span></label>
-        <small style="margin-top:10px">Para assinar, confirme com a sua senha</small>
+        <label class="campo-rotulo" for="cons-senha" style="margin-top:10px">Para assinar, confirme com a sua senha</label>
         <input id="cons-senha" type="password" placeholder="Sua senha" autocomplete="current-password" required style="margin-top:4px;max-width:320px">
-        <p id="cons-erro" class="pill danger oculto" style="margin-top:8px"></p>
+        <p id="cons-erro" role="alert" class="pill danger oculto" style="margin-top:8px"></p>
         <button class="btn" type="submit">Assinar e continuar</button>
         <button class="btn outline" id="cons-depois" type="button" style="margin-top:8px">Responder depois</button>
       </form>
     </section>
-  </div>
+  </main>
 
   <div id="tela-carregando" class="oculto" role="status" aria-live="polite">
     <span class="carregando-logo"><img class="logo-img" src="assets/logo-sive-branco.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar"></span>
@@ -284,11 +422,11 @@
   </div>
 
   <div id="app" class="oculto">
-    <aside id="menu">
+    <aside id="menu" aria-label="Menu e conta">
       <div class="logo"><img class="logo-img" src="assets/logo-sive-branco.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar"></div>
-      <nav id="nav"></nav>
+      <nav id="nav" aria-label="Menu principal"></nav>
       <div class="user">
-        <span class="avatar" id="user-iniciais"></span>
+        <span class="avatar" id="user-iniciais" aria-hidden="true"></span>
         <div><b id="user-nome"></b><small id="user-papel"></small></div>
         <button id="btn-tutorial" title="Rever o tutorial" aria-label="Rever o tutorial" class="botao-icone" data-ico="ajuda" style="margin-left:auto"></button>
         <button id="btn-privacidade" title="Política de privacidade" aria-label="Política de privacidade" class="botao-icone" data-ico="cadeado"></button>
@@ -299,9 +437,9 @@
     <div id="overlay"></div>
     <div class="conteudo">
       <header>
-        <button id="btn-menu" aria-label="Abrir menu" data-ico="menu"></button>
+        <button id="btn-menu" aria-label="Abrir menu" aria-expanded="false" aria-controls="menu" data-ico="menu"></button>
         <div><h1 id="titulo"></h1><small id="data-hora"></small></div>
-        <select id="seletor-contexto" class="oculto seletor-contexto"></select>
+        <select id="seletor-contexto" class="oculto seletor-contexto" aria-label="Escolher aluno ou turma"></select>
         <div id="busca-rapida" class="busca-rapida oculto" role="search">
           <input id="busca-rapida-campo" type="search" placeholder="Buscar aluno... (tecla /)" aria-label="Buscar aluno" autocomplete="off">
           <div id="busca-rapida-lista" class="busca-rapida-lista oculto" role="listbox" aria-label="Alunos encontrados"></div>
@@ -311,11 +449,44 @@
           <span class="contador avisos-contador oculto" id="avisos-contador" aria-hidden="true"></span>
           <div id="avisos-painel" class="avisos-painel oculto" role="dialog" aria-label="Avisos"></div>
         </div>
-        <span id="status-conexao" class="pill success" title="O sistema está respondendo">● Conectado</span>
+        <span id="status-conexao" role="status" class="pill success" title="O sistema está respondendo">● Conectado</span>
       </header>
-      <main id="tela"></main>
+      <main id="tela" tabindex="-1" hidden></main>
     </div>
   </div>
+  <!-- ===== Painel de Acessibilidade (js/app.js). Salvo na conta de quem está logado ===== -->
+  <button type="button" id="btn-acessibilidade" class="btn-acessibilidade" aria-haspopup="dialog" aria-label="Acessibilidade: ajustar texto, contraste e leitura" title="Acessibilidade" data-ico="acessibilidade"></button>
+  <dialog id="painel-acessibilidade" class="painel-a11y" aria-labelledby="a11y-titulo">
+    <div class="a11y-topo"><h2 id="a11y-titulo">Acessibilidade</h2><button type="button" class="btn outline pequeno" id="a11y-fechar">Fechar</button></div>
+    <small>Os ajustes valem na hora e ficam salvos na sua conta.</small>
+    <form id="form-acessibilidade">
+      <fieldset><legend>Tamanho do texto</legend>
+        <label class="a11y-opcao"><input type="radio" name="texto" value="normal"> Normal</label>
+        <label class="a11y-opcao"><input type="radio" name="texto" value="grande"> Grande</label>
+        <label class="a11y-opcao"><input type="radio" name="texto" value="muito-grande"> Muito grande</label>
+      </fieldset>
+      <fieldset><legend>Contraste</legend>
+        <label class="a11y-opcao"><input type="radio" name="contraste" value="padrao"> Padrão</label>
+        <label class="a11y-opcao"><input type="radio" name="contraste" value="alto"> Alto contraste</label>
+        <label class="a11y-opcao"><input type="radio" name="contraste" value="escuro"> Modo escuro</label>
+      </fieldset>
+      <fieldset><legend>Cores e leitura</legend>
+        <label class="a11y-opcao"><input type="checkbox" name="daltonismo"> <span>Modo daltonismo<small>Azul e laranja no lugar de verde e vermelho, com símbolos nos selos.</small></span></label>
+        <label class="a11y-opcao"><input type="checkbox" name="fonte"> <span>Fonte mais legível<small>Letras mais fáceis de diferenciar.</small></span></label>
+        <label class="a11y-opcao"><input type="checkbox" name="espaco"> <span>Mais espaço entre as linhas</span></label>
+        <label class="a11y-opcao"><input type="checkbox" name="links"> <span>Sublinhar todos os links</span></label>
+        <label class="a11y-opcao"><input type="checkbox" name="semMovimento"> <span>Parar as animações</span></label>
+      </fieldset>
+      <fieldset><legend>Leitura em voz alta</legend>
+        <label class="a11y-opcao"><input type="checkbox" name="voz"> <span>Ligar a leitura em voz alta<small>Lê na hora o que está sob o mouse ou com o foco, como o NVDA. Usa a voz instalada no aparelho.</small></span></label>
+        <div id="a11y-voz-area" class="oculto">
+          <div class="a11y-botoes"><button type="button" class="btn pequeno" id="a11y-ler">Ler esta tela</button><button type="button" class="btn outline pequeno" id="a11y-parar">Parar</button></div>
+          <small id="a11y-voz-aviso" role="status"></small>
+        </div>
+      </fieldset>
+      <button type="button" class="btn outline" id="a11y-padrao">Voltar ao padrão</button>
+    </form>
+  </dialog>
   <div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
   <!-- ===== Tutorial do primeiro acesso (os passos de cada perfil ficam em PASSOS_TUTORIAL, no app.js) ===== -->
   <div id="tutorial" class="tutorial oculto" role="dialog" aria-modal="true" aria-labelledby="tutorial-titulo" aria-describedby="tutorial-texto">
@@ -340,47 +511,32 @@
       <button type="button" class="ce-fechar" id="ce-fechar" aria-label="Fechar">&times;</button>
       <div id="ce-ficha">
         <div class="ce-cabeca"><span class="logo-icon" data-ico="escola"></span><div><h2 id="ce-titulo">Quero o S.I.V.E. na minha escola</h2>
-          <small>Preencha a ficha e a nossa equipe entra em contato para apresentar o sistema. Leva cerca de 3 minutos.</small></div></div>
+          <small>Deixe seus dados e a nossa equipe prepara um orçamento para a sua escola. Leva menos de 1 minuto.</small></div></div>
         <form id="form-escola" novalidate>
-          <fieldset><legend>1. Dados da escola</legend>
+          <fieldset><legend>Sua escola</legend>
             <div class="ce-grade">
               <label class="ce-largo">Nome da escola *<input id="ce-nome" name="nome" maxlength="150" autocomplete="organization" required></label>
-              <label>CNPJ *<input id="ce-cnpj" name="cnpj" inputmode="numeric" maxlength="18" placeholder="00.000.000/0000-00" required></label>
-              <label>Rede *<select id="ce-rede" name="rede" required><option value="">Escolha...</option><option value="municipal">Pública municipal</option><option value="estadual">Pública estadual</option><option value="federal">Pública federal</option><option value="privada">Privada</option></select></label>
-              <label>Número de alunos (aproximado) *<input id="ce-alunos" name="alunos" type="number" min="1" max="100000" inputmode="numeric" required></label>
-            </div>
-            <div class="ce-etapas" id="ce-etapas" role="group" aria-label="Etapas de ensino"><small>Etapas que a escola atende *</small><label><input type="checkbox" name="etapas" value="Educação Infantil"> Educação Infantil</label><label><input type="checkbox" name="etapas" value="Fundamental I (1º ao 5º ano)"> Fundamental I (1º ao 5º ano)</label><label><input type="checkbox" name="etapas" value="Fundamental II (6º ao 9º ano)"> Fundamental II (6º ao 9º ano)</label><label><input type="checkbox" name="etapas" value="Ensino Médio"> Ensino Médio</label></div>
-          </fieldset>
-          <fieldset><legend>2. Endereço</legend>
-            <div class="ce-grade">
-              <label>CEP *<input id="ce-cep" name="cep" inputmode="numeric" maxlength="9" placeholder="00000-000" autocomplete="postal-code" required><small id="ce-cep-aviso" class="ce-dica" aria-live="polite">Preenchemos o endereço pelo CEP.</small></label>
-              <label class="ce-largo">Rua / avenida *<input id="ce-logradouro" name="logradouro" maxlength="150" autocomplete="address-line1" required></label>
-              <label>Número *<input id="ce-numero" name="numero" maxlength="10" required></label>
-              <label>Complemento<input id="ce-complemento" name="complemento" maxlength="60" autocomplete="address-line2"></label>
-              <label>Bairro *<input id="ce-bairro" name="bairro" maxlength="80" required></label>
               <label>Cidade *<input id="ce-cidade" name="cidade" maxlength="80" autocomplete="address-level2" required></label>
               <label>Estado (UF) *<select id="ce-uf" name="uf" autocomplete="address-level1" required><option value="">UF</option><option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option><option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option><option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option><option>PR</option><option>PE</option><option>PI</option><option>RJ</option><option>RN</option><option>RS</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option><option>SE</option><option>TO</option></select></label>
+              <label class="ce-largo">Número de alunos (aproximado) *<input id="ce-alunos" name="alunos" type="number" min="1" max="100000" inputmode="numeric" required></label>
             </div>
           </fieldset>
-          <fieldset><legend>3. Com quem falamos</legend>
+          <fieldset><legend>Seu contato</legend>
             <div class="ce-grade">
-              <label class="ce-largo">Nome completo *<input id="ce-contato_nome" name="contato_nome" maxlength="100" autocomplete="name" required></label>
-              <label>Cargo *<input id="ce-contato_cargo" name="contato_cargo" maxlength="60" placeholder="Ex.: diretora, coordenador" autocomplete="organization-title" required></label>
+              <label class="ce-largo">Seu nome *<input id="ce-contato_nome" name="contato_nome" maxlength="100" autocomplete="name" required></label>
               <label>E-mail *<input id="ce-email" name="email" type="email" maxlength="120" autocomplete="email" required></label>
               <label>Telefone / WhatsApp *<input id="ce-telefone" name="telefone" type="tel" inputmode="numeric" maxlength="15" placeholder="(11) 98765-4321" autocomplete="tel" required></label>
-              <label>Melhor horário para contato<select id="ce-horario" name="horario"><option value="qualquer">Qualquer horário</option><option value="manha">Manhã</option><option value="tarde">Tarde</option></select></label>
-              <label class="ce-largo">Quer contar algo? (opcional)<textarea id="ce-mensagem" name="mensagem" rows="3" maxlength="600" placeholder="Ex.: queremos começar no próximo semestre; temos duas unidades."></textarea></label>
             </div>
-            <label class="ce-site" aria-hidden="true">Site<input name="site" tabindex="-1" autocomplete="off"></label>
+            <div class="ce-site" aria-hidden="true"><label>Site<input name="site" tabindex="-1" autocomplete="off"></label></div>
           </fieldset>
           <label class="termo-aceite ce-aceite"><input type="checkbox" id="ce-aceite" name="aceite"> <span>Concordo que a equipe S.I.V.E. use estes dados <b>só para entrar em contato</b> sobre a contratação do sistema. Posso pedir a exclusão a qualquer momento (LGPD).</span></label>
           <p id="ce-erro" class="pill danger oculto" role="alert"></p>
-          <div class="ce-acoes"><button type="button" class="btn outline" id="ce-cancelar">Cancelar</button><button type="submit" class="btn" id="ce-enviar">Enviar cadastro</button></div>
+          <div class="ce-acoes"><button type="button" class="btn outline" id="ce-cancelar">Cancelar</button><button type="submit" class="btn" id="ce-enviar">Solicitar orçamento</button></div>
         </form>
       </div>
       <div id="ce-pronto" class="ce-pronto oculto" aria-live="polite">
         <span class="ce-pronto-ico" data-ico="confere"></span>
-        <h2 id="ce-pronto-titulo">Cadastro recebido!</h2>
+        <h2 id="ce-pronto-titulo">Pedido de orçamento recebido!</h2>
         <p id="ce-pronto-texto"></p>
         <div class="ce-protocolo"><small>Seu protocolo</small><b id="ce-protocolo"></b></div>
         <small>Guarde este número. Se precisar falar com a gente, é só informá-lo.</small>
@@ -396,6 +552,8 @@
       <div class="dialogo-acoes"><button type="button" class="btn outline pequeno" id="dialogo-cancelar">Cancelar</button><button type="button" class="btn pequeno" id="dialogo-ok">Confirmar</button></div>
     </div>
   </div>
+  <!-- VLibras (governo federal): tradução para Libras. Este script só desenha o botão; o avatar é baixado quando a pessoa clica. Se o serviço cair, o sistema segue normal. -->
+  <script src="https://vlibras.gov.br/app/vlibras-plugin.js" defer></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -173,13 +173,23 @@ CREATE TABLE usuarios (
   usu_inativado_em DATETIME NULL,
   usu_reativado_em DATETIME NULL,
   usu_reativacao_pedida_em DATETIME NULL,
+  usu_senha_pedida_em DATETIME NULL,        -- "Esqueci minha senha" sem e-mail cadastrado: vira um pedido para a gestão
+  usu_email VARCHAR(120) NULL,              -- e-mail da conta, para recuperar a senha (responsáveis: vale também res_email)
+  usu_recuperacao_hash CHAR(64) NULL,       -- hash do código do link de recuperação (o código em si não é guardado)
+  usu_recuperacao_expira DATETIME NULL,     -- até quando o link de recuperação vale
   res_id INT NULL,
   usu_sessao_versao INT NOT NULL DEFAULT 0, -- sobe a cada Sair/troca de senha: logins antigos param de valer
   usu_2fa_segredo VARCHAR(200) NULL,        -- verificação em duas etapas (segredo criptografado)
   usu_2fa_ativo BOOLEAN NOT NULL DEFAULT FALSE,
+  usu_2fa_metodo ENUM('app','email','sms','whatsapp') NOT NULL DEFAULT 'app', -- como a pessoa recebe o código
+  usu_2fa_destino VARCHAR(120) NULL,        -- e-mail ou celular (vazio no aplicativo)
+  usu_2fa_codigo_hash CHAR(64) NULL,        -- código enviado por e-mail, SMS ou WhatsApp (o código em si não é guardado)
+  usu_2fa_codigo_expira DATETIME NULL,
   usu_avisos_vistos_em DATETIME NULL,       -- quando a pessoa abriu os avisos (sino) pela última vez: o que veio depois conta como novo
   usu_tutorial_visto_em DATETIME NULL,      -- quando a pessoa concluiu ou pulou o tutorial do primeiro acesso (vazio: ele aparece ao entrar)
+  usu_acessibilidade VARCHAR(200) NULL,     -- ajustes do Painel de Acessibilidade, em JSON (texto, contraste, daltonismo...). Vazio: nada escolhido
   FOREIGN KEY (alu_id) REFERENCES alunos(alu_id),
+  INDEX idx_usu_recuperacao (usu_recuperacao_hash),
   FOREIGN KEY (res_id) REFERENCES responsaveis(res_id),
   CONSTRAINT fk_usu_turma FOREIGN KEY (usu_sala) REFERENCES turmas(tur_nome) ON UPDATE CASCADE
 );
@@ -426,19 +436,19 @@ CREATE TABLE escolas_interessadas (
   esi_id INT AUTO_INCREMENT PRIMARY KEY,
   esi_protocolo VARCHAR(20) NULL UNIQUE,
   esi_nome VARCHAR(150) NOT NULL,
-  esi_cnpj CHAR(14) NOT NULL,
-  esi_rede ENUM('municipal','estadual','federal','privada') NOT NULL,
-  esi_etapas VARCHAR(120) NOT NULL,
+  esi_cnpj CHAR(14) NULL,
+  esi_rede ENUM('municipal','estadual','federal','privada') NULL,
+  esi_etapas VARCHAR(120) NULL,
   esi_alunos INT NOT NULL,
-  esi_cep CHAR(8) NOT NULL,
-  esi_logradouro VARCHAR(150) NOT NULL,
-  esi_numero VARCHAR(10) NOT NULL,
+  esi_cep CHAR(8) NULL,
+  esi_logradouro VARCHAR(150) NULL,
+  esi_numero VARCHAR(10) NULL,
   esi_complemento VARCHAR(60) NULL,
-  esi_bairro VARCHAR(80) NOT NULL,
+  esi_bairro VARCHAR(80) NULL,
   esi_cidade VARCHAR(80) NOT NULL,
   esi_uf CHAR(2) NOT NULL,
   esi_contato_nome VARCHAR(100) NOT NULL,
-  esi_contato_cargo VARCHAR(60) NOT NULL,
+  esi_contato_cargo VARCHAR(60) NULL,
   esi_email VARCHAR(120) NOT NULL,
   esi_telefone VARCHAR(11) NOT NULL,
   esi_horario ENUM('manha','tarde','qualquer') NOT NULL DEFAULT 'qualquer',
