@@ -38,6 +38,10 @@ SEGURANÇA DO LOGIN
     "https": { "certificado": "caminho/cert.pem", "chave": "caminho/chave.pem" }
   ou, atrás de um Nginx com HTTPS, use "seguranca": { ..., "atras_de_proxy": true }.
 
+VLIBRAS (TRADUÇÃO PARA LIBRAS)
+O botão do VLibras precisa de internet. Depois de atualizar o sistema, reinicie o servidor (npm start): sem isso o navegador bloqueia o avatar.
+O texto em que a pessoa clica é enviado ao servidor de tradução do governo. Na tela Proteção, o tradutor fica desligado.
+
 BANCO JÁ EXISTENTE (atualização)
 Se o seu banco foi criado com uma versão anterior, rode database/migracao-atualizacao.sql
 (depois de um backup). Ele não apaga dados.
@@ -197,3 +201,11 @@ FICHA DE CADASTRO PARA ESCOLAS (03/11/2026)
                         npm run escolas -- --csv  (planilha escolas-interessadas.csv)
                         npm run escolas -- --status SIVE-2026-00001 em_contato
 
+RECUPERAÇÃO DE SENHA E FICHA DE ORÇAMENTO (05/11/2026)
+- Banco: rode, nesta ordem, database/migracao-2026-11-05.sql, migracao-2026-11-05-email.sql e migracao-2026-11-05-2fa.sql ANTES de reiniciar o servidor. Não apagam dados.
+- Rode npm install (pacote novo: nodemailer).
+- Tela de login: "Esqueci minha senha" manda um link para o e-mail cadastrado. Sem e-mail, o pedido vai para a gestão, em Usuários.
+- Sem serviço de e-mail configurado, o envio é simulado: o link aparece só no terminal do servidor. Como ligar: README.md.
+- A ficha "Quero o S.I.V.E. na minha escola" agora pede só escola, cidade, UF, alunos e contato (botão "Solicitar orçamento").
+- Verificação em duas etapas: a gestão escolhe Google Authenticator, e-mail ou SMS/WhatsApp. SMS e WhatsApp estão simulados (código só no terminal).
+- Nova página Quem Somos: http://localhost:3000/#quem-somos

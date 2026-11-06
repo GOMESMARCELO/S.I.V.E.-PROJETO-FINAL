@@ -8,6 +8,12 @@ cabeçalho `Authorization: Bearer <token>`, obtido em `/api/login`.
 | Método | Rota        | O que faz                                                      |
 |--------|-------------|------------------------------------------------------------------|
 | POST   | /api/login  | Recebe `{ usuario, senha }` e devolve o token de acesso          |
+| POST   | /api/recuperar-senha | Pública. Recebe `{ usuario }` e envia o link por e-mail (sem e-mail, avisa a gestão). Sempre devolve `{ ok: true }` |
+| POST   | /api/2fa/novo | Logado. Corpo `{ metodo, destino }`: `app` devolve o QR code; `email`, `sms` ou `whatsapp` enviam um código |
+| POST   | /api/2fa/ativar | Logado. Corpo `{ codigo }`: liga a verificação em duas etapas |
+| POST   | /api/redefinir-senha | Pública. Recebe `{ codigo, senha }` do link do e-mail e grava a senha nova |
+| PUT    | /api/usuarios/:id/email | Só gestão. Recebe `{ email }` (vazio remove) e cancela links de recuperação pendentes |
+| PUT    | /api/usuarios/:id/nova-senha | Só gestão. Gera uma senha provisória para a conta ativa e devolve `senha_provisoria` |
 
 Usuários de teste (cadastrados em `database/sive.sql`):
 - **Administração:** `mariana` / `123456`
@@ -215,8 +221,7 @@ e gera uma linha na tabela `assinaturas`: hash SHA-256 do conteúdo assinado + s
 ## Ficha "Quero o S.I.V.E. na minha escola" (pública, sem login) — 03/11/2026
 | Método | Rota | O que faz |
 |--------|------|-----------|
-| GET  | /api/cep/:cep | Endereço pelo CEP (consulta o ViaCEP pelo servidor). Devolve `logradouro`, `bairro`, `cidade`, `uf`. 404 = CEP não existe; 502 = sem internet (a pessoa preenche à mão). Limite: 30 por minuto |
-| POST | /api/escolas-interessadas | Grava o pedido. Corpo: `nome`, `cnpj`, `rede` (`municipal`, `estadual`, `federal`, `privada`), `alunos`, `etapas` (lista), `cep`, `logradouro`, `numero`, `complemento`, `bairro`, `cidade`, `uf`, `contato_nome`, `contato_cargo`, `email`, `telefone`, `horario` (`manha`, `tarde`, `qualquer`), `mensagem`, `aceite: true`. Devolve 201 `{ protocolo }`. Mesmo CNPJ com pedido aberto nos últimos 30 dias: 200 `{ protocolo, repetido: true, em }`. Erro: 400 `{ erro, campo }`, com o nome do campo errado. Limite: 5 por minuto |
+| POST | /api/escolas-interessadas | Grava o pedido de orçamento. Corpo: `nome`, `cidade`, `uf`, `alunos`, `contato_nome`, `email`, `telefone`, `aceite` (`true`). Devolve `protocolo`; em erro, `erro` e `campo`. |
 
 ## Avisos do responsável (sino no topo) — 02/11/2026
 | Método | Rota | Quem | Descrição |

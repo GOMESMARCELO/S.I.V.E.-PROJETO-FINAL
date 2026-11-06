@@ -7,6 +7,7 @@ const crypto = require("crypto");
 const util = require("util");
 const importador = require("./importar-alunos");
 const backup = require("./backup");
+const { enviarEmail, simulado: emailSimulado, enviarMensagemTelefone, telefoneSimulado } = require("./email");
 const QRCode = require("qrcode");
 const config = require("./config.json");
 
@@ -42,13 +43,16 @@ if (config.seguranca.atras_de_proxy === true) app.set("trust proxy", 1);
 
 // Cabeçalhos de segurança em todas as respostas (a API nunca fica em cache do navegador)
 app.disable("x-powered-by");
+// VLibras (tradução para Libras, do governo federal): o endereço oficial redireciona para o jsDelivr, então a liberação vale só para a pasta oficial do projeto
+const VLIBRAS = "https://vlibras.gov.br https://cdn.jsdelivr.net/gh/spbgovbr-vlibras/";
+const CSP = `default-src 'self'; script-src 'self' ${VLIBRAS}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: ${VLIBRAS}; font-src 'self' ${VLIBRAS}; connect-src 'self' ${VLIBRAS} https://traducao2.vlibras.gov.br; frame-src ${VLIBRAS}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`;
 app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   if (req.secure) res.setHeader("Strict-Transport-Security", "max-age=31536000"); // só com HTTPS: o navegador passa a recusar HTTP
-  res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  res.setHeader("Content-Security-Policy", CSP);
   if (req.path.startsWith("/api")) res.setHeader("Cache-Control", "no-store");
   next();
 });
@@ -295,7 +299,7 @@ app.post("/api/login", limitePorMinuto("login", 30), rota(async (req, res) => {
     return res.status(429).json({ erro: `Muitas tentativas erradas. Tente de novo em ${minutos} minuto(s).` });
   }
   await verificarInatividade(); // confere os 60 dias antes de deixar entrar
-  const [linhas] = await db.query("SELECT usu_id AS id, usu_papel AS papel, alu_id AS aluno_id, usu_sala AS sala, usu_nome AS nome, usu_senha_temporaria AS senha_temporaria, usu_senha AS senha, usu_aceite_versao AS aceite_versao, usu_ativo AS ativo, usu_inativado_motivo AS motivo, res_id AS res_id, usu_sessao_versao AS sessao, usu_2fa_ativo AS dois_ativo, usu_2fa_segredo AS dois_segredo, usu_tutorial_visto_em AS tutorial_visto FROM usuarios WHERE usu_usuario = ?", [String(usuario || "")]);
+  const [linhas] = await db.query("SELECT usu_id AS id, usu_papel AS papel, alu_id AS aluno_id, usu_sala AS sala, usu_nome AS nome, usu_senha_temporaria AS senha_temporaria, usu_senha AS senha, usu_aceite_versao AS aceite_versao, usu_ativo AS ativo, usu_inativado_motivo AS motivo, res_id AS res_id, usu_sessao_versao AS sessao, usu_2fa_ativo AS dois_ativo, usu_2fa_segredo AS dois_segredo, usu_2fa_metodo AS dois_metodo, usu_2fa_destino AS dois_destino, usu_2fa_codigo_hash AS codigo_hash, usu_2fa_codigo_expira > NOW() AS codigo_valido, usu_2fa_codigo_expira > NOW() + INTERVAL 9 MINUTE AS codigo_recente, usu_tutorial_visto_em AS tutorial_visto, usu_acessibilidade AS acessibilidade FROM usuarios WHERE usu_usuario = ?", [String(usuario || "")]);
   const u = linhas[0];
   const senhaOk = await conferirSenha(senha, u ? u.senha : HASH_FALSO);
   if (u && senhaOk && !u.ativo && u.motivo === "inatividade") { // senha certa, mas o acesso foi suspenso por 60 dias sem uso
@@ -309,14 +313,23 @@ app.post("/api/login", limitePorMinuto("login", 30), rota(async (req, res) => {
     await registrarLog(null, "login_falha", `Tentativa com usuário "${usuario}"`);
     return res.status(401).json({ erro: "Usuário ou senha inválidos, ou cadastro inativo" });
   }
-  // Duas etapas: com a senha certa, pede o código do aplicativo (a senha é enviada de novo junto com o código)
+  // Duas etapas: com a senha certa, pede o código do aplicativo, do e-mail ou do celular (a senha é enviada de novo junto com o código)
   if (u.dois_ativo) {
-    if (!codigo) return res.json({ precisa_codigo: true });
-    if (!totpConfere(lerSegredo2fa(u.id, u.dois_segredo), codigo)) {
+    const metodo = u.dois_metodo || "app", noAplicativo = metodo === "app";
+    if (!codigo) {
+      if (noAplicativo) return res.json({ precisa_codigo: true, metodo });
+      if (!u.codigo_recente) { // não reenvia em menos de 1 minuto
+        try { await enviarCodigo2fa(u.id, metodo, u.dois_destino); }
+        catch (erro) { console.error("Código de verificação:", erro.message); return res.status(502).json({ erro: "Não foi possível enviar o código agora. Tente de novo em instantes." }); }
+      }
+      return res.json({ precisa_codigo: true, metodo, destino: mascararDestino(metodo, u.dois_destino), simulado: envioSimulado(metodo) });
+    }
+    if (!(noAplicativo ? totpConfere(lerSegredo2fa(u.id, u.dois_segredo), codigo) : codigo2faConfere(u.id, u, codigo))) {
       registrarFalha(chave, "par"); registrarFalha(chaveConta, "conta");
       await registrarLog(u, "login_codigo_errado", null);
-      return res.status(401).json({ erro: "Código do aplicativo inválido ou vencido. Confira e tente de novo." });
+      return res.status(401).json({ erro: `Código ${noAplicativo ? "do aplicativo " : ""}inválido ou vencido. Confira e tente de novo.` });
     }
+    if (!noAplicativo) await db.query("UPDATE usuarios SET usu_2fa_codigo_hash = NULL, usu_2fa_codigo_expira = NULL WHERE usu_id = ?", [u.id]); // cada código vale uma vez
   }
   tentativas.delete(chave); tentativas.delete(chaveConta);
   // Senha que não segue as regras (ex.: 123456): entra, mas é obrigado a trocar antes de usar o sistema
@@ -328,12 +341,59 @@ app.post("/api/login", limitePorMinuto("login", 30), rota(async (req, res) => {
   const ctx = await contextoDoUsuario(u);
   res.json({ token: gerarToken(u), id: u.id, usuario: login, papel: u.papel, nome: u.nome, aluno_id: ctx.alunoPadrao, sala: ctx.salaPadrao, filhos: ctx.filhos, turmas: ctx.turmas,
     senha_temporaria: !!u.senha_temporaria || senhaFraca, senha_fraca: senhaFraca, aceite_ok: u.aceite_versao === POLITICA.versao,
-    configurar_2fa: SEG.doisFatoresGestao && u.papel === "admin" && !u.dois_ativo, tutorial_visto: !!u.tutorial_visto });
+    configurar_2fa: SEG.doisFatoresGestao && u.papel === "admin" && !u.dois_ativo, tutorial_visto: !!u.tutorial_visto, acessibilidade: lerAcessibilidade(u.acessibilidade) });
+}));
+
+// Esqueci minha senha: manda um link de uso único para o e-mail da pessoa. Sem e-mail (ou se o envio falhar), o pedido vai para a gestão.
+// A resposta é sempre a mesma e não espera o envio, exista ou não o usuário: esta rota não serve para descobrir quem tem conta.
+// No banco fica só o hash do código: quem ler a tabela não consegue usar o link. A senha só muda em /api/redefinir-senha.
+const RECUPERACAO_MINUTOS = 30;
+const hashDoCodigo = (codigo) => crypto.createHash("sha256").update(codigo).digest("hex");
+async function pedirSenhaAGestao(login) {
+  const [r] = await db.query("UPDATE usuarios SET usu_senha_pedida_em = NOW() WHERE usu_usuario = ? AND usu_ativo = TRUE AND usu_senha_pedida_em IS NULL", [login]);
+  if (r.affectedRows) await registrarLog(null, "recuperacao_senha_pedida", `Usuário "${login}"`);
+}
+async function iniciarRecuperacao(login) {
+  const [[u]] = await db.query(`SELECT COALESCE(u.usu_email, r.res_email) AS email, u.usu_recuperacao_expira > NOW() + INTERVAL ? MINUTE AS recente
+    FROM usuarios u LEFT JOIN responsaveis r ON r.res_id = u.res_id WHERE u.usu_usuario = ? AND u.usu_ativo = TRUE`, [RECUPERACAO_MINUTOS - 2, login]);
+  if (!u) return;
+  if (!u.email) return pedirSenhaAGestao(login);
+  if (u.recente) return; // já mandou há menos de 2 minutos: não enche a caixa de entrada da pessoa
+  const codigo = crypto.randomBytes(32).toString("hex");
+  await db.query("UPDATE usuarios SET usu_recuperacao_hash = ?, usu_recuperacao_expira = NOW() + INTERVAL ? MINUTE WHERE usu_usuario = ?", [hashDoCodigo(codigo), RECUPERACAO_MINUTOS, login]);
+  // O endereço vem do config.json, nunca do pedido: assim ninguém forja um link que aponte para outro site
+  const base = String((config.email || {}).url_base || `${protocolo}://localhost:${config.porta}`).replace(/\/+$/, "");
+  try {
+    await enviarEmail({ para: u.email, assunto: "S.I.V.E.: redefinição de senha",
+      texto: `Recebemos um pedido para redefinir a sua senha do S.I.V.E.\n\nPara criar uma senha nova, abra o link abaixo. Ele vale por ${RECUPERACAO_MINUTOS} minutos e só funciona uma vez:\n${base}/#redefinir=${codigo}\n\nSe não foi você, ignore este e-mail: a sua senha continua a mesma.` });
+    await registrarLog(null, "recuperacao_senha_email", `Usuário "${login}"`);
+  } catch (erro) {
+    console.error("Não foi possível enviar o e-mail de recuperação:", erro.message);
+    await pedirSenhaAGestao(login);
+  }
+}
+app.post("/api/recuperar-senha", limitePorMinuto("recuperar", 5), rota(async (req, res) => {
+  const login = String((req.body || {}).usuario || "").trim().toLowerCase().slice(0, 60);
+  if (login) iniciarRecuperacao(login).catch((erro) => console.error("Recuperação de senha:", erro.message));
+  res.json({ ok: true });
+}));
+app.post("/api/redefinir-senha", limitePorMinuto("redefinir", 10), rota(async (req, res) => {
+  const { codigo, senha } = req.body || {};
+  const [[u]] = /^[0-9a-f]{64}$/.test(String(codigo)) ? await db.query(`SELECT usu_id AS id, usu_nome AS nome, usu_papel AS papel, usu_usuario AS login FROM usuarios
+    WHERE usu_recuperacao_hash = ? AND usu_recuperacao_expira > NOW() AND usu_ativo = TRUE`, [hashDoCodigo(codigo)]) : [[]];
+  if (!u) return res.status(400).json({ erro: "Este link é inválido ou já venceu. Peça um novo em Esqueci minha senha." });
+  const problema = problemaNaSenha(senha, u.login);
+  if (problema) return res.status(400).json({ erro: problema });
+  await db.query(`UPDATE usuarios SET usu_senha = ?, usu_senha_temporaria = FALSE, usu_senha_pedida_em = NULL, usu_recuperacao_hash = NULL, usu_recuperacao_expira = NULL,
+    usu_sessao_versao = usu_sessao_versao + 1 WHERE usu_id = ?`, [await hashSenha(senha), u.id]);
+  tentativas.delete(`conta|${u.login}`);
+  await registrarLog(u, "senha_redefinida_email", "outras sessões encerradas");
+  res.json({ ok: true });
 }));
 
 // Lê o token, confere no banco se o usuário continua ativo e diz quem está fazendo a requisição.
 // Quem ainda não aceitou a política de privacidade só consegue trocar a senha e aceitar o termo.
-const ROTAS_SEM_ACEITE = new Set(["PUT /api/minha-senha", "POST /api/aceite-privacidade", "POST /api/sair"]);
+const ROTAS_SEM_ACEITE = new Set(["PUT /api/minha-senha", "POST /api/aceite-privacidade", "POST /api/sair", "PUT /api/acessibilidade"]);
 // Gestão sem as duas etapas configuradas só consegue configurar (e trocar a senha / aceitar o termo / sair)
 const ROTAS_SEM_2FA = new Set([...ROTAS_SEM_ACEITE, "POST /api/2fa/novo", "POST /api/2fa/ativar"]);
 async function autenticar(req, res, next) {
@@ -398,7 +458,7 @@ app.put("/api/minha-senha", autenticar, rota(async (req, res) => {
   if (minutos) return res.status(429).json({ erro: `Muitas tentativas erradas. Tente de novo em ${minutos} minuto(s).` });
   if (!u || !(await conferirSenha(senha_atual, u.senha))) { registrarFalha(chave); return res.status(400).json({ erro: "Senha atual incorreta" }); }
   if (senha_atual === senha_nova) return res.status(400).json({ erro: "A nova senha precisa ser diferente da atual" });
-  await db.query("UPDATE usuarios SET usu_senha = ?, usu_senha_temporaria = FALSE, usu_sessao_versao = usu_sessao_versao + 1 WHERE usu_id = ?", [await hashSenha(senha_nova), req.usuario.id]);
+  await db.query("UPDATE usuarios SET usu_senha = ?, usu_senha_temporaria = FALSE, usu_senha_pedida_em = NULL, usu_recuperacao_hash = NULL, usu_recuperacao_expira = NULL, usu_sessao_versao = usu_sessao_versao + 1 WHERE usu_id = ?", [await hashSenha(senha_nova), req.usuario.id]);
   await registrarLog(req.usuario, "troca_senha", "outras sessões encerradas");
   const [[novo]] = await db.query("SELECT usu_id AS id, usu_sessao_versao AS sessao FROM usuarios WHERE usu_id = ?", [req.usuario.id]);
   res.json({ ok: true, token: gerarToken(novo) }); // este navegador continua logado; os outros saem
@@ -411,23 +471,58 @@ app.post("/api/sair", autenticar, rota(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// Duas etapas: gera um segredo novo (ainda desligado) e o QR code para o aplicativo autenticador
-app.post("/api/2fa/novo", autenticar, rota(async (req, res) => {
+// Duas etapas por e-mail, SMS ou WhatsApp: código de 6 números que vale 10 minutos e uma vez só.
+// No banco fica só um HMAC com a chave do servidor: com tão poucos números, um hash simples seria descoberto por tentativa.
+const hashCodigo2fa = (usuId, codigo) => crypto.createHmac("sha256", config.seguranca.segredo_token).update(`2fa|${usuId}|${codigo}`).digest("hex");
+const envioSimulado = (metodo) => (metodo === "email" ? emailSimulado : telefoneSimulado);
+const mascararDestino = (metodo, destino) => (metodo === "email" ? destino.replace(/^(.{1,2}).*?(@.*)$/, "$1***$2") : `(**) *****-${destino.slice(-4)}`);
+async function enviarCodigo2fa(usuId, metodo, destino) {
+  const codigo = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+  await db.query("UPDATE usuarios SET usu_2fa_codigo_hash = ?, usu_2fa_codigo_expira = NOW() + INTERVAL 10 MINUTE WHERE usu_id = ?", [hashCodigo2fa(usuId, codigo), usuId]);
+  const texto = `Seu código de verificação do S.I.V.E. é ${codigo}. Ele vale por 10 minutos. Não passe este código para ninguém.`;
+  if (metodo === "email") await enviarEmail({ para: destino, assunto: "S.I.V.E.: código de verificação", texto });
+  else await enviarMensagemTelefone({ para: destino, canal: metodo, texto });
+}
+function codigo2faConfere(usuId, guardado, codigo) {
+  const c = String(codigo || "").replace(/\D/g, "");
+  if (c.length !== 6 || !guardado.codigo_hash || !guardado.codigo_valido) return false;
+  return crypto.timingSafeEqual(Buffer.from(hashCodigo2fa(usuId, c)), Buffer.from(guardado.codigo_hash));
+}
+// Duas etapas: prepara o método escolhido (ainda desligado). Aplicativo: gera o segredo e o QR code. E-mail ou celular: manda um código.
+app.post("/api/2fa/novo", limitePorMinuto("2fa-novo", 10), autenticar, rota(async (req, res) => {
   const [[u]] = await db.query("SELECT usu_usuario AS login, usu_2fa_ativo AS ativo FROM usuarios WHERE usu_id = ?", [req.usuario.id]);
   if (u.ativo) return res.status(400).json({ erro: "A verificação em duas etapas já está ligada" });
-  const segredo = paraBase32(crypto.randomBytes(20));
-  await db.query("UPDATE usuarios SET usu_2fa_segredo = ? WHERE usu_id = ?", [guardarSegredo2fa(req.usuario.id, segredo), req.usuario.id]);
-  const url = `otpauth://totp/${encodeURIComponent("SIVE:" + u.login)}?secret=${segredo}&issuer=SIVE&digits=6&period=30`;
-  res.json({ segredo, qr: await QRCode.toString(url, { type: "svg", margin: 1 }) });
+  const metodo = (req.body || {}).metodo || "app";
+  if (metodo === "app") {
+    const segredo = paraBase32(crypto.randomBytes(20));
+    await db.query("UPDATE usuarios SET usu_2fa_segredo = ?, usu_2fa_metodo = 'app', usu_2fa_destino = NULL, usu_2fa_codigo_hash = NULL, usu_2fa_codigo_expira = NULL WHERE usu_id = ?", [guardarSegredo2fa(req.usuario.id, segredo), req.usuario.id]);
+    const url = `otpauth://totp/${encodeURIComponent("SIVE:" + u.login)}?secret=${segredo}&issuer=SIVE&digits=6&period=30`;
+    return res.json({ segredo, qr: await QRCode.toString(url, { type: "svg", margin: 1 }) });
+  }
+  if (!["email", "sms", "whatsapp"].includes(metodo)) return res.status(400).json({ erro: "Escolha uma das opções" });
+  const destino = metodo === "email" ? String(req.body.destino || "").trim().toLowerCase() : soNumeros(req.body.destino);
+  if (metodo === "email" && !emailValido(destino)) return res.status(400).json({ erro: "Informe um e-mail válido." });
+  if (metodo !== "email" && !/^[1-9]{2}9?\d{8}$/.test(destino)) return res.status(400).json({ erro: "Informe o celular com DDD (ex.: 11 98765-4321)." });
+  await db.query("UPDATE usuarios SET usu_2fa_segredo = NULL, usu_2fa_metodo = ?, usu_2fa_destino = ? WHERE usu_id = ?", [metodo, destino, req.usuario.id]);
+  try { await enviarCodigo2fa(req.usuario.id, metodo, destino); }
+  catch (erro) { console.error("Código de verificação:", erro.message); return res.status(502).json({ erro: "Não foi possível enviar o código agora. Confira os dados ou escolha outra opção." }); }
+  res.json({ ok: true, destino: mascararDestino(metodo, destino), simulado: envioSimulado(metodo) });
 }));
-// Liga as duas etapas depois que a pessoa digita um código certo do aplicativo (prova que configurou)
+// Liga as duas etapas depois que a pessoa digita um código certo (prova que recebe o código)
 app.post("/api/2fa/ativar", autenticar, rota(async (req, res) => {
-  const [[u]] = await db.query("SELECT usu_2fa_segredo AS segredo, usu_2fa_ativo AS ativo FROM usuarios WHERE usu_id = ?", [req.usuario.id]);
+  const [[u]] = await db.query(`SELECT usu_2fa_segredo AS segredo, usu_2fa_ativo AS ativo, usu_2fa_metodo AS metodo, usu_2fa_codigo_hash AS codigo_hash,
+    usu_2fa_codigo_expira > NOW() AS codigo_valido FROM usuarios WHERE usu_id = ?`, [req.usuario.id]);
   if (u.ativo) return res.status(400).json({ erro: "A verificação em duas etapas já está ligada" });
-  if (!u.segredo) return res.status(400).json({ erro: "Gere o QR code antes" });
-  if (!totpConfere(lerSegredo2fa(req.usuario.id, u.segredo), req.body.codigo)) return res.status(400).json({ erro: "Código inválido. Confira o horário do celular e digite o código que aparece agora." });
-  await db.query("UPDATE usuarios SET usu_2fa_ativo = TRUE WHERE usu_id = ?", [req.usuario.id]);
-  await registrarLog(req.usuario, "2fa_ativada", null);
+  const chave = `2fa-ativar|${req.usuario.id}`, minutos = minutosBloqueado(chave);
+  if (minutos) return res.status(429).json({ erro: `Muitas tentativas erradas. Tente de novo em ${minutos} minuto(s).` });
+  const noAplicativo = (u.metodo || "app") === "app";
+  if (noAplicativo && !u.segredo) return res.status(400).json({ erro: "Gere o QR code antes" });
+  if (!(noAplicativo ? totpConfere(lerSegredo2fa(req.usuario.id, u.segredo), req.body.codigo) : codigo2faConfere(req.usuario.id, u, req.body.codigo))) {
+    registrarFalha(chave);
+    return res.status(400).json({ erro: noAplicativo ? "Código inválido. Confira o horário do celular e digite o código que aparece agora." : "Código inválido ou vencido. Confira e tente de novo." });
+  }
+  await db.query("UPDATE usuarios SET usu_2fa_ativo = TRUE, usu_2fa_codigo_hash = NULL, usu_2fa_codigo_expira = NULL WHERE usu_id = ?", [req.usuario.id]);
+  await registrarLog(req.usuario, "2fa_ativada", noAplicativo ? "aplicativo" : u.metodo);
   res.json({ ok: true });
 }));
 // A gestão desliga as duas etapas de alguém que perdeu o celular (a pessoa configura de novo no próximo login)
@@ -435,7 +530,7 @@ app.put("/api/usuarios/:id/2fa/zerar", autenticar, apenasAdmin, rota(async (req,
   if (Number(req.params.id) === req.usuario.id) return res.status(400).json({ erro: "Peça a outra pessoa da gestão para zerar a sua verificação" });
   const [[u]] = await db.query("SELECT usu_nome AS nome FROM usuarios WHERE usu_id = ?", [req.params.id]);
   if (!u) return res.status(404).json({ erro: "Usuário não encontrado" });
-  await db.query("UPDATE usuarios SET usu_2fa_ativo = FALSE, usu_2fa_segredo = NULL, usu_sessao_versao = usu_sessao_versao + 1 WHERE usu_id = ?", [req.params.id]);
+  await db.query("UPDATE usuarios SET usu_2fa_ativo = FALSE, usu_2fa_segredo = NULL, usu_2fa_metodo = 'app', usu_2fa_destino = NULL, usu_2fa_codigo_hash = NULL, usu_2fa_codigo_expira = NULL, usu_sessao_versao = usu_sessao_versao + 1 WHERE usu_id = ?", [req.params.id]);
   await registrarLog(req.usuario, "2fa_zerada", u.nome);
   res.json({ ok: true });
 }));
@@ -475,6 +570,7 @@ app.get("/api/resumo", autenticar, apenasAdmin, rota(async (req, res) => {
   const ref = await dataReferencia();
   const [[total]] = await db.query("SELECT COUNT(*) AS n FROM alunos WHERE alu_situacao = 'Ativo'");
   const [[reat]] = await db.query("SELECT COUNT(*) AS inativos, COUNT(usu_reativacao_pedida_em) AS pedidos FROM usuarios WHERE usu_papel = 'professor' AND usu_ativo = FALSE AND usu_inativado_motivo = 'inatividade'");
+  const [[pedidosSenha]] = await db.query("SELECT COUNT(*) AS n FROM usuarios WHERE usu_ativo = TRUE AND usu_senha_pedida_em IS NOT NULL");
   const [[dia]] = await db.query(`SELECT COUNT(CASE WHEN pre_status = 'Presente' THEN 1 END) AS presentes,
     COUNT(CASE WHEN pre_status = 'Ausente' THEN 1 END) AS ausentes FROM presencas WHERE pre_data = ?`, [ref.data]);
   const [[ocor]] = await db.query(`SELECT COUNT(*) AS total, COUNT(CASE WHEN adv_tipo = 'Advertencia' THEN 1 END) AS advertencias,
@@ -491,7 +587,7 @@ app.get("/api/resumo", autenticar, apenasAdmin, rota(async (req, res) => {
     ocorrencias_dia: ocor.total, advertencias_dia: ocor.advertencias, acoes_dia: ocor.acoes,
     ocorrencias_gestao: oce.n, ocorrencias_sem_resp: oce.sem_resp,
     percentual: percentual(dia.presentes, dia.ausentes), busca_ativa: busca.n, autorizacoes_recentes: aut.n, documentos_recentes: docs.n, comunicacoes_pendentes: ctp.n,
-    professores_inativos: reat.inativos, reativacoes_pedidas: reat.pedidos, inatividade_dias: INATIVIDADE.dias,
+    professores_inativos: reat.inativos, reativacoes_pedidas: reat.pedidos, senhas_pedidas: pedidosSenha.n, inatividade_dias: INATIVIDADE.dias,
   });
 }));
 
@@ -587,7 +683,8 @@ app.get("/api/usuarios", autenticar, apenasAdmin, rota(async (req, res) => {
   await verificarInatividade();
   const [linhas] = await db.query(`SELECT u.usu_id AS id, u.usu_usuario AS usuario, u.usu_nome AS nome, u.usu_papel AS papel, u.usu_sala AS sala, u.usu_ativo AS ativo, u.usu_senha_temporaria AS senha_temporaria,
     DATE_FORMAT(u.usu_ultimo_acesso, '%d/%m/%Y %H:%i') AS ultimo_acesso, u.usu_inativado_motivo AS inativado_motivo, DATE_FORMAT(u.usu_inativado_em, '%d/%m/%Y') AS inativado_em,
-    DATE_FORMAT(u.usu_reativacao_pedida_em, '%d/%m/%Y %H:%i') AS reativacao_pedida_em, ${SQL_DIAS_SEM_ACESSO} AS dias_sem_acesso,
+    DATE_FORMAT(u.usu_reativacao_pedida_em, '%d/%m/%Y %H:%i') AS reativacao_pedida_em, DATE_FORMAT(u.usu_senha_pedida_em, '%d/%m/%Y %H:%i') AS senha_pedida_em, ${SQL_DIAS_SEM_ACESSO} AS dias_sem_acesso,
+    u.usu_email AS email_conta, COALESCE(u.usu_email, (SELECT r2.res_email FROM responsaveis r2 WHERE r2.res_id = u.res_id)) AS email,
     a.alu_nome AS aluno_nome, u.alu_id AS aluno_id, u.usu_2fa_ativo AS dois_fatores,
     (SELECT GROUP_CONCAT(CONCAT(a2.alu_id, ':', a2.alu_nome) ORDER BY a2.alu_nome SEPARATOR '|') FROM aluno_responsavel ar2 JOIN alunos a2 ON a2.alu_id = ar2.alu_id WHERE ar2.res_id = u.res_id) AS filhos_txt,
     (SELECT GROUP_CONCAT(t.tur_nome ORDER BY t.tur_nome SEPARATOR '|') FROM professor_turma pt JOIN turmas t ON t.tur_id = pt.tur_id WHERE pt.usu_id = u.usu_id) AS turmas_txt
@@ -598,17 +695,20 @@ app.get("/api/usuarios", autenticar, apenasAdmin, rota(async (req, res) => {
     turmas: (turmas_txt || "").split("|").filter(Boolean) })));
 }));
 
+const emailValido = (e) => e.length <= 120 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
 app.post("/api/usuarios", autenticar, apenasAdmin, rota(async (req, res) => {
   const { usuario, nome, papel, aluno_id, sala } = req.body;
+  const email = String(req.body.email || "").trim().toLowerCase();
   if (!usuario || !nome || !papel) return res.status(400).json({ erro: "Usuário, nome e papel são obrigatórios" });
+  if (email && !emailValido(email)) return res.status(400).json({ erro: "O e-mail não parece válido" });
   if (papel === "pai" && !aluno_id) return res.status(400).json({ erro: "Selecione a qual aluno este responsável pertence" });
   if (papel === "professor" && !sala) return res.status(400).json({ erro: "Informe a turma (sala) do professor" });
   if (papel === "professor" && !(await turmaExiste(sala))) return res.status(400).json({ erro: "Escolha uma turma cadastrada" });
   const senhaGerada = gerarSenhaGenerica();
   let novo;
   try {
-    [novo] = await db.query("INSERT INTO usuarios (usu_usuario, usu_senha, usu_papel, usu_nome, alu_id, usu_sala, usu_senha_temporaria) VALUES (?, ?, ?, ?, ?, ?, TRUE)",
-      [usuario, await hashSenha(senhaGerada), papel, nome, papel === "pai" ? aluno_id : null, papel === "professor" ? sala : null]);
+    [novo] = await db.query("INSERT INTO usuarios (usu_usuario, usu_senha, usu_papel, usu_nome, alu_id, usu_sala, usu_email, usu_senha_temporaria) VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)",
+      [usuario, await hashSenha(senhaGerada), papel, nome, papel === "pai" ? aluno_id : null, papel === "professor" ? sala : null, email || null]);
   } catch (erro) {
     if (erro.code === "ER_DUP_ENTRY") return res.status(409).json({ erro: "Já existe um usuário com esse nome de login" });
     throw erro;
@@ -617,6 +717,16 @@ app.post("/api/usuarios", autenticar, apenasAdmin, rota(async (req, res) => {
   if (papel === "professor") await db.query("INSERT IGNORE INTO professor_turma (usu_id, tur_id) SELECT ?, tur_id FROM turmas WHERE tur_nome = ?", [novo.insertId, sala]);
   await registrarLog(req.usuario, "cadastro_usuario", `${usuario} (${papel})`);
   res.status(201).json({ ok: true, senha_genercada: senhaGerada }); // devolve a senha gerada só nesta resposta, para o admin entregar ao usuário
+}));
+
+// E-mail usado na recuperação de senha. Mudar o e-mail cancela qualquer link de recuperação que ainda esteja valendo.
+app.put("/api/usuarios/:id/email", autenticar, apenasAdmin, rota(async (req, res) => {
+  const email = String((req.body || {}).email || "").trim().toLowerCase();
+  if (email && !emailValido(email)) return res.status(400).json({ erro: "O e-mail não parece válido" });
+  const [r] = await db.query("UPDATE usuarios SET usu_email = ?, usu_recuperacao_hash = NULL, usu_recuperacao_expira = NULL WHERE usu_id = ?", [email || null, req.params.id]);
+  if (!r.affectedRows) return res.status(404).json({ erro: "Usuário não encontrado" });
+  await registrarLog(req.usuario, "email_usuario_alterado", `usuário id ${req.params.id}`);
+  res.json({ ok: true });
 }));
 
 app.put("/api/usuarios/:id/ativo", autenticar, apenasAdmin, rota(async (req, res) => {
@@ -1299,73 +1409,32 @@ app.get("/api/verificar/:codigo/qr.svg", limitePorMinuto("qr", 60), rota(async (
 // ---------- Página inicial: ficha "Quero o S.I.V.E. na minha escola" (pública, sem login) ----------
 // A escola interessada preenche os dados e recebe um protocolo. A equipe S.I.V.E. consulta os pedidos com: npm run escolas
 const UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ");
-const REDES = ["municipal", "estadual", "federal", "privada"];
-const ETAPAS = ["Educação Infantil", "Fundamental I (1º ao 5º ano)", "Fundamental II (6º ao 9º ano)", "Ensino Médio"];
-const HORARIOS = ["manha", "tarde", "qualquer"];
 const soNumeros = (v) => String(v || "").replace(/\D/g, "");
-// CNPJ: os dois últimos números são calculados a partir dos 12 primeiros (dígitos verificadores, regra da Receita Federal)
-function cnpjValido(cnpj) {
-  if (!/^\d{14}$/.test(cnpj) || /^(\d)\1{13}$/.test(cnpj)) return false;
-  const digito = (base) => {
-    let soma = 0, peso = base.length - 7;
-    for (const n of base) { soma += Number(n) * peso--; if (peso < 2) peso = 9; }
-    const resto = soma % 11;
-    return resto < 2 ? 0 : 11 - resto;
-  };
-  const d1 = digito(cnpj.slice(0, 12)), d2 = digito(cnpj.slice(0, 12) + d1);
-  return cnpj.endsWith(`${d1}${d2}`);
-}
-// Busca o endereço pelo CEP (ViaCEP). Passa pelo servidor porque a página só pode falar com o próprio S.I.V.E. (segurança do navegador).
-// Se a internet ou o ViaCEP falharem, a pessoa preenche o endereço à mão.
-app.get("/api/cep/:cep", limitePorMinuto("cep", 30), rota(async (req, res) => {
-  const cep = soNumeros(req.params.cep);
-  if (cep.length !== 8) return res.status(400).json({ erro: "O CEP tem 8 números." });
-  let r;
-  try { r = await (await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: AbortSignal.timeout(4000) })).json(); }
-  catch { return res.status(502).json({ erro: "Não foi possível buscar o CEP agora. Preencha o endereço, por favor." }); }
-  if (!r || r.erro) return res.status(404).json({ erro: "CEP não encontrado. Confira os números ou preencha o endereço." });
-  res.json({ logradouro: r.logradouro || "", bairro: r.bairro || "", cidade: r.localidade || "", uf: r.uf || "" });
-}));
 app.post("/api/escolas-interessadas", limitePorMinuto("escola", 5), rota(async (req, res) => {
   const b = req.body || {};
   // Campo escondido (só robôs preenchem): finge que deu certo e não grava nada
   if (b.site) return res.json({ protocolo: `SIVE-${new Date().getFullYear()}-${String(crypto.randomInt(10000, 99999))}` });
   const texto = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
   const d = {
-    nome: texto(b.nome, 150), cnpj: soNumeros(b.cnpj), rede: b.rede, alunos: Number(b.alunos),
-    etapas: (Array.isArray(b.etapas) ? b.etapas : []).filter((e) => ETAPAS.includes(e)),
-    cep: soNumeros(b.cep), logradouro: texto(b.logradouro, 150), numero: texto(b.numero, 10), complemento: texto(b.complemento, 60),
-    bairro: texto(b.bairro, 80), cidade: texto(b.cidade, 80), uf: String(b.uf || "").toUpperCase(),
-    contato_nome: texto(b.contato_nome, 100), contato_cargo: texto(b.contato_cargo, 60), email: texto(b.email, 120).toLowerCase(),
-    telefone: soNumeros(b.telefone), horario: HORARIOS.includes(b.horario) ? b.horario : "qualquer", mensagem: String(b.mensagem || "").trim().slice(0, 600),
+    nome: texto(b.nome, 150), cidade: texto(b.cidade, 80), uf: String(b.uf || "").toUpperCase(), alunos: Number(b.alunos),
+    contato_nome: texto(b.contato_nome, 100), email: texto(b.email, 120).toLowerCase(), telefone: soNumeros(b.telefone),
   };
   // Cada erro diz qual campo está errado, para a tela levar a pessoa direto até ele
   const erro = (campo, msg) => res.status(400).json({ erro: msg, campo });
   if (d.nome.length < 3) return erro("nome", "Informe o nome da escola.");
-  if (!cnpjValido(d.cnpj)) return erro("cnpj", "CNPJ inválido. Confira os 14 números.");
-  if (!REDES.includes(d.rede)) return erro("rede", "Escolha a rede da escola.");
-  if (!d.etapas.length) return erro("etapas", "Marque pelo menos uma etapa de ensino.");
-  if (!Number.isInteger(d.alunos) || d.alunos < 1 || d.alunos > 100000) return erro("alunos", "Informe quantos alunos a escola tem (aproximadamente).");
-  if (d.cep.length !== 8) return erro("cep", "O CEP tem 8 números.");
-  if (d.logradouro.length < 3) return erro("logradouro", "Informe a rua ou avenida.");
-  if (!d.numero) return erro("numero", "Informe o número (ou S/N).");
-  if (d.bairro.length < 2) return erro("bairro", "Informe o bairro.");
   if (d.cidade.length < 2) return erro("cidade", "Informe a cidade.");
   if (!UFS.includes(d.uf)) return erro("uf", "Escolha o estado (UF).");
-  if (d.contato_nome.split(" ").length < 2) return erro("contato_nome", "Informe o nome e o sobrenome de quem vamos procurar.");
-  if (d.contato_cargo.length < 2) return erro("contato_cargo", "Informe o cargo (ex.: diretora, coordenador).");
+  if (!Number.isInteger(d.alunos) || d.alunos < 1 || d.alunos > 100000) return erro("alunos", "Informe quantos alunos a escola tem (aproximadamente).");
+  if (d.contato_nome.length < 2) return erro("contato_nome", "Informe o seu nome.");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email)) return erro("email", "E-mail inválido.");
   if (!/^[1-9]{2}9?\d{8}$/.test(d.telefone)) return erro("telefone", "Telefone inválido. Use DDD + número (ex.: 11 98765-4321).");
   if (b.aceite !== true) return erro("aceite", "Para entrarmos em contato, marque que concorda com o uso dos dados.");
-  // A mesma escola pediu há pouco tempo e o pedido ainda está aberto: devolve o protocolo que ela já tem
+  // A mesma pessoa pediu há pouco tempo para a mesma escola e o pedido ainda está aberto: devolve o protocolo que ela já tem
   const [[antes]] = await db.query(`SELECT esi_protocolo AS protocolo, DATE_FORMAT(esi_criado_em, '%d/%m/%Y') AS em FROM escolas_interessadas
-    WHERE esi_cnpj = ? AND esi_status IN ('novo','em_contato') AND esi_criado_em >= NOW() - INTERVAL 30 DAY ORDER BY esi_id DESC LIMIT 1`, [d.cnpj]);
+    WHERE esi_email = ? AND esi_nome = ? AND esi_status IN ('novo','em_contato') AND esi_criado_em >= NOW() - INTERVAL 30 DAY ORDER BY esi_id DESC LIMIT 1`, [d.email, d.nome]);
   if (antes) return res.json({ protocolo: antes.protocolo, repetido: true, em: antes.em });
-  const [r] = await db.query(`INSERT INTO escolas_interessadas (esi_nome, esi_cnpj, esi_rede, esi_etapas, esi_alunos, esi_cep, esi_logradouro, esi_numero,
-    esi_complemento, esi_bairro, esi_cidade, esi_uf, esi_contato_nome, esi_contato_cargo, esi_email, esi_telefone, esi_horario, esi_mensagem, esi_aceite_em, esi_ip)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),?)`,
-    [d.nome, d.cnpj, d.rede, d.etapas.join(", "), d.alunos, d.cep, d.logradouro, d.numero, d.complemento || null, d.bairro, d.cidade, d.uf,
-      d.contato_nome, d.contato_cargo, d.email, d.telefone, d.horario, d.mensagem || null, req.ip]);
+  const [r] = await db.query(`INSERT INTO escolas_interessadas (esi_nome, esi_alunos, esi_cidade, esi_uf, esi_contato_nome, esi_email, esi_telefone, esi_aceite_em, esi_ip)
+    VALUES (?,?,?,?,?,?,?,NOW(),?)`, [d.nome, d.alunos, d.cidade, d.uf, d.contato_nome, d.email, d.telefone, req.ip]);
   const protocolo = `SIVE-${new Date().getFullYear()}-${String(r.insertId).padStart(5, "0")}`;
   await db.query("UPDATE escolas_interessadas SET esi_protocolo = ? WHERE esi_id = ?", [protocolo, r.insertId]);
   console.log(`🏫 Nova escola interessada: ${d.nome} (${d.cidade}/${d.uf}) — protocolo ${protocolo}`);
@@ -1663,6 +1732,18 @@ app.get("/api/reativacao", autenticar, apenasAdmin, rota(async (req, res) => {
   res.json({ ...INATIVIDADE, inativos: linhas.filter((l) => !l.ativo), perto: linhas.filter((l) => l.ativo).map((l) => ({ ...l, faltam: INATIVIDADE.dias - l.dias_sem_acesso })) });
 }));
 
+// Pedido de "Esqueci minha senha": a gestão confirma quem é e gera uma senha provisória (troca obrigatória no próximo login).
+// A verificação em duas etapas continua valendo; se a pessoa também perdeu o celular, a gestão zera à parte.
+app.put("/api/usuarios/:id/nova-senha", autenticar, apenasAdmin, rota(async (req, res) => {
+  const [[u]] = await db.query("SELECT usu_id AS id, usu_nome AS nome, usu_ativo AS ativo FROM usuarios WHERE usu_id = ?", [req.params.id]);
+  if (!u) return res.status(404).json({ erro: "Usuário não encontrado" });
+  if (!u.ativo) return res.status(400).json({ erro: "Este usuário está inativo. Reative o acesso primeiro." });
+  if (u.id === req.usuario.id) return res.status(400).json({ erro: "Para mudar a sua própria senha, use Trocar senha." });
+  const senha = gerarSenhaGenerica();
+  await db.query("UPDATE usuarios SET usu_senha = ?, usu_senha_temporaria = TRUE, usu_senha_pedida_em = NULL, usu_recuperacao_hash = NULL, usu_recuperacao_expira = NULL, usu_sessao_versao = usu_sessao_versao + 1 WHERE usu_id = ?", [await hashSenha(senha), u.id]);
+  await registrarLog(req.usuario, "nova_senha_usuario", `${u.nome} (nova senha provisória gerada)`);
+  res.json({ ok: true, senha_provisoria: senha });
+}));
 // A gestão reativa: o acesso volta, o prazo recomeça e uma senha provisória nova é gerada (troca obrigatória no próximo login)
 app.put("/api/usuarios/:id/reativar", autenticar, apenasAdmin, rota(async (req, res) => {
   const [[u]] = await db.query("SELECT usu_id AS id, usu_nome AS nome, usu_ativo AS ativo FROM usuarios WHERE usu_id = ?", [req.params.id]);
@@ -2080,6 +2161,21 @@ app.post("/api/avisos/vistos", autenticar, apenasPai, rota(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// Painel de Acessibilidade: as escolhas da própria pessoa. Só ela lê e grava, e nada disso vai para os logs (pode revelar uma condição de saúde).
+const OPCOES_ACESSIBILIDADE = { texto: ["normal", "grande", "muito-grande"], contraste: ["padrao", "alto", "escuro"] };
+const LIGA_DESLIGA_ACESSIBILIDADE = ["daltonismo", "fonte", "espaco", "links", "semMovimento", "voz"];
+function limparAcessibilidade(dados) {
+  const p = {};
+  for (const [campo, opcoes] of Object.entries(OPCOES_ACESSIBILIDADE)) if (opcoes.includes(dados[campo])) p[campo] = dados[campo];
+  for (const campo of LIGA_DESLIGA_ACESSIBILIDADE) if (dados[campo] === true) p[campo] = true;
+  return p;
+}
+function lerAcessibilidade(texto) { try { return texto ? limparAcessibilidade(JSON.parse(texto)) : null; } catch { return null; } }
+app.put("/api/acessibilidade", autenticar, rota(async (req, res) => {
+  await db.query("UPDATE usuarios SET usu_acessibilidade = ? WHERE usu_id = ?", [JSON.stringify(limparAcessibilidade(req.body || {})), req.usuario.id]);
+  res.json({ ok: true });
+}));
+
 // Tutorial do primeiro acesso: a pessoa concluiu ou pulou, e ele não aparece mais sozinho (em nenhum aparelho)
 app.post("/api/tutorial/visto", autenticar, rota(async (req, res) => {
   await db.query("UPDATE usuarios SET usu_tutorial_visto_em = NOW() WHERE usu_id = ?", [req.usuario.id]);
@@ -2127,6 +2223,9 @@ const servidor = protocolo === "https"
   : app;
 servidor.listen(config.porta, async () => {
   console.log(`S.I.V.E. rodando em ${protocolo}://localhost:${config.porta}`);
+  if (emailSimulado) console.log("✉️  E-mail em modo SIMULADO: os links de recuperação de senha e os códigos de verificação aparecem só aqui no terminal.");
+  if (telefoneSimulado) console.log("📱 SMS e WhatsApp em modo SIMULADO: os códigos de verificação aparecem só aqui no terminal.");
+  else if (!(config.email || {}).url_base) console.log('⚠️  Preencha "url_base" em "email" no config.json: sem ele, os links de recuperação apontam para localhost.');
   // Dados pessoais e chaves em pasta sincronizada com a nuvem (OneDrive, Google Drive, Dropbox): avisa
   if (/onedrive|google drive|dropbox|icloud/i.test(__dirname + "|" + PASTA_BACKUPS)) {
     console.log("\n⚠️  ATENÇÃO: o sistema ou a pasta de backups está numa pasta sincronizada com a nuvem (ex.: OneDrive).");
@@ -2138,6 +2237,12 @@ servidor.listen(config.porta, async () => {
   try {
     const [colunas] = await db.query("SHOW COLUMNS FROM usuarios LIKE 'usu_inativado_motivo'");
     const [tabelas] = await db.query("SHOW TABLES LIKE 'reconhecimentos'");
+    const [pedidoSenha] = await db.query("SHOW COLUMNS FROM usuarios LIKE 'usu_senha_pedida_em'");
+    if (!pedidoSenha.length) console.log("\n⚠️  BANCO DESATUALIZADO: rode database/migracao-2026-11-05.sql no MySQL e reinicie o servidor.\n");
+    const [emailConta] = await db.query("SHOW COLUMNS FROM usuarios LIKE 'usu_email'");
+    if (!emailConta.length) console.log("\n⚠️  BANCO DESATUALIZADO: rode database/migracao-2026-11-05-email.sql no MySQL e reinicie o servidor.\n");
+    const [metodo2fa] = await db.query("SHOW COLUMNS FROM usuarios LIKE 'usu_2fa_metodo'");
+    if (!metodo2fa.length) console.log("\n⚠️  BANCO DESATUALIZADO: rode database/migracao-2026-11-05-2fa.sql no MySQL e reinicie o servidor.\n");
     if (!colunas.length || !tabelas.length) {
       console.log("\n⚠️  BANCO DESATUALIZADO: rode o arquivo database/sive.sql no MySQL de novo e reinicie o servidor.\n");
     } else {

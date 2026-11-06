@@ -12,9 +12,9 @@ const config = require("./config.json");
 const SITUACOES = { novo: "Novo", em_contato: "Em contato", contratou: "Contratou", desistiu: "Desistiu" };
 const REDES = { municipal: "Pública municipal", estadual: "Pública estadual", federal: "Pública federal", privada: "Privada" };
 const HORARIOS = { manha: "Manhã", tarde: "Tarde", qualquer: "Qualquer horário" };
-const cnpjFormatado = (c) => c.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+const cnpjFormatado = (c) => String(c ?? "").replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
 const telefoneFormatado = (t) => t.replace(/^(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3");
-const cepFormatado = (c) => c.replace(/^(\d{5})(\d{3})$/, "$1-$2");
+const cepFormatado = (c) => String(c ?? "").replace(/^(\d{5})(\d{3})$/, "$1-$2");
 
 async function main() {
   const args = process.argv.slice(2);
@@ -35,7 +35,7 @@ async function main() {
       const cab = ["Protocolo", "Recebido em", "Situação", "Escola", "CNPJ", "Rede", "Etapas", "Alunos", "Endereço", "Bairro", "Cidade", "UF", "CEP",
         "Contato", "Cargo", "E-mail", "Telefone", "Melhor horário", "Mensagem"];
       const corpo = linhas.map((l) => [l.esi_protocolo, l.em, SITUACOES[l.esi_status], l.esi_nome, cnpjFormatado(l.esi_cnpj), REDES[l.esi_rede], l.esi_etapas,
-        l.esi_alunos, `${l.esi_logradouro}, ${l.esi_numero}${l.esi_complemento ? " - " + l.esi_complemento : ""}`, l.esi_bairro, l.esi_cidade, l.esi_uf,
+        l.esi_alunos, l.esi_logradouro ? `${l.esi_logradouro}, ${l.esi_numero}${l.esi_complemento ? " - " + l.esi_complemento : ""}` : "", l.esi_bairro, l.esi_cidade, l.esi_uf,
         cepFormatado(l.esi_cep), l.esi_contato_nome, l.esi_contato_cargo, l.esi_email, telefoneFormatado(l.esi_telefone), HORARIOS[l.esi_horario], l.esi_mensagem]);
       const arquivo = path.join(__dirname, "escolas-interessadas.csv");
       // ; e o "BOM" no começo: o Excel em português abre com as colunas e os acentos certos
@@ -47,10 +47,11 @@ async function main() {
     console.log(`\n🏫 ${linhas.length} pedido(s)${args.includes("--todos") ? "" : " em aberto"}\n`);
     for (const l of linhas) {
       console.log(`${l.esi_protocolo}  •  ${l.em}  •  ${SITUACOES[l.esi_status]}`);
-      console.log(`  ${l.esi_nome}  (CNPJ ${cnpjFormatado(l.esi_cnpj)})  •  ${REDES[l.esi_rede]}  •  ${l.esi_alunos} alunos`);
-      console.log(`  ${l.esi_etapas}`);
-      console.log(`  ${l.esi_logradouro}, ${l.esi_numero}${l.esi_complemento ? " - " + l.esi_complemento : ""} — ${l.esi_bairro}, ${l.esi_cidade}/${l.esi_uf}, CEP ${cepFormatado(l.esi_cep)}`);
-      console.log(`  Falar com: ${l.esi_contato_nome} (${l.esi_contato_cargo}) • ${telefoneFormatado(l.esi_telefone)} • ${l.esi_email} • ${HORARIOS[l.esi_horario]}`);
+      // Pedidos antigos têm CNPJ, rede, etapas, endereço e cargo; os novos (ficha simplificada) não
+      console.log(`  ${l.esi_nome}${l.esi_cnpj ? `  (CNPJ ${cnpjFormatado(l.esi_cnpj)})  •  ${REDES[l.esi_rede]}` : ""}  •  ${l.esi_alunos} alunos  •  ${l.esi_cidade}/${l.esi_uf}`);
+      if (l.esi_etapas) console.log(`  ${l.esi_etapas}`);
+      if (l.esi_logradouro) console.log(`  ${l.esi_logradouro}, ${l.esi_numero}${l.esi_complemento ? " - " + l.esi_complemento : ""} — ${l.esi_bairro}, CEP ${cepFormatado(l.esi_cep)}`);
+      console.log(`  Falar com: ${l.esi_contato_nome}${l.esi_contato_cargo ? ` (${l.esi_contato_cargo})` : ""} • ${telefoneFormatado(l.esi_telefone)} • ${l.esi_email} • ${HORARIOS[l.esi_horario]}`);
       if (l.esi_mensagem) console.log(`  Mensagem: ${l.esi_mensagem}`);
       console.log("");
     }
