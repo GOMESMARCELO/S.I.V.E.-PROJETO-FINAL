@@ -32,7 +32,7 @@ async function api(url, opcoes = {}) {
     });
   } catch {
     marcarConexao(false); // o servidor não respondeu (sem internet ou servidor desligado)
-    throw new Error("Sem conexão com o sistema. Confira a internet e tente de novo.");
+    throw new Error("Sem conexão. Confira a internet e tente de novo.");
   }
   marcarConexao(true);
   if (resposta.status === 401 || resposta.status === 403) {
@@ -42,7 +42,7 @@ async function api(url, opcoes = {}) {
     if (corpo.codigo === "2FA_PENDENTE") { usuarioLogado.configurar_2fa = true; mostrarTela2fa(); throw new Error("Aceite pendente"); }
     throw new Error(corpo.erro || "Acesso negado");
   }
-  if (!resposta.ok) { const corpo = await resposta.json().catch(() => ({})); throw Object.assign(new Error(corpo.erro || "Falha na API"), { codigo: corpo.codigo, alunos: corpo.alunos }); }
+  if (!resposta.ok) { const corpo = await resposta.json().catch(() => ({})); throw Object.assign(new Error(corpo.erro || "Não foi possível concluir agora. Tente de novo."), { codigo: corpo.codigo, alunos: corpo.alunos }); }
   return resposta.json();
 }
 // Usado nos botões: se a API der erro, avisa na tela em vez de falhar em silêncio
@@ -129,8 +129,8 @@ const menusPorPapel = {
     { grupo: "Administração", id: "logs", nome: "Registro de atividades", dica: "Quem fez o quê", icone: "atividade" },
   ],
   pai: [
-    { id: "pais", nome: "Portal dos Pais", dica: "Meu filho", icone: "familia" },
-    { id: "ocorrencias", nome: "Ocorrências", dica: "Registros do professor", icone: "prancheta" },
+    { id: "pais", nome: "Portal da Família", dica: "Meu filho", icone: "familia" },
+    { id: "ocorrencias", nome: "Ocorrências", dica: "Registros do docente", icone: "prancheta" },
     { id: "calendario", nome: "Calendário", dica: "Eventos da escola", icone: "calendario" },
     { id: "perfil", nome: "Meu perfil", dica: "Dados e contatos", icone: "pessoa" },
   ],
@@ -192,6 +192,7 @@ const ICONES = {
   menu: { anim: "pula", svg: '<path d="M4 6h16M4 12h16M4 18h16"/>' },
   setaEsq: { anim: "anda", svg: '<path d="m15 18-6-6 6-6"/>' },
   setaDir: { anim: "anda", svg: '<path d="m9 18 6-6-6-6"/>' },
+  externo: { anim: "procura", svg: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>' },
   sair: { anim: "anda", svg: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>' },
   ajuda: { anim: "balanca", svg: '<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>' },
   acessibilidade: { anim: "pulsa", svg: '<circle cx="12" cy="4.5" r="2"/><path d="M4 8.5c5 1.5 11 1.5 16 0"/><path d="M12 10v5"/><path d="m8 21 4-6 4 6"/>' },
@@ -228,8 +229,63 @@ function ligarRotulos() {
 }
 ["tela", "dialogo-campos"].forEach((id) => new MutationObserver(ligarRotulos).observe(document.getElementById(id), { childList: true, subtree: true }));
 
+// ---------- Filtro "Turma → Aluno" ----------
+// Todo <select data-filtro-turma> de aluno ganha, antes dele, um seletor de turma: primeiro escolhe a turma, depois o aluno
+// (em ordem alfabética). As opções de aluno precisam de data-sala. Opções sem data-sala (ex.: "Escolha o aluno...") ficam sempre no topo.
+const ordemTurma = (a, b) => String(a).localeCompare(String(b), "pt-BR", { numeric: true, sensitivity: "base" });
+const ordemNome = (a, b) => String(a.nome).localeCompare(String(b.nome), "pt-BR", { sensitivity: "base" });
+const opcoesAlunos = (alunos, salaPadrao = "") => [...alunos].sort(ordemNome)
+  .map((a) => `<option value="${a.id}" data-sala="${esc(a.sala || salaPadrao)}">${esc(a.nome)}</option>`).join("");
+const turmasDe = (alunos, salaPadrao = "") => [...new Set(alunos.map((a) => a.sala || salaPadrao).filter(Boolean))].sort(ordemTurma);
+const valorNativoSelect = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value");
+function ligarFiltrosTurma() {
+  document.querySelectorAll("select[data-filtro-turma]").forEach((sel) => {
+    if (sel._filtro && !sel.querySelector("option:not([data-f])")) return; // já pronto e ninguém trocou as opções
+    const lidas = [...sel.options];
+    const topo = lidas.filter((o) => !o.hasAttribute("data-sala")).map((o) => ({ value: o.value, text: o.textContent }));
+    const itens = lidas.filter((o) => o.hasAttribute("data-sala")).map((o) => ({ value: o.value, text: o.textContent, sala: o.dataset.sala }))
+      .sort((a, b) => a.text.localeCompare(b.text, "pt-BR", { sensitivity: "base" }));
+    const escolhido = itens.find((i) => i.value === valorNativoSelect.get.call(sel) && lidas.find((o) => o.value === i.value && o.selected && o.hasAttribute("selected")));
+    const turmas = [...new Set(itens.map((i) => i.sala).filter(Boolean))].sort(ordemTurma);
+    let turmaSel = sel._filtro ? sel._filtro.turmaSel : null;
+    if (!turmaSel) {
+      if (!sel.hasAttribute("aria-label") && !sel.hasAttribute("aria-labelledby") && sel.previousElementSibling && sel.previousElementSibling.tagName === "SMALL") {
+        const r = sel.previousElementSibling; if (!r.id) r.id = `rotulo-${++proximoRotulo}`; sel.setAttribute("aria-labelledby", r.id);
+      }
+      const par = document.createElement("div"); par.className = "par-turma-aluno";
+      turmaSel = document.createElement("select"); turmaSel.className = "filtro-turma"; turmaSel.setAttribute("aria-label", "Turma (escolha primeiro)");
+      sel.before(par); par.append(turmaSel, sel);
+      Object.defineProperty(sel, "value", { configurable: true, get() { return valorNativoSelect.get.call(this); },
+        set(v) { const it = this._filtro && this._filtro.itens.find((i) => i.value === String(v));
+          if (it && this._filtro.turmaSel.value !== it.sala) { this._filtro.turmaSel.value = it.sala; this._filtro.desenhar(); }
+          valorNativoSelect.set.call(this, v); } });
+      turmaSel.addEventListener("change", () => { sel._filtro.desenhar(); valorNativoSelect.set.call(sel, ""); sel.dispatchEvent(new Event("change", { bubbles: true })); if (turmaSel.value) sel.focus(); });
+    }
+    const anterior = turmaSel.value;
+    turmaSel.innerHTML = `<option value="" data-f>Turma...</option>` + turmas.map((t) => `<option data-f>${esc(t)}</option>`).join("");
+    turmaSel.value = turmas.includes(anterior) ? anterior : escolhido ? escolhido.sala : turmas.length === 1 ? turmas[0] : "";
+    const desenhar = () => {
+      const atual = valorNativoSelect.get.call(sel), sala = turmaSel.value;
+      sel.innerHTML = topo.map((o, i) => `<option value="${esc(o.value)}" data-f>${esc(i === 0 && o.value === "" && /^Escolha/.test(o.text) && !sala && itens.length ? "Escolha a turma primeiro" : o.text)}</option>`).join("")
+        + itens.filter((i) => i.sala === sala).map((i) => `<option value="${esc(i.value)}" data-sala="${esc(i.sala)}" data-f>${esc(i.text)}</option>`).join("");
+      valorNativoSelect.set.call(sel, [...sel.options].some((o) => o.value === atual) ? atual : (sel.options[0] ? sel.options[0].value : ""));
+    };
+    sel._filtro = { turmaSel, itens, desenhar };
+    desenhar();
+    if (escolhido) valorNativoSelect.set.call(sel, escolhido.value);
+  });
+}
+new MutationObserver(ligarFiltrosTurma).observe(document.getElementById("tela"), { childList: true, subtree: true });
+
 // ---------- Página de apresentação (antes do login) ----------
 document.getElementById("lp-ano").textContent = new Date().getFullYear();
+// WhatsApp flutuante: só aparece com um número válido em data-numero (DDD + número)
+(() => {
+  const botao = document.getElementById("lp-whatsapp"), numero = (botao.dataset.numero || "").replace(/\D/g, "");
+  if (!/^[1-9]{2}9?\d{8}$/.test(numero)) return;
+  botao.href = `https://wa.me/55${numero}?text=${encodeURIComponent("Olá! Quero saber mais sobre o S.I.V.E.")}`;
+  botao.hidden = false;
+})();
 // Títulos, textos e cards aparecem quando entram na tela, vindos de direções diferentes. Sem suporte ao observador, aparecem de uma vez.
 (() => {
   document.querySelectorAll(".lp-secao .lp-sobretitulo, .lp-secao .lp-titulo, .lp-depoimentos-aviso, .lp-texto, .lp-nota-centro, .lp-faq, .lp-selos > div, .lp-chamada .lp-faixa > *")
@@ -280,6 +336,7 @@ document.getElementById("lp-pausar").onclick = (e) => {
     botaoTopo.classList.toggle("visivel", y > 600);
     let atual = null;
     links.forEach((a) => { const s = document.querySelector(a.getAttribute("href")); if (s && s.getBoundingClientRect().top < 140) atual = a; });
+    if (max > 0 && y >= max - 4) atual = links[links.length - 1]; // no fim da página, a última seção (Perguntas) não chega ao topo: marca o último link
     links.forEach((a) => a.classList.toggle("ativo", a === atual));
   };
   addEventListener("scroll", aoRolar, { passive: true });
@@ -287,9 +344,226 @@ document.getElementById("lp-pausar").onclick = (e) => {
 })();
 // Os links "Entrar" (#entrar) abrem a página de login, que tem só o usuário e a senha. Qualquer outro endereço mostra o site.
 // Usa o endereço da página, então o botão "voltar" do navegador também volta para o site.
-const TITULO_SITE = "S.I.V.E. — Vigilância Escolar Inteligente";
+const TITULO_SITE = "S.I.V.E. — Gestão e segurança escolar";
 const menosMovimento = () => matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.hasAttribute("data-sem-movimento");
 function homeVisivel() { return document.getElementById("lp-home").offsetParent !== null; }
+// Painel do topo "vivo": os números contam até o valor ao abrir e, de tempos em tempos, chega uma notificação (entrada no portão,
+// comunicado lido...), como se o dia estivesse acontecendo. Tudo fictício. Para com "menos movimento", com o botão de pausar,
+// com a aba escondida ou com o painel fora da tela.
+(() => {
+  const mock = document.querySelector(".lp-mock");
+  if (!mock) return;
+  const q = (s) => mock.querySelector(s), aviso = q(".lp-mock-aviso"), sinoNum = q(".lp-mock-sino-num");
+  const presentes = q("[data-presentes]"), ausentes = q("[data-ausentes]"), docs = q("[data-documentos]"), auts = q("[data-autorizacoes]");
+  const total = 312;
+  let naTela = true;
+  if ("IntersectionObserver" in window) new IntersectionObserver(([e]) => { naTela = e.isIntersecting; }).observe(mock);
+  const parado = () => menosMovimento() || document.hidden || !naTela || !homeVisivel() || document.body.classList.contains("lp-pausado");
+  // 1) Números contando (uma vez, ao abrir a página)
+  const numeros = [...mock.querySelectorAll(".lp-mock-metricas b, .lp-mock-alerta > b")];
+  if (!menosMovimento()) {
+    const finais = numeros.map((b) => Number(b.textContent));
+    numeros.forEach((b) => { b.textContent = "0"; });
+    setTimeout(() => {
+      const t0 = performance.now();
+      const passo = (agora) => {
+        const t = Math.min(1, (agora - t0) / 1300), suave = 1 - Math.pow(1 - t, 3);
+        numeros.forEach((b, i) => { b.textContent = Math.round(finais[i] * suave); });
+        if (t < 1) requestAnimationFrame(passo);
+      };
+      requestAnimationFrame(passo);
+    }, 700);
+  }
+  // 2) Notificações chegando
+  const avisos = [
+    { ico: "olho", titulo: "Entrada: Lucas • 3º Ano A", texto: "Portão principal • agora", entrada: true },
+    { ico: "megafone", titulo: "Comunicado lido", texto: "23 de 24 famílias" },
+    { ico: "olho", titulo: "Entrada: Sofia • 1º Ano B", texto: "Portão principal • agora", entrada: true },
+    { ico: "caneta", titulo: "Autorização assinada", texto: "Passeio ao museu • 2º Ano B", conta: auts },
+    { ico: "olho", titulo: "Entrada: Davi • 5º Ano A", texto: "Portão lateral • agora", entrada: true },
+    { ico: "pasta", titulo: "Documento recebido", texto: "Comprovante de residência", conta: docs },
+  ];
+  let i = 0, novos = 0;
+  setInterval(() => {
+    if (parado()) return;
+    const a = avisos[i % avisos.length]; i++;
+    const presentesAgora = Number(presentes.textContent);
+    if (a.entrada && presentesAgora >= total) return; // todo mundo já chegou: pula as entradas
+    aviso.classList.remove("mostrar");
+    void aviso.offsetWidth; // reinicia a animação de entrada
+    aviso.innerHTML = `<span class="lp-mock-aviso-ico">${ico(a.ico)}</span><span><b>${a.titulo}</b><small>${a.texto}</small></span>`;
+    aviso.classList.add("mostrar");
+    novos = Math.min(9, novos + 1); sinoNum.textContent = novos; sinoNum.hidden = false;
+    sinoNum.classList.remove("pulou"); void sinoNum.offsetWidth; sinoNum.classList.add("pulou");
+    const pular = (el) => { el.classList.remove("mudou"); void el.offsetWidth; el.classList.add("mudou"); };
+    if (a.entrada) { presentes.textContent = presentesAgora + 1; ausentes.textContent = `${total - presentesAgora - 1} ausentes`; pular(presentes); }
+    if (a.conta) { a.conta.textContent = Math.min(9, Number(a.conta.textContent) + 1); pular(a.conta); }
+  }, 3400);
+})();
+// Carrosséis do celular (Recursos, Perfis e Situações): os cartões deslizam para o lado e os pontinhos mostram em qual você está.
+// No computador o CSS mostra a grade normal e os pontinhos ficam escondidos.
+(() => {
+  document.querySelectorAll("[data-carrossel]").forEach((lista) => {
+    const itens = [...lista.children];
+    const pontos = document.createElement("div");
+    pontos.className = "lp-carrossel-pontos";
+    pontos.innerHTML = itens.map((_, i) => `<button type="button" aria-label="${lista.dataset.carrossel}: item ${i + 1} de ${itens.length}"></button>`).join("");
+    lista.after(pontos);
+    const botoes = [...pontos.children];
+    const marcar = () => {
+      const meio = lista.scrollLeft + lista.clientWidth / 2;
+      let atual = 0;
+      itens.forEach((it, i) => { if (it.offsetLeft <= meio) atual = i; });
+      botoes.forEach((b, i) => b.setAttribute("aria-current", i === atual ? "true" : "false"));
+    };
+    botoes.forEach((b, i) => b.addEventListener("click", () => lista.scrollTo({ left: itens[i].offsetLeft - (lista.clientWidth - itens[i].offsetWidth) / 2, behavior: menosMovimento() ? "auto" : "smooth" })));
+    lista.addEventListener("scroll", () => requestAnimationFrame(marcar), { passive: true });
+    addEventListener("resize", marcar);
+    marcar();
+  });
+})();
+// Barra fixa do celular ("Entrar" e "Quero o S.I.V.E."): aparece depois que os botões do topo saem da tela e some perto da chamada final,
+// que já tem os mesmos botões. Enquanto ela aparece, os botões flutuantes (WhatsApp, voltar ao topo) sobem para não ficarem por baixo.
+(() => {
+  const barra = document.querySelector(".lp-barra-movel"), acoesTopo = document.querySelector(".lp-hero .lp-acoes"), chamada = document.querySelector(".lp-chamada");
+  if (!barra) return;
+  let agendado = false;
+  const atualizar = () => {
+    agendado = false;
+    const mostrar = homeVisivel() && innerWidth < 760 && acoesTopo.getBoundingClientRect().bottom < 0 && chamada.getBoundingClientRect().top > innerHeight * 0.6;
+    document.documentElement.classList.toggle("lp-com-barra", mostrar);
+  };
+  const agendar = () => { if (!agendado) { agendado = true; requestAnimationFrame(atualizar); } };
+  addEventListener("scroll", agendar, { passive: true });
+  addEventListener("resize", agendar);
+  addEventListener("hashchange", agendar);
+  atualizar();
+})();
+// Transição do "Entrar": o botão clicado se transforma na caixa de login (View Transitions do navegador).
+// Navegadores sem esse recurso, ou com "menos movimento", só trocam de tela como antes.
+document.addEventListener("click", (e) => {
+  const link = e.target.closest('a[href="#entrar"]');
+  if (!link || !document.startViewTransition || menosMovimento()) return;
+  document.querySelectorAll(".lp-vt-origem").forEach((el) => el.classList.remove("lp-vt-origem"));
+  link.classList.add("lp-vt-origem");
+}, true);
+function trocarTela() {
+  const origem = document.querySelector(".lp-vt-origem");
+  if (!origem || !document.startViewTransition || menosMovimento()) { mostrarPaginaInicial(); return; }
+  const transicao = document.startViewTransition(() => { origem.classList.remove("lp-vt-origem"); mostrarPaginaInicial(); });
+  transicao.finished.finally(() => origem.classList.remove("lp-vt-origem"));
+}
+// O S.I.V.E. não é instalável: desfaz o service worker que versões anteriores registraram neste navegador.
+if ("serviceWorker" in navigator) navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
+// Topo do site encaixado na primeira tela: o hero ocupa a altura que sobra entre o cabeçalho e a faixa de recursos,
+// e a faixa termina exatamente no fim da tela. Se o conteúdo não couber, o hero fica mais compacto em até dois níveis.
+// No celular, com letra ampliada ou fora da home, o hero volta à altura natural.
+(() => {
+  const hero = document.querySelector(".lp-hero"), topo = document.querySelector(".lp-topo"), faixa = document.querySelector(".lp-ticker");
+  let alturaTopo = 0; // altura do cabeçalho no alto da página (rolando, ele fica mais baixo)
+  const encaixar = () => {
+    if (!homeVisivel()) return;
+    hero.classList.remove("lp-hero-ajuste1", "lp-hero-ajuste2");
+    hero.style.removeProperty("min-height");
+    if (innerWidth < 960 || document.documentElement.hasAttribute("data-texto")) return;
+    if (!topo.classList.contains("rolou") || !alturaTopo) alturaTopo = topo.offsetHeight + (topo.classList.contains("rolou") ? 12 : 0);
+    const livre = innerHeight - alturaTopo - faixa.offsetHeight;
+    // Altura do conteúdo (as bolhas decorativas do fundo ficam de fora da conta)
+    const grade = hero.querySelector(".lp-hero-grade");
+    const precisa = () => { const e = getComputedStyle(hero); return grade.offsetHeight + parseFloat(e.paddingTop) + parseFloat(e.paddingBottom); };
+    for (const nivel of ["lp-hero-ajuste1", "lp-hero-ajuste2"]) { if (precisa() <= livre) break; hero.classList.add(nivel); }
+    hero.style.minHeight = livre + "px";
+  };
+  addEventListener("resize", encaixar);
+  addEventListener("hashchange", () => requestAnimationFrame(encaixar));
+  new MutationObserver(encaixar).observe(document.documentElement, { attributes: true, attributeFilter: ["data-texto", "data-fonte", "data-espaco"] });
+  encaixar();
+  if (document.fonts) document.fonts.ready.then(encaixar); // as fontes mudam a altura do texto
+})();
+// Efeitos guiados pela rolagem (hero, assinatura e chamada final): o app.js só escreve um número de 0 a 1 em uma variável CSS, e o CSS faz o resto.
+// Com "menos movimento", tudo fica no estado final (1), sem animação.
+(() => {
+  const hero = document.querySelector(".lp-hero"), vitrine = document.querySelector(".lp-vitrine");
+  const passos = document.querySelector(".lp-fluxo-passos"), itens = [...passos.children], chamada = document.querySelector(".lp-chamada");
+  const limitar = (v) => Math.min(1, Math.max(0, v));
+  // Quanto o elemento já andou entre "o topo dele está em `de` da altura da tela" (0) e "está em `ate`" (1)
+  const entre = (el, de, ate) => limitar((de * innerHeight - el.getBoundingClientRect().top) / ((de - ate) * innerHeight));
+  let agendado = false;
+  const desenhar = () => {
+    agendado = false;
+    if (!homeVisivel()) return;
+    const parado = menosMovimento();
+    vitrine.style.setProperty("--h", parado ? 1 : limitar(scrollY / (hero.offsetHeight * 0.6)).toFixed(3));
+    const f = parado ? 1 : entre(passos, 0.85, 0.35);
+    passos.style.setProperty("--f", f.toFixed(3));
+    passos.parentElement.parentElement.classList.toggle("lp-fluxo-vivo", !parado);
+    itens.forEach((li, i) => li.classList.toggle("aceso", f >= i / (itens.length - 1) - 0.02));
+    chamada.style.setProperty("--c", parado ? 1 : entre(chamada, 1, 0.55).toFixed(3));
+    // "No dia a dia": o sol anda pelo trilho (7h30 → 17h40) e os cartões acendem na hora deles. Só em telas largas.
+    const dia = document.querySelector(".lp-dia-trilho");
+    if (dia) {
+      const largo = innerWidth >= 760 && !parado, d = largo ? entre(dia, 0.85, 0.3) : 1;
+      dia.style.setProperty("--d", d.toFixed(3));
+      const cartoes = [...dia.nextElementSibling.children];
+      dia.parentElement.classList.toggle("lp-dia-vivo", largo);
+      cartoes.forEach((c, i) => c.classList.toggle("aceso", d >= i / (cartoes.length - 1) - 0.02));
+    }
+  };
+  const agendar = () => { if (!agendado) { agendado = true; requestAnimationFrame(desenhar); } };
+  addEventListener("scroll", agendar, { passive: true });
+  addEventListener("resize", agendar);
+  addEventListener("hashchange", agendar);
+  new MutationObserver(agendar).observe(document.documentElement, { attributes: true, attributeFilter: ["data-sem-movimento"] });
+  agendar();
+})();
+// Seção "Para quem" presa na tela: enquanto a pessoa rola, a seção fica parada e o perfil em destaque muda (01, 02, 03), junto com a tela ao lado.
+// Só liga em telas grandes, sem letra ampliada e sem "menos movimento". Nos outros casos (e sem JavaScript) os três perfis ficam um abaixo do outro.
+(() => {
+  const secao = document.getElementById("para-quem"), trilho = secao.querySelector(".lp-passos-trilho"), palco = secao.querySelector(".lp-passos-palco");
+  const passos = [...secao.querySelectorAll(".lp-passo")], telas = passos.map((p) => p.querySelector(".lp-passo-tela"));
+  const FOLGA = 0.08; // 8% da rolagem parada no primeiro perfil e 8% no último, para dar tempo de ler
+  const limitar = (v) => Math.min(1, Math.max(0, v));
+  const podePrender = () => innerWidth >= 1000 && innerHeight >= 640 && !menosMovimento() && !document.documentElement.hasAttribute("data-texto");
+  let vivo = false, topo = 0, agendado = false;
+  const desenhar = () => {
+    agendado = false;
+    if (!homeVisivel()) return;
+    if (podePrender() !== vivo) { // entrou no modo preso ou saiu dele (ex.: a janela mudou de tamanho)
+      vivo = !vivo;
+      secao.classList.toggle("lp-passos-vivo", vivo);
+      topo = vivo ? parseFloat(getComputedStyle(palco).top) || 0 : 0; // altura do cabeçalho fixo, definida no CSS (--passos-topo)
+      if (!vivo) telas.forEach((t) => { t.style.removeProperty("--d"); t.style.removeProperty("--a"); });
+    }
+    if (!vivo) return;
+    const sobra = trilho.offsetHeight - palco.offsetHeight; // quanto dá para rolar com a seção parada
+    const p = limitar((topo - trilho.getBoundingClientRect().top) / sobra); // 0 = seção acabou de parar, 1 = vai soltar
+    const bruta = limitar((p - FOLGA) / (1 - 2 * FOLGA)) * (passos.length - 1); // 0 a 2, com casas decimais: 0,5 é o meio do caminho entre o 1º e o 2º perfil
+    // Cada perfil fica parado por um trecho e a troca acontece só no meio do caminho, começando e terminando devagar
+    const inteiro = Math.min(Math.floor(bruta), passos.length - 2), t = limitar((bruta - inteiro - 0.25) / 0.5);
+    const posicao = inteiro + t * t * (3 - 2 * t);
+    const atual = Math.round(posicao);
+    secao.style.setProperty("--p", p.toFixed(4));
+    passos.forEach((passo, i) => {
+      passo.classList.toggle("ativo", i === atual);
+      const d = i - posicao; // negativo: a tela já passou (sobe); positivo: ainda vem (espera embaixo)
+      telas[i].style.setProperty("--d", d.toFixed(4));
+      telas[i].style.setProperty("--a", Math.abs(d).toFixed(4));
+    });
+  };
+  const agendar = () => { if (!agendado) { agendado = true; requestAnimationFrame(desenhar); } }; // no máximo um desenho por quadro
+  // Clicar em um perfil rola até o ponto em que ele fica em destaque
+  passos.forEach((passo, i) => passo.querySelector(".lp-passo-texto").addEventListener("click", () => {
+    if (!vivo) return;
+    const sobra = trilho.offsetHeight - palco.offsetHeight, p = FOLGA + (i / (passos.length - 1)) * (1 - 2 * FOLGA);
+    window.scrollTo({ top: scrollY + trilho.getBoundingClientRect().top - topo + p * sobra, behavior: "smooth" });
+  }));
+  addEventListener("scroll", agendar, { passive: true });
+  addEventListener("resize", agendar);
+  addEventListener("hashchange", agendar);
+  matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", agendar);
+  new MutationObserver(agendar).observe(document.documentElement, { attributes: true, attributeFilter: ["data-sem-movimento", "data-texto"] }); // painel de acessibilidade
+  agendar();
+})();
 const codigoNaUrl = () => new URLSearchParams(location.search).get("verificar"); // ?verificar=CÓDIGO (link do QR code)
 let codigoRedefinir = ""; // link do e-mail de recuperação (#redefinir=CÓDIGO): fica depois do #, então não vai para o servidor nem para logs de acesso
 function mostrarPaginaInicial() {
@@ -306,7 +580,7 @@ function mostrarPaginaInicial() {
   const quemSomos = location.hash === "#quem-somos";
   document.getElementById("conteudo").classList.toggle("oculto", quemSomos);
   document.getElementById("lp-quem-somos").classList.toggle("oculto", !quemSomos);
-  document.title = verificar ? "Verificar assinatura — S.I.V.E." : login ? "Entrar — S.I.V.E." : quemSomos ? "Quem Somos — S.I.V.E." : TITULO_SITE;
+  document.title = verificar ? "Verificar assinatura — S.I.V.E." : login ? "Entrar — S.I.V.E." : quemSomos ? "Quem somos — S.I.V.E." : TITULO_SITE;
   if (verificar) {
     window.scrollTo(0, 0);
     if (codigoNaUrl()) { document.getElementById("ver-codigo").value = codigoNaUrl(); conferirAssinatura(); }
@@ -412,13 +686,13 @@ const cadastroEscola = (() => {
         : `Obrigado, ${nome}! A equipe S.I.V.E. vai enviar o orçamento em até 2 dias úteis pelo telefone ou e-mail informado.`;
       $("ce-ficha").classList.add("oculto"); $("ce-pronto").classList.remove("oculto"); modal.scrollTop = 0; $("ce-ok").focus();
       if (!res.repetido) form.reset();
-    } catch { mostrarErro("Sem conexão com o servidor. Confira a internet e tente de novo."); }
+    } catch { mostrarErro("Sem conexão. Confira a internet e tente de novo."); }
     finally { botao.disabled = false; botao.textContent = "Solicitar orçamento"; }
   });
   return { abrir };
 })();
 
-addEventListener("hashchange", mostrarPaginaInicial);
+addEventListener("hashchange", trocarTela);
 mostrarPaginaInicial();
 let ultimaAbaAtiva = null; // a animação de "abrir a aba" só toca quando a aba muda, não a cada redesenho do menu
 
@@ -473,17 +747,17 @@ new MutationObserver(() => {
   requestAnimationFrame(() => { paginacaoAgendada = false; paginarTudo(); });
 }).observe(document.getElementById("tela"), { childList: true, subtree: true });
 const titulos = {
-  secretaria: "Central do Dia", seguranca: "Monitoramento", pais: "Portal dos Pais", calendario: "Calendário Escolar", perfil: "Meu Perfil",
-  frequencia: "Controle de Frequência", busca: "Busca Ativa", relatorio: "Relatório Mensal",
-  cadastro: "Alunos e Turmas", usuarios: "Usuários do Sistema", logs: "Registro de Atividades", turma: "Minha Turma",
-  ficha: "Ficha do Aluno", ocorrencias: "Ocorrências", comunicados: "Comunicados", autorizacoes: "Autorizações Digitais", consentimentos: "Consentimento dos Responsáveis", protecao: "Proteção da Criança",
+  secretaria: "Central do Dia", seguranca: "Monitoramento", pais: "Portal da Família", calendario: "Calendário escolar", perfil: "Meu perfil",
+  frequencia: "Controle de frequência", busca: "Busca Ativa", relatorio: "Relatório Mensal",
+  cadastro: "Alunos e turmas", usuarios: "Usuários do sistema", logs: "Registro de atividades", turma: "Minha Turma",
+  ficha: "Ficha do aluno", ocorrencias: "Ocorrências", comunicados: "Comunicados", autorizacoes: "Autorizações Digitais", consentimentos: "Consentimento dos responsáveis", protecao: "Proteção da criança",
 };
-const papelLabel = (p) => ({ admin: "Gestão", pai: "Responsável", professor: "Professor(a)", sistema: "Sistema" }[p] || p);
+const papelLabel = (p) => ({ admin: "Gestão", pai: "Responsável", professor: "Docente", sistema: "Sistema" }[p] || p);
 const acaoLabel = (a) => ({
   login_sucesso: "Login", login_falha: "Tentativa de login falhou", logout: "Saiu do sistema", login_codigo_errado: "Errou o código das duas etapas",
-  "2fa_ativada": "Ativou a verificação em duas etapas", "2fa_zerada": "Zerou a verificação em duas etapas de um usuário", backup_feito: "Backup automático feito", backup_falhou: "Backup automático falhou",
+  "2fa_ativada": "Ativou a verificação em duas etapas", "2fa_zerada": "Redefiniu a verificação em duas etapas de um usuário", backup_feito: "Backup automático feito", backup_falhou: "Backup automático falhou",
   logs_apagados: "Apagou logs antigos (prazo de guarda)", turma_criada: "Criou turma", turma_alterada: "Alterou turma", aluno_situacao: "Mudou a situação do aluno",
-  responsavel_vinculado: "Ligou aluno a um responsável", responsavel_desvinculado: "Desligou aluno de um responsável", professor_turmas: "Alterou as turmas do professor", cadastro_aluno: "Cadastrou aluno",
+  responsavel_vinculado: "Vinculou aluno a um responsável", responsavel_desvinculado: "Desvinculou aluno de um responsável", professor_turmas: "Alterou as turmas do docente", cadastro_aluno: "Cadastrou aluno",
   cadastro_usuario: "Cadastrou usuário", troca_senha: "Trocou a senha", recuperacao_senha_pedida: "Pediu senha nova à gestão", recuperacao_senha_email: "Recebeu link de recuperação por e-mail", senha_redefinida_email: "Redefiniu a senha pelo link do e-mail", nova_senha_usuario: "Gerou senha nova para um usuário", email_usuario_alterado: "Alterou o e-mail de um usuário", autorizacao_alternada: "Alterou autorização",
   liberacao_saida: "Liberou saída", reativar_usuario: "Reativou usuário", desativar_usuario: "Desativou usuário",
   chamada_registrada: "Registrou a chamada", busca_ativa_aberta: "Abriu caso de Busca Ativa (automático)",
@@ -497,7 +771,7 @@ const acaoLabel = (a) => ({
   documento_integridade_falhou: "Arquivo de documento alterado ou ilegível", login_bloqueado: "Login bloqueado (muitas tentativas)", importacao_alunos: "Importou alunos de planilha",
   protecao_registrada: "Registrou caso de proteção da criança", protecao_comunicada: "Registrou comunicação ao Conselho Tutelar",
   protecao_consultada: "Consultou registros de proteção", comunicado_com_nome_de_aluno: "Publicou comunicado citando nome de aluno",
-  inativado_por_inatividade: "Inativou professor (60 dias sem acesso)", reativacao_solicitada: "Pediu reativação do acesso",
+  inativado_por_inatividade: "Inativou docente (60 dias sem acesso)", reativacao_solicitada: "Pediu reativação do acesso",
   perfil_atualizado: "Atualizou o perfil", evento_criado: "Criou evento no calendário", evento_excluido: "Excluiu evento do calendário",
   entrada_manual: "Registrou entrada pela portaria", saida_manual: "Registrou saída pela portaria", reconhecimento_simulado: "Simulou reconhecimento facial",
   facial_ligado: "Ligou o reconhecimento facial", facial_desligado: "Desligou o reconhecimento facial", camera_cadastrada: "Cadastrou câmera",
@@ -506,6 +780,8 @@ const acaoLabel = (a) => ({
 
 const pill = (texto, tom) => `<span class="pill ${tom}">${texto}</span>`;
 const iniciais = (nome) => nome.split(" ").slice(0, 2).map((n) => n[0]).join("");
+// Plural certo em vez de "aluno(s)": pl(1, "aluno", "alunos") = "1 aluno"; pl(3, "aluno", "alunos") = "3 alunos"
+const pl = (n, um, varios) => `${n} ${Number(n) === 1 ? um : varios}`;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const dataCurta = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" });
 const pct = (v) => (v == null ? "—" : String(v).replace(".", ",") + "%");
@@ -676,7 +952,7 @@ function iniciarAvisos() {
 function marcarContador(n) {
   const c = document.getElementById("avisos-contador");
   c.textContent = n > 9 ? "9+" : n; c.classList.toggle("oculto", !n);
-  document.getElementById("btn-avisos").setAttribute("aria-label", n ? `Avisos: ${n} novo(s)` : "Avisos");
+  document.getElementById("btn-avisos").setAttribute("aria-label", n ? `Avisos: ${pl(n, "novo", "novos")}` : "Avisos");
 }
 async function atualizarContadorAvisos() {
   if (!usuarioLogado || usuarioLogado.papel !== "pai") return;
@@ -701,7 +977,7 @@ function quandoRelativo(iso) {
 function desenharAvisos(r) {
   const painel = document.getElementById("avisos-painel");
   const podeNotificar = "Notification" in window && Notification.permission === "default";
-  painel.innerHTML = `<div class="avisos-topo"><b>Avisos</b><small>${r.novos ? `${r.novos} novo(s)` : "Nenhum aviso novo"}</small></div>
+  painel.innerHTML = `<div class="avisos-topo"><b>Avisos</b><small>${r.novos ? pl(r.novos, "novo", "novos") : "Nenhum aviso novo"}</small></div>
     ${r.itens.length ? `<div class="avisos-lista">${r.itens.map((i, k) => `<button type="button" class="aviso ${i.novo ? "novo" : ""} ${i.acao ? "acao" : ""}" data-aviso="${k}">
       <span class="icone ${i.acao ? "warning" : "info"}">${ico(iconeAviso[i.tipo] || "sino")}</span>
       <span class="aviso-texto"><b>${esc(i.titulo)}</b><small>${esc(i.texto)} • ${quandoRelativo(i.quando)}</small></span></button>`).join("")}</div>`
@@ -860,7 +1136,7 @@ document.getElementById("form-termo").onsubmit = async (e) => {
 };
 
 // ---------- Termo de consentimento dos responsáveis (imagem e informações do aluno) ----------
-async function mostrarConsentimento(modo) { // modo "primeiro" (logo após o login) ou "alterar" (pelo Portal dos Pais)
+async function mostrarConsentimento(modo) { // modo "primeiro" (logo após o login) ou "alterar" (pelo Portal da Família)
   const $ = (id) => document.getElementById(id);
   const alunoId = usuarioLogado.aluno_id;
   const [termo, estado, filho] = await Promise.all([fetch("/api/consentimento-termo").then((r) => r.json()), api(`/api/alunos/${alunoId}/consentimento`), api(`/api/alunos/${alunoId}`)]);
@@ -891,7 +1167,7 @@ document.getElementById("form-consent").onsubmit = async (e) => {
   const escolhas = {};
   document.querySelectorAll("#cons-opcoes input").forEach((c) => { escolhas[c.dataset.opcao] = c.checked; });
   if (!$("cons-confirmo").checked) { erro.textContent = "Marque “Li o termo e confirmo minhas escolhas” para assinar."; erro.classList.remove("oculto"); return; }
-  if (!Object.values(escolhas).some(Boolean) && !(await confirmar({ titulo: "Não autorizar nenhum item?", texto: "Você deixou todos os itens desmarcados. A escola não vai usar as informações nem as imagens do seu filho no sistema. Você pode mudar isso depois no Portal dos Pais.", botao: "Sim, não autorizo" }))) return;
+  if (!Object.values(escolhas).some(Boolean) && !(await confirmar({ titulo: "Não autorizar nenhum item?", texto: "Você deixou todos os itens desmarcados. A escola não vai usar as informações nem as imagens do seu filho no sistema. Você pode mudar isso depois no Portal da Família.", botao: "Sim, não autorizo" }))) return;
   try {
     await api(`/api/alunos/${usuarioLogado.aluno_id}/consentimento`, { method: "POST", body: JSON.stringify({ ...escolhas, confirmo: true, senha: $("cons-senha").value }) });
     $("cons-confirmo").checked = false; $("cons-senha").value = "";
@@ -900,7 +1176,7 @@ document.getElementById("form-consent").onsubmit = async (e) => {
     entrarNoApp();
   } catch (err) { if (err.message !== "Sessão expirada") { erro.textContent = err.message; erro.classList.remove("oculto"); } }
 };
-// cartão do Portal dos Pais
+// cartão do Portal da Família
 function cartaoConsentimento() {
   const c = dados.ficha.consentimento, [rotulo, tom] = statusConsent[c.status], a = c.atual;
   const itens = a ? `<small>${sinal(a.informacoes)} Informações do aluno no sistema</small><small>${sinal(a.imagem)} Imagens (fotos) do aluno no sistema</small><small>${sinal(a.monitoramento)} Câmeras de segurança e reconhecimento facial</small>` : "";
@@ -942,7 +1218,7 @@ async function abrirComprovanteConsentimento(c, aluno) {
     <tr><td>Aluno(a)</td><td>${esc(aluno.nome)} — ${esc(aluno.sala)}</td></tr><tr><td>Assinado por</td><td>${esc(c.assinado_nome)}</td></tr>
     <tr><td>Data e hora</td><td>${esc(c.assinado_em)}</td></tr><tr><td>Código de verificação</td><td class="cod">${esc(c.codigo)}</td></tr></table>
     <h3>Escolhas do responsável</h3><table aria-label="Escolhas do responsável">${linhas}</table>
-    ${blocoVerificacao(c.codigo)}<p>Documento gerado pelo sistema S.I.V.E. O consentimento foi confirmado com a senha do responsável e pode ser alterado ou revogado a qualquer momento no Portal dos Pais.</p><button id="imprimir">Imprimir</button></body></html>`);
+    ${blocoVerificacao(c.codigo)}<p>Documento gerado pelo sistema S.I.V.E. O consentimento foi confirmado com a senha do responsável e pode ser alterado ou revogado a qualquer momento no Portal da Família.</p><button id="imprimir">Imprimir</button></body></html>`);
   w.document.close();
   w.document.getElementById("imprimir").addEventListener("click", () => w.print());
 }
@@ -954,7 +1230,7 @@ function telaConsentimentos() {
     const [rotulo, tom] = statusConsent[a.status], marca = (v) => (a.status === "pendente" ? "—" : sinal(v));
     return `<tr><td><b>${esc(a.nome)}</b></td><td>${esc(a.sala)}</td><td>${pill(rotulo, tom)}</td><td>${marca(a.informacoes)}</td><td>${marca(a.imagem)}</td><td>${marca(a.monitoramento)}</td><td>${a.assinado_nome ? `${esc(a.assinado_nome)}<small>${a.assinado_em}</small>` : "—"}</td></tr>`;
   }).join("");
-  return `<div class="topo"><h2>Consentimento dos responsáveis</h2><small>Uso de imagem e informações dos alunos (termo versão ${esc(dados.consents.versao)}). Cada responsável assina pelo Portal dos Pais.</small></div>
+  return `<div class="topo"><h2>Consentimento dos responsáveis</h2><small>Uso de imagem e informações dos alunos (termo versão ${esc(dados.consents.versao)}). Cada responsável assina pelo Portal da Família.</small></div>
   <section class="card"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${resumo}</div>
   <div class="tabela"><table><caption class="so-leitor">Consentimento dos responsáveis por aluno</caption><thead><tr><th scope="col">Aluno</th><th scope="col">Turma</th><th scope="col">Situação</th><th scope="col">Informações</th><th scope="col">Imagens</th><th scope="col">Câmeras</th><th scope="col">Assinado por</th></tr></thead><tbody>${linhas}</tbody></table></div></section>`;
 }
@@ -965,18 +1241,19 @@ const hojeLocalISO = () => new Date(Date.now() - new Date().getTimezoneOffset() 
 function telaProtecao() {
   const ehAdmin = usuarioLogado.papel === "admin", p = dados.protecao;
   const motivos = (ehAdmin ? ["Maus-tratos", "Faltas", "Outro"] : ["Maus-tratos", "Outro"]).map((m) => `<option value="${m}">${motivosProtecao[m]}</option>`).join("");
-  const alunos = dados.alunosProtecao.map((a) => `<option value="${a.id}">${esc(a.nome)}${a.sala ? " — " + esc(a.sala) : ""}</option>`).join("");
+  const alunos = opcoesAlunos(dados.alunosProtecao, usuarioLogado.sala);
   const msg = dados.protecaoMsg || ""; dados.protecaoMsg = "";
   return `<div class="topo"><h2>Proteção da criança</h2><small>Comunicações ao Conselho Tutelar e registros sigilosos.</small></div>
   <section class="card" style="margin-bottom:16px"><b>Por que esta tela existe</b>
     <small>• <b>ECA, art. 13:</b> casos de suspeita ou confirmação de maus-tratos devem ser comunicados ao Conselho Tutelar. Deixar de comunicar é infração administrativa (art. 245).</small>
     <small>• <b>ECA, art. 56:</b> o dirigente da escola comunica ao Conselho Tutelar os maus-tratos e as faltas reiteradas ou a evasão, depois de esgotados os recursos da escola.</small>
-    <small>• <b>Sigilo:</b> estes registros não aparecem para os responsáveis nem para outros professores. Cada consulta e cada registro ficam nos logs.</small></section>
-  ${ehAdmin && p.pendentes ? `<p class="pill danger" style="white-space:normal;margin-bottom:14px">${ico("aviso")} ${p.pendentes} registro(s) aguardando a comunicação ao Conselho Tutelar.</p>` : ""}
+    <small>• <b>Quer saber mais?</b> <a href="https://www.planalto.gov.br/ccivil_03/leis/l8069.htm" target="_blank" rel="noopener noreferrer" class="link-eca">Leia o ECA completo (Lei nº 8.069/1990) no site oficial do Planalto ${ico("externo")}</a><span class="so-leitor"> (abre em outra aba)</span></small>
+    <small>• <b>Sigilo:</b> estes registros não aparecem para os responsáveis nem para outros docentes. Cada consulta e cada registro ficam registrados.</small></section>
+  ${ehAdmin && p.pendentes ? `<p class="pill danger" style="white-space:normal;margin-bottom:14px">${ico("aviso")} ${pl(p.pendentes, "registro aguardando", "registros aguardando")} a comunicação ao Conselho Tutelar.</p>` : ""}
   ${msg ? `<p class="pill success" style="white-space:normal;margin-bottom:14px">${esc(msg)}</p>` : ""}
   <form id="form-protecao" class="card" style="margin-bottom:16px">
     <b>Registrar um caso</b>
-    <div class="grade dois" style="margin-top:10px"><label class="campo-bloco"><small>Aluno</small><select id="pro-aluno" required><option value="">Escolha o aluno...</option>${alunos}</select></label>
+    <div class="grade dois" style="margin-top:10px"><label class="campo-bloco"><small>Turma e aluno</small><select id="pro-aluno" data-filtro-turma required><option value="">Escolha o aluno...</option>${alunos}</select></label>
       <label class="campo-bloco"><small>Motivo</small><select id="pro-motivo">${motivos}</select></label></div>
     <label class="campo-bloco" style="margin-top:10px"><small>Fatos observados (o que viu ou ouviu, quando e onde; sem julgamentos)</small><textarea id="pro-descricao" rows="4" maxlength="1500" required></textarea></label>
     <label class="campo-bloco" style="margin-top:10px"><small>Medidas já adotadas pela escola (opcional)</small><textarea id="pro-medidas" rows="2" maxlength="1500"></textarea></label>
@@ -1006,7 +1283,7 @@ function desenharProtecao() {
   const cartao = (i) => `<article class="card" style="margin-bottom:12px;${i.pendente ? "border-left:4px solid var(--danger)" : ""}">
     <div class="linha" style="flex-wrap:wrap;gap:8px">
       <div class="aluno"><span class="avatar">${iniciais(i.aluno_nome)}</span><div><b>${esc(i.aluno_nome)}</b><small>${esc(i.aluno_sala)} • registrado em ${i.registrada_em} por ${esc(i.registrada_por)}</small></div></div>
-      <div>${pill(motivosProtecao[i.motivo], i.motivo === "Maus-tratos" ? "danger" : "warning")} ${i.pendente ? pill(`Pendente de comunicação${i.dias_registro ? " há " + i.dias_registro + " dia(s)" : ""}`, "danger") : pill("Comunicado ao Conselho Tutelar", "success")}</div>
+      <div>${pill(motivosProtecao[i.motivo], i.motivo === "Maus-tratos" ? "danger" : "warning")} ${i.pendente ? pill(`Pendente de comunicação${i.dias_registro ? " há " + pl(i.dias_registro, "dia", "dias") : ""}`, "danger") : pill("Comunicado ao Conselho Tutelar", "success")}</div>
     </div>
     <div class="nota"><small><b>Fatos</b></small>${esc(i.descricao)}</div>
     ${i.medidas ? `<div class="nota"><small><b>Medidas adotadas pela escola</b></small><span style="white-space:pre-line">${esc(i.medidas)}</span></div>` : ""}
@@ -1059,7 +1336,7 @@ document.getElementById("form-senha").onsubmit = async (e) => {
   erroBox.classList.add("oculto");
   const nova = document.getElementById("senha-nova").value;
   const confirmar = document.getElementById("senha-confirmar").value;
-  if (nova !== confirmar) { erroBox.textContent = "As senhas não coincidem"; erroBox.classList.remove("oculto"); return; }
+  if (nova !== confirmar) { erroBox.textContent = "As duas senhas não são iguais."; erroBox.classList.remove("oculto"); return; }
   try {
     const r = await api("/api/minha-senha", { method: "PUT", body: JSON.stringify({
       senha_atual: document.getElementById("senha-atual").value, senha_nova: nova,
@@ -1128,7 +1405,7 @@ document.getElementById("dois-ativar").onclick = async () => {
 document.getElementById("dois-codigo").onkeydown = (e) => { if (e.key === "Enter") document.getElementById("dois-ativar").click(); };
 document.getElementById("dois-sair").onclick = () => sairDoSistema();
 
-// ---------- Histórico de presença (usado pelo Portal dos Pais e pela Frequência) ----------
+// ---------- Histórico de presença (usado pelo Portal da Família e pela Frequência) ----------
 function blocoHistorico(h) {
   const estat = (rotulo, valor) => `<div class="card" style="padding:12px;text-align:center"><small>${rotulo}</small><b style="font-size:1.375rem;display:block">${valor}</b></div>`;
   const lista = h.registros.length
@@ -1151,19 +1428,19 @@ function telaSecretaria() {
   const aviso = r.eh_hoje ? "" : r.fim_de_semana ? ` Hoje não tem aula: mostrando o último dia letivo (${dataCurta(r.data)}).` : ` Mostrando o último dia com chamada registrada (${dataCurta(r.data)}).`;
   const comRegistro = r.presentes + r.ausentes;
   return `<div class="topo"><p class="destaque">Visão geral</p><h2>${saudacao()}, ${esc(usuarioLogado.nome.split(" ")[0])}</h2><small>Acompanhe os indicadores e prioridades da escola.${aviso}</small></div>
-  ${r.professores_inativos ? `<div class="card" style="margin-bottom:16px;border-left:4px solid var(--warning)"><div class="linha" style="flex-wrap:wrap;gap:8px"><b>${ico("pessoa")} ${r.professores_inativos} professor(es) inativado(s) por ${r.inatividade_dias} dias sem acessar${r.reativacoes_pedidas ? ` • ${r.reativacoes_pedidas} pediu(ram) reativação` : ""}</b><button class="btn pequeno" data-ir="usuarios" style="width:auto">Ver em Usuários</button></div><small>O acesso é suspenso sozinho depois de ${r.inatividade_dias} dias sem uso. A gestão reativa com uma senha provisória nova.</small></div>` : ""}
-  ${r.senhas_pedidas ? `<div class="card" style="margin-bottom:16px;border-left:4px solid var(--warning)"><div class="linha" style="flex-wrap:wrap;gap:8px"><b>${ico("chave")} ${r.senhas_pedidas} pedido(s) de senha nova</b><button class="btn pequeno" data-ir="usuarios" style="width:auto">Ver em Usuários</button></div><small>Confirme quem pediu antes de gerar a senha provisória.</small></div>` : ""}
-  ${r.comunicacoes_pendentes ? `<div class="card" style="margin-bottom:16px;border-left:4px solid var(--danger)"><div class="linha" style="flex-wrap:wrap;gap:8px"><b>${ico("aviso")} ${r.comunicacoes_pendentes} comunicação(ões) ao Conselho Tutelar pendente(s)</b><button class="btn pequeno" data-ir-protecao style="width:auto">Abrir Proteção</button></div><small>O ECA (arts. 13 e 56) pede que casos de maus-tratos e de faltas reiteradas sejam comunicados ao Conselho Tutelar.</small></div>` : ""}
+  ${r.professores_inativos ? `<div class="card" style="margin-bottom:16px;border-left:4px solid var(--warning)"><div class="linha" style="flex-wrap:wrap;gap:8px"><b>${ico("pessoa")} ${pl(r.professores_inativos, "docente inativado", "docentes inativados")} por ${r.inatividade_dias} dias sem acessar${r.reativacoes_pedidas ? ` • ${r.reativacoes_pedidas} ${r.reativacoes_pedidas === 1 ? "pediu" : "pediram"} reativação` : ""}</b><button class="btn pequeno" data-ir="usuarios" style="width:auto">Ver em Usuários</button></div><small>O acesso é suspenso sozinho depois de ${r.inatividade_dias} dias sem uso. A gestão reativa com uma senha provisória nova.</small></div>` : ""}
+  ${r.senhas_pedidas ? `<div class="card" style="margin-bottom:16px;border-left:4px solid var(--warning)"><div class="linha" style="flex-wrap:wrap;gap:8px"><b>${ico("chave")} ${pl(r.senhas_pedidas, "pedido", "pedidos")} de senha nova</b><button class="btn pequeno" data-ir="usuarios" style="width:auto">Ver em Usuários</button></div><small>Confirme quem pediu antes de gerar a senha provisória.</small></div>` : ""}
+  ${r.comunicacoes_pendentes ? `<div class="card" style="margin-bottom:16px;border-left:4px solid var(--danger)"><div class="linha" style="flex-wrap:wrap;gap:8px"><b>${ico("aviso")} ${r.comunicacoes_pendentes === 1 ? "1 comunicação ao Conselho Tutelar pendente" : r.comunicacoes_pendentes + " comunicações ao Conselho Tutelar pendentes"}</b><button class="btn pequeno" data-ir-protecao style="width:auto">Abrir Proteção</button></div><small>O ECA (arts. 13 e 56) pede que casos de maus-tratos e de faltas reiteradas sejam comunicados ao Conselho Tutelar.</small></div>` : ""}
   <div class="grade g3">
-    ${metrica(ico("familia"), "Total de Alunos", r.total_alunos, "alunos cadastrados", "info", "Escola")}
+    ${metrica(ico("familia"), "Total de alunos", r.total_alunos, "alunos cadastrados", "info", "Escola")}
     <article class="card metrica"><div class="linha"><div class="icone success">${ico("confere")}</div><small>${tag}</small></div>
       <small>Presentes e ausentes</small>
       <div class="linha" style="gap:24px;align-items:flex-end;justify-content:flex-start;flex-wrap:wrap">
         <div><div class="num">${r.presentes}</div><small>${ico("confere", "ok")} Presentes</small></div>
         <div><div class="num">${r.ausentes}</div><small>${ico("aviso")} Ausentes • ${r.busca_ativa} em Busca Ativa</small></div>
       </div>
-      <small>${!comRegistro ? "Nenhuma chamada registrada ainda" : `${pct(r.percentual)} de presença entre ${comRegistro} aluno(s) com registro`}</small>
-      ${r.sem_registro ? `<small class="nota-alerta">${ico("aviso")} ${r.sem_registro} aluno(s) ainda sem registro neste dia</small>` : ""}</article>
+      <small>${!comRegistro ? "Nenhuma chamada registrada ainda" : `${pct(r.percentual)} de presença entre ${pl(comRegistro, "aluno", "alunos")} com registro`}</small>
+      ${r.sem_registro ? `<small class="nota-alerta">${ico("aviso")} ${pl(r.sem_registro, "aluno", "alunos")} ainda sem registro neste dia</small>` : ""}</article>
     <button type="button" class="card metrica clicavel" data-ir="ocorrencias-gestao" title="Abrir a pasta de ocorrências">
       <span class="linha"><span class="icone info">${ico("prancheta")}</span><small>${ico("pasta")} Abrir pasta</small></span>
       <small>Ocorrências</small><span class="num" id="oc-gestao-num">${r.ocorrencias_gestao}</span>
@@ -1179,6 +1456,7 @@ function telaSecretaria() {
   <section class="card"><div class="linha" style="flex-wrap:wrap;gap:12px"><div><h2>Gestão de alunos</h2><small>Clique nos títulos para ordenar e abra a ficha de cada aluno.</small></div>
     <div class="linha" style="gap:16px;flex-wrap:wrap;justify-content:flex-end">
       <select id="g-filtro" aria-label="Filtrar alunos" style="width:auto"><option value="todos">Todos os alunos</option><option value="pendencias">Com pendências</option><option value="aut">Autorização pendente</option><option value="comunicados">Comunicado não lido</option><option value="adv">Com advertências</option></select>
+      <select id="g-turma" class="filtro-turma-tabela" aria-label="Filtrar por turma" style="width:auto"><option value="">Todas as turmas</option>${turmasDe(dados.gestao).map((s) => `<option${s === dados.turmaGestao ? " selected" : ""}>${esc(s)}</option>`).join("")}</select>
       <input id="busca" class="campo-busca" aria-label="Buscar aluno" placeholder="Buscar aluno..." style="width:240px;max-width:100%"></div></div>
     <div class="tabela"><table><caption class="so-leitor">Gestão de alunos</caption><thead><tr>
       <th scope="col" class="ord" data-ord="nome">Nome da criança <span class="seta"></span></th><th scope="col" class="ord" data-ord="novos">Comunicados <span class="seta"></span></th>
@@ -1223,12 +1501,12 @@ async function abrirPastaOcorrencias() {
   };
   const linha = (o) => `<button type="button" class="item item-botao" data-oc-abrir="${o.id}">
     <span class="linha" style="flex-wrap:wrap;gap:8px">
-      <span class="aluno"><span class="avatar">${iniciais(o.aluno_nome)}</span><span><b>${esc(o.aluno_nome)}</b><small>${esc(o.turma)} • ${dataBR(o.data)} às ${o.horario} • Prof. ${esc(o.professor_nome)}</small></span></span>
+      <span class="aluno"><span class="avatar">${iniciais(o.aluno_nome)}</span><span><b>${esc(o.aluno_nome)}</b><small>${esc(o.turma)} • ${dataBR(o.data)} às ${o.horario} • Docente: ${esc(o.professor_nome)}</small></span></span>
       ${pillAssinaturaGestao(o)}</span></button>`;
   const desenharLista = () => {
     $("modal-oc-titulo").innerHTML = `${ico("pasta")} Ocorrências`;
     const pendentes = lista.filter((o) => !o.ges_assinada_em), registradas = lista.filter((o) => o.ges_assinada_em);
-    conteudo.innerHTML = `<small style="margin:4px 0 12px">Ocorrências registradas pelos professores. Clique em uma para ler e assinar. Depois da assinatura da gestão, ela passa para “Ocorrências registradas”.</small>
+    conteudo.innerHTML = `<small style="margin:4px 0 12px">Ocorrências registradas pelos docentes. Clique em uma para ler e assinar. Depois da assinatura da gestão, ela passa para “Ocorrências registradas”.</small>
       <b>Aguardando a assinatura da gestão (${pendentes.length})</b>
       ${pendentes.length ? pendentes.map(linha).join("") : vazio("Nenhuma ocorrência aguardando a gestão.")}
       <details class="pasta" style="margin-top:16px"><summary><b>${ico("pasta")} Ocorrências registradas</b> <small style="display:inline">(${registradas.length})</small></summary>
@@ -1245,7 +1523,7 @@ async function abrirPastaOcorrencias() {
         ${pillAssinaturaGestao(o)}</div>
       <p style="margin-top:12px;white-space:pre-line">${esc(o.descricao)}</p>
       <small style="margin-top:6px">Responsável notificado em ${o.notificado_em} • Buscado por ${esc(o.buscado_por)}</small>
-      ${seloAssinatura("Registrado e assinado pelo professor", o.professor_nome, o.assinada_em, o.codigo)}
+      ${seloAssinatura("Registrado e assinado pelo docente", o.professor_nome, o.assinada_em, o.codigo)}
       ${o.resp_assinada_em
         ? seloAssinatura("Ciência do responsável", o.resp_nome, o.resp_assinada_em, o.resp_codigo)
         : `<div style="margin-top:10px">${pill("Aguardando a assinatura do responsável", "warning")}</div>`}
@@ -1300,18 +1578,19 @@ const filtrosGestao = {
 function desenharAlunos() {
   const busca = document.getElementById("busca").value.toLowerCase();
   const { campo, dir } = dados.ordem;
-  const lista = dados.gestao.filter((a) => a.nome.toLowerCase().includes(busca) && filtrosGestao[dados.filtroGestao](a))
+  const turma = document.getElementById("g-turma").value;
+  const lista = dados.gestao.filter((a) => (!turma || a.sala === turma) && a.nome.toLowerCase().includes(busca) && filtrosGestao[dados.filtroGestao](a))
     .sort((x, y) => { const a = chaveOrdem[campo](x), b = chaveOrdem[campo](y); return (a > b ? 1 : a < b ? -1 : x.nome.localeCompare(y.nome)) * dir; });
   document.querySelectorAll("th.ord").forEach((th) => { th.querySelector(".seta").textContent = th.dataset.ord === campo ? (dir === 1 ? "▲" : "▼") : ""; });
   document.getElementById("linhas").innerHTML = lista.length ? lista.map((a) => {
     const novos = a.com_total - a.com_lidos;
     const tipos = a.pend_tipos ? a.pend_tipos.split(",") : [];
     const pendencias = (a.aut_pendentes > 0 ? pill("Autorização", "info") + " " : "") + tipos.map((t) => pill(t, "danger")).join(" ");
-    const ocorr = (a.advertencias ? pill(`${a.advertencias} advertência(s)`, "danger") + " " : "") + (a.acoes ? pill(`${a.acoes} ação(ões)`, "info") : "");
+    const ocorr = (a.advertencias ? pill(pl(a.advertencias, "advertência", "advertências"), "danger") + " " : "") + (a.acoes ? pill(pl(a.acoes, "ação", "ações"), "info") : "");
     return `<tr>
       <td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><div><b>${esc(a.nome)}</b><small>${esc(a.sala)}</small></div></div></td>
-      <td>${novos > 0 ? pill(`${novos} novo(s)`, "warning") : pill("Em dia", "success")}<small>${a.com_lidos} lido(s)</small></td>
-      <td>${a.aut_pendentes > 0 ? pill(`${a.aut_pendentes} pendente(s)`, "warning") : a.aut_assinadas > 0 ? pill("Em dia", "success") : pill("Nenhuma", "neutral")}</td>
+      <td>${novos > 0 ? pill(pl(novos, "novo", "novos"), "warning") : pill("Em dia", "success")}<small>${pl(a.com_lidos, "lido", "lidos")}</small></td>
+      <td>${a.aut_pendentes > 0 ? pill(pl(a.aut_pendentes, "pendente", "pendentes"), "warning") : a.aut_assinadas > 0 ? pill("Em dia", "success") : pill("Nenhuma", "neutral")}</td>
       <td>${pendencias || pill("Nenhuma", "neutral")}</td><td>${ocorr || "—"}</td>
       <td><button class="btn outline pequeno" data-ficha="${a.id}">Abrir ficha</button></td></tr>`;
   }).join("") : `<tr><td colspan="6"><div class="vazio"><small>Nenhum aluno encontrado com esse filtro.</small></div></td></tr>`;
@@ -1329,6 +1608,7 @@ function ligarGestao() {
     document.getElementById("linhas").scrollIntoView({ behavior: "smooth", block: "center" });
   });
   document.getElementById("busca").oninput = desenharAlunos;
+  document.getElementById("g-turma").onchange = (e) => { dados.turmaGestao = e.target.value; desenharAlunos(); };
   filtro.value = dados.filtroGestao;
   filtro.onchange = () => { dados.filtroGestao = filtro.value; desenharAlunos(); };
   document.querySelectorAll("th.ord").forEach((th) => th.onclick = () => {
@@ -1345,6 +1625,7 @@ function telaFrequencia() {
   <section class="card">
     <div class="linha" style="flex-wrap:wrap;align-items:flex-end;gap:12px">
       <label class="campo-bloco"><small>Data</small><input type="date" id="freq-data" style="max-width:200px"></label>
+      <label class="campo-bloco"><small>Turma</small><select id="freq-turma" class="filtro-turma-tabela" aria-label="Filtrar por turma" style="width:auto"><option value="">Todas as turmas</option>${turmasDe(dados.freq.alunos).map((s) => `<option${s === dados.turmaFreq ? " selected" : ""}>${esc(s)}</option>`).join("")}</select></label>
       <input id="freq-busca" class="campo-busca" aria-label="Buscar aluno" placeholder="Buscar aluno..." style="max-width:280px">
     </div>
     <div class="tabela"><table><caption class="so-leitor">Controle de frequência</caption><thead><tr><th scope="col">Aluno</th><th scope="col">Situação</th><th scope="col">Observação</th><th scope="col">Faltas (30 dias)</th><th scope="col"><span class="so-leitor">Ações</span></th></tr></thead>
@@ -1357,15 +1638,15 @@ function desenharFrequencia() {
   document.getElementById("freq-data").value = f.data;
   const tag = f.eh_hoje ? "Hoje" : dataCurta(f.data), comRegistro = f.presentes + f.ausentes;
   document.getElementById("freq-cards").innerHTML =
-    metrica(ico("familia"), "Total de Alunos", f.total, "alunos ativos", "info", tag) +
+    metrica(ico("familia"), "Total de alunos", f.total, "alunos ativos", "info", tag) +
     metrica(ico("confere"), "Presentes", f.presentes, comRegistro ? `${pct(calcPct(f.presentes, f.ausentes))} dos ${comRegistro} com registro` : "Sem chamada neste dia", "success", tag) +
     metrica(ico("proibido"), "Ausentes", f.ausentes, "faltas no dia", "danger", tag) +
     metrica(ico("relogio"), "Sem registro", f.sem_registro, f.sem_registro ? "chamada ainda não feita" : "todos registrados", f.sem_registro ? "warning" : "neutral", tag);
   document.getElementById("freq-aviso").innerHTML = f.fim_de_semana
     ? `<p class="pill info aviso-largo">${ico("calendario")} Hoje não tem aula. Mostrando o último dia letivo: ${dataCurta(f.data)}.</p>`
-    : f.sem_registro && comRegistro ? `<p class="pill warning aviso-largo">${ico("aviso")} ${f.sem_registro} aluno(s) ainda sem registro: o percentual de presença considera só os ${comRegistro} que já têm chamada ou entrada.</p>` : "";
-  const filtro = document.getElementById("freq-busca").value.toLowerCase();
-  document.getElementById("freq-linhas").innerHTML = f.alunos.filter((a) => a.nome.toLowerCase().includes(filtro)).map((a) => `<tr>
+    : f.sem_registro && comRegistro ? `<p class="pill warning aviso-largo">${ico("aviso")} ${pl(f.sem_registro, "aluno", "alunos")} ainda sem registro: o percentual de presença considera só os ${comRegistro} que já têm chamada ou entrada.</p>` : "";
+  const filtro = document.getElementById("freq-busca").value.toLowerCase(), turmaFreq = document.getElementById("freq-turma").value;
+  document.getElementById("freq-linhas").innerHTML = f.alunos.filter((a) => (!turmaFreq || a.sala === turmaFreq) && a.nome.toLowerCase().includes(filtro)).map((a) => `<tr>
     <td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><div><b>${esc(a.nome)}</b><small>${esc(a.sala)}</small></div></div></td>
     <td>${pill(a.status || "Sem registro", a.status === "Presente" ? "success" : a.status === "Ausente" ? "danger" : "neutral")}</td>
     <td>${esc(a.observacao || "—")}</td>
@@ -1388,6 +1669,7 @@ function ligarFrequencia() {
     desenharFrequencia();
   });
   document.getElementById("freq-busca").oninput = desenharFrequencia;
+  document.getElementById("freq-turma").onchange = (e) => { dados.turmaFreq = e.target.value; desenharFrequencia(); };
   desenharFrequencia();
 }
 
@@ -1431,7 +1713,7 @@ function cartaoCaso(c) {
     </div>
     ${aberto ? contatosFamilia(c.contatos) : ""}
     <div style="margin-top:8px">${c.registros.map((r) => `<div class="nota ${r.nome_usuario === "Sistema" ? "sistema" : ""}"><small><b>${esc(r.nome_usuario)}</b> • ${r.quando}</small>${esc(r.texto)}</div>`).join("")}</div>
-    ${aberto ? `<textarea rows="2" maxlength="450" data-nota="${c.id}" placeholder="Anote o acompanhamento (ligação, visita, conversa com a família...)" style="margin-top:8px" aria-label="Acompanhamento de ${esc(c.nome)}"></textarea>
+    ${aberto ? `<textarea rows="2" maxlength="500" data-nota="${c.id}" placeholder="Anote o acompanhamento (ligação, visita, conversa com a família...)" style="margin-top:8px" aria-label="Acompanhamento de ${esc(c.nome)}"></textarea>
       <div class="acoes acoes-separadas"><button class="btn pequeno" data-anotar="${c.id}">Registrar acompanhamento</button><button class="btn perigo-leve pequeno" data-encerrar="${c.id}" data-nome="${esc(c.nome)}">Encerrar caso</button></div>` : ""}
     ${blocoConselho(c)}
   </article>`;
@@ -1497,12 +1779,103 @@ function desenharRelatorio() {
       <tbody>${r.alunos.map((a) => `<tr><td><b>${esc(a.nome)}</b></td><td>${esc(a.sala)}</td><td>${a.presencas}</td><td>${a.faltas}</td>
         <td>${pill(pct(a.percentual), a.percentual == null ? "neutral" : a.percentual < 75 ? "danger" : a.percentual < 90 ? "warning" : "success")}</td></tr>`).join("")}</tbody></table></div></section>
     <section class="card" style="margin-top:20px"><h2>Busca Ativa no mês</h2>
-      <small>${b.abertos_no_mes} caso(s) aberto(s) • ${b.encerrados_no_mes} encerrado(s) • ${b.em_acompanhamento} ainda em acompanhamento</small>
+      <small>${pl(b.abertos_no_mes, "caso aberto", "casos abertos")} • ${pl(b.encerrados_no_mes, "encerrado", "encerrados")} • ${b.em_acompanhamento} ainda em acompanhamento</small>
       ${b.casos.length ? b.casos.map((k) => `<div style="margin-top:16px"><b>${esc(k.nome)}</b> <small style="display:inline">(${esc(k.sala)})</small> ${pill(k.status, k.status === "Resolvido" ? "success" : "danger")}
         <small>Aberto em ${k.aberta_em}${k.encerrada_em ? " • encerrado em " + k.encerrada_em : ""}</small>
         ${k.registros.map((n) => `<div class="nota ${n.nome_usuario === "Sistema" ? "sistema" : ""}"><small><b>${esc(n.nome_usuario)}</b> • ${n.quando}</small>${esc(n.texto)}</div>`).join("")}</div>`).join("")
         : `<div class="vazio"><small>Nenhum caso de Busca Ativa neste mês.</small></div>`}
     </section>`;
+}
+// Versão impressa do relatório mensal: página própria, limpa e em A4 (sem menu, cartões, sombras nem botões flutuantes)
+function imprimirRelatorio() {
+  const r = dados.relatorio, c = r.criterio, s = r.resumo, b = r.busca_ativa;
+  const w = window.open("", "_blank");
+  if (!w) { avisar("O navegador bloqueou a janela de impressão. Permita pop-ups para este site e tente de novo.", "danger"); return; }
+  const nomeMes = new Date(r.mes + "-01T12:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const mesTitulo = nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1);
+  const agora = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const freq = (v) => (v == null ? "—" : pct(v));
+  const baixa = (v) => v != null && v < 75;
+  // agrupa por turma (turmas em ordem; alunos em ordem alfabética)
+  const turmas = [...new Set(r.alunos.map((a) => a.sala))].sort(ordemTurma).map((sala) => {
+    const alunos = r.alunos.filter((a) => a.sala === sala).sort(ordemNome);
+    const presencas = alunos.reduce((t, a) => t + a.presencas, 0), faltas = alunos.reduce((t, a) => t + a.faltas, 0);
+    return { sala, alunos, presencas, faltas, percentual: presencas + faltas ? Math.round(presencas * 1000 / (presencas + faltas)) / 10 : null,
+      abaixo: alunos.filter((a) => baixa(a.percentual)).length };
+  });
+  const resumoTurmas = turmas.map((t) => `<tr><td>${esc(t.sala)}</td><td class="n">${t.alunos.length}</td><td class="n">${t.presencas}</td><td class="n">${t.faltas}</td>
+    <td class="n${baixa(t.percentual) ? " alerta" : ""}">${freq(t.percentual)}</td><td class="n">${t.abaixo || "—"}</td></tr>`).join("");
+  const porAluno = turmas.map((t) => `<section class="turma"><h3>${esc(t.sala)} <span>${pl(t.alunos.length, "aluno", "alunos")} • frequência da turma ${freq(t.percentual)}</span></h3>
+    <table><thead><tr><th class="n num">Nº</th><th>Aluno</th><th class="n">Presenças</th><th class="n">Faltas</th><th class="n">Frequência</th></tr></thead><tbody>
+    ${t.alunos.map((a, i) => `<tr${baixa(a.percentual) ? ' class="alerta"' : ""}><td class="n num">${i + 1}</td><td>${esc(a.nome)}</td><td class="n">${a.presencas}</td><td class="n">${a.faltas}</td><td class="n">${freq(a.percentual)}${baixa(a.percentual) ? " *" : ""}</td></tr>`).join("")}
+    </tbody></table></section>`).join("");
+  const casos = b.casos.length ? b.casos.map((k) => `<div class="caso"><div class="caso-topo"><b>${esc(k.nome)}</b> — ${esc(k.sala)}<span class="status">${esc(k.status)}</span></div>
+      <div class="meta">Aberto em ${esc(k.aberta_em)}${k.encerrada_em ? " • encerrado em " + esc(k.encerrada_em) : ""}</div>
+      ${k.registros.length ? `<ul>${k.registros.map((n) => `<li><span class="meta">${esc(n.quando)} • ${esc(n.nome_usuario)}:</span> ${esc(n.texto)}</li>`).join("")}</ul>` : ""}</div>`).join("")
+    : `<p class="meta">Nenhum caso de Busca Ativa neste mês.</p>`;
+  w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório mensal — ${esc(mesTitulo)} — S.I.V.E.</title>
+  <style>
+    @page{size:A4;margin:16mm 14mm 18mm}
+    @page{@bottom-left{content:"S.I.V.E. • Relatório mensal • ${esc(mesTitulo)}";font:8pt Arial,sans-serif;color:#777}@bottom-right{content:"Página " counter(page) " de " counter(pages);font:8pt Arial,sans-serif;color:#777}}
+    *{box-sizing:border-box}
+    body{font:9.5pt/1.4 Arial,Helvetica,sans-serif;color:#1a1a1a;margin:0;padding:24px;max-width:820px;margin:0 auto;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;padding-bottom:10px;border-bottom:2px solid #140040}
+    header img{height:44px;width:auto}
+    header .titulo{text-align:right}
+    header h1{font-size:15pt;margin:0;color:#140040}
+    header .escola{font-size:9pt;color:#555;margin-top:2px}
+    .info{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 16px;font-size:8.5pt;color:#555;margin:8px 0 18px}
+    h2{font-size:11pt;color:#140040;margin:22px 0 8px;padding-bottom:4px;border-bottom:1px solid #ccc;break-after:avoid}
+    .resumo{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #ccc;border-radius:4px}
+    .resumo div{padding:8px 12px;border-left:1px solid #ccc}.resumo div:first-child{border-left:0}
+    .resumo b{display:block;font-size:15pt;color:#140040;line-height:1.2}.resumo span{font-size:8pt;color:#555;text-transform:uppercase;letter-spacing:.03em}
+    table{width:100%;border-collapse:collapse}
+    th{font-size:7.5pt;text-transform:uppercase;letter-spacing:.04em;color:#555;text-align:left;font-weight:700;padding:5px 6px;border-bottom:1px solid #999}
+    td{padding:4px 6px;border-bottom:1px solid #e3e3e3}
+    tbody tr:nth-child(even) td{background:#f7f7f7}
+    tr{break-inside:avoid}
+    .n{text-align:right;white-space:nowrap}.num{width:34px;color:#777}
+    th.n{text-align:right}
+    tr.alerta td,td.alerta{font-weight:700}
+    .turma{margin-top:14px}
+    .turma h3{font-size:10pt;margin:0 0 4px;break-after:avoid}.turma h3 span{font-weight:400;color:#555;font-size:8.5pt;margin-left:6px}
+    .nota{font-size:8pt;color:#555;margin-top:6px}
+    .caso{padding:8px 0;border-bottom:1px solid #e3e3e3;break-inside:avoid}
+    .caso-topo{display:flex;gap:8px;align-items:baseline}.status{margin-left:auto;font-size:8pt;border:1px solid #999;border-radius:3px;padding:1px 6px}
+    .caso ul{margin:4px 0 0;padding-left:16px}.caso li{margin:2px 0}
+    .meta{color:#555;font-size:8.5pt}
+    .assinaturas{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:48px;break-inside:avoid}
+    .assinaturas div{border-top:1px solid #333;padding-top:4px;text-align:center;font-size:8.5pt;color:#333}
+    .rodape{margin-top:20px;font-size:7.5pt;color:#777;border-top:1px solid #ddd;padding-top:6px}
+    .acoes{position:sticky;top:0;background:#fff;padding:10px 0;margin-bottom:10px;border-bottom:1px solid #eee;display:flex;gap:8px;justify-content:flex-end}
+    .acoes button{font:600 10pt Arial,sans-serif;padding:8px 16px;border-radius:6px;border:1px solid #0B78B3;background:#0B78B3;color:#fff;cursor:pointer}
+    .acoes button.sec{background:#fff;color:#0B78B3}
+    @media print{body{padding:0;max-width:none}.acoes{display:none}}
+  </style></head><body>
+  <div class="acoes"><button id="fechar" class="sec">Fechar</button><button id="imprimir">Imprimir / salvar em PDF</button></div>
+  <header><img src="${location.origin}/assets/logo-sive.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar">
+    <div class="titulo"><h1>Relatório mensal de frequência</h1><div class="escola">${esc(r.escola || "")}${r.escola ? " • " : ""}${esc(mesTitulo)}</div></div></header>
+  <div class="info"><span>Emitido em ${esc(agora)} por ${esc(usuarioLogado.nome)}</span><span>Critério da Busca Ativa: ${c.faltas} faltas em ${c.dias} dias</span></div>
+  <h2>Resumo do mês</h2>
+  <div class="resumo"><div><span>Alunos</span><b>${s.total_alunos}</b></div><div><span>Dias com chamada</span><b>${s.dias_com_registro}</b></div>
+    <div><span>Frequência média</span><b>${freq(s.percentual)}</b></div><div><span>Total de faltas</span><b>${s.faltas}</b></div></div>
+  <h2>Frequência por turma</h2>
+  <table><thead><tr><th>Turma</th><th class="n">Alunos</th><th class="n">Presenças</th><th class="n">Faltas</th><th class="n">Frequência</th><th class="n">Abaixo de 75%</th></tr></thead><tbody>${resumoTurmas}</tbody></table>
+  <h2>Frequência por aluno</h2>
+  <p class="nota">Alunos em ordem alfabética dentro de cada turma. Em negrito e com * : frequência abaixo de 75% no mês. "—": sem chamada registrada.</p>
+  ${porAluno}
+  <h2>Busca Ativa no mês</h2>
+  <p class="meta">${pl(b.abertos_no_mes, "caso aberto", "casos abertos")} • ${pl(b.encerrados_no_mes, "encerrado", "encerrados")} • ${b.em_acompanhamento} ainda em acompanhamento</p>
+  ${casos}
+  <div class="assinaturas"><div>Direção</div><div>Coordenação pedagógica</div></div>
+  <p class="rodape">Documento de uso interno da escola. Contém dados pessoais de alunos (LGPD, art. 14): não compartilhe fora da equipe responsável.</p>
+  </body></html>`);
+  w.document.close();
+  w.document.getElementById("imprimir").addEventListener("click", () => w.print());
+  w.document.getElementById("fechar").addEventListener("click", () => w.close());
+  const img = w.document.querySelector("header img"); // espera o logo carregar antes de abrir a caixa de impressão
+  const abrir = () => setTimeout(() => w.print(), 150);
+  if (img.complete) abrir(); else { img.onload = abrir; img.onerror = abrir; }
 }
 function ligarRelatorio() {
   document.getElementById("rel-mes").onchange = seguro(async (e) => {
@@ -1510,7 +1883,7 @@ function ligarRelatorio() {
     dados.relatorio = await api("/api/relatorio-mensal?mes=" + e.target.value);
     desenharRelatorio();
   });
-  document.getElementById("rel-imprimir").onclick = () => window.print();
+  document.getElementById("rel-imprimir").onclick = imprimirRelatorio;
   document.getElementById("rel-csv").onclick = () => {
     const r = dados.relatorio;
     const linhas = [["Aluno", "Turma", "Presenças", "Faltas", "Frequência (%)"],
@@ -1581,13 +1954,16 @@ function ligarBanners() {
 const SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const eventosDoDia = (iso) => dados.cal.eventos.filter((e) => e.data <= iso && iso <= (e.data_fim || e.data));
 function cartaoEvento(e) {
-  return `<div class="item evento">
+  const acoes = e.pode_gerenciar ? `<div class="evento-acoes">
+      <button type="button" class="evento-icone" data-editar-evento="${e.id}" title="Editar evento" aria-label="Editar o evento ${esc(e.titulo)}">${ico("caneta")}</button>
+      <button type="button" class="evento-icone perigo" data-excluir-evento="${e.id}" data-titulo="${esc(e.titulo)}" title="Excluir evento" aria-label="Excluir o evento ${esc(e.titulo)}">${ico("lixeira")}</button></div>` : "";
+  return `<div class="item evento${acoes ? " com-acoes" : ""}">${acoes}
     ${e.tem_banner ? `<img class="evento-img" data-banner-img="${e.id}" alt="Banner do evento ${esc(e.titulo)}">` : ""}
     <div class="linha" style="gap:8px;flex-wrap:wrap;align-items:flex-start"><div><b>${esc(e.titulo)}</b><small>${ico("calendario")} ${quandoEvento(e)}${e.local ? " • " + ico("local") + " " + esc(e.local) : ""}</small></div>
       <div>${pill(esc(e.tipo), tomTipo[e.tipo] || "info")} ${pill(e.sala ? esc(e.sala) : "Escola toda", "neutral")}${e.destaque ? " " + pill("Banner", "info") : ""}</div></div>
     ${e.descricao ? `<p style="margin-top:8px">${esc(e.descricao)}</p>` : ""}
     <small style="margin-top:6px">Criado por ${esc(e.criado_por_nome)}</small>
-    ${e.pode_excluir ? `<div class="acoes"><button class="btn outline pequeno" data-excluir-evento="${e.id}" data-titulo="${esc(e.titulo)}">${ico("lixeira")} Excluir</button></div>` : ""}</div>`;
+</div>`;
 }
 function telaCalendario() {
   const papel = usuarioLogado.papel, podeCriar = papel !== "pai";
@@ -1608,7 +1984,7 @@ function telaCalendario() {
     <div><section class="card" id="cal-dia"></section>
       <section class="card" style="margin-top:16px"><h2>Próximos eventos</h2><div id="cal-proximos"></div></section></div>
   </div>
-  ${podeCriar ? `<form id="form-evento" class="card" style="margin-top:20px"><h2>Novo evento</h2>
+  ${podeCriar ? `<form id="form-evento" class="card" style="margin-top:20px"><h2 id="ev-form-titulo">Novo evento</h2>
     <small>${papel === "professor" ? "O evento aparece para a sua turma." : "Escolha uma turma ou a escola toda."}</small>
     <div class="grade dois" style="margin-top:12px"><div><small>Título</small><input id="ev-titulo" required maxlength="100" placeholder="Ex.: Festa da primavera"></div>
       <div><small>Tipo</small><select id="ev-tipo">${dados.cal.tipos.map((t) => `<option>${t}</option>`).join("")}</select></div></div>
@@ -1616,11 +1992,13 @@ function telaCalendario() {
       <div><small>Termina em (opcional)</small><input type="date" id="ev-fim"></div><div><small>Hora (opcional)</small><input type="time" id="ev-hora"></div></div>
     <div class="grade dois" style="margin-top:12px"><div><small>Local (opcional)</small><input id="ev-local" maxlength="100" placeholder="Ex.: Pátio central"></div><div><small>Para quem</small>${destino}</div></div>
     <div style="margin-top:12px"><small>Descrição (opcional)</small><textarea id="ev-desc" rows="3" maxlength="500"></textarea></div>
-    <label class="termo-aceite"><input type="checkbox" id="ev-destaque"> <span>Mostrar como <b>banner</b> nos painéis (Central do Dia, Minha Turma e Portal dos Pais) até a data do evento</span></label>
+    <label class="termo-aceite"><input type="checkbox" id="ev-destaque"> <span>Mostrar como <b>banner</b> nos painéis (Central do Dia, Minha Turma e Portal da Família) até a data do evento</span></label>
     <div style="margin-top:12px"><small>Imagem do banner (opcional: PNG ou JPG, até 2 MB, de preferência deitada)</small><input type="file" id="ev-imagem" accept=".png,.jpg,.jpeg,image/png,image/jpeg"></div>
+    <label class="termo-aceite oculto" id="ev-remover-box"><input type="checkbox" id="ev-remover"> <span>Remover o banner atual deste evento</span></label>
     <label class="termo-aceite oculto" id="ev-eca-box"><input type="checkbox" id="ev-eca"> <span>A imagem <b>não mostra alunos</b>, ou todos os alunos que aparecem têm autorização de uso de imagem (ECA, art. 17; LGPD, art. 14). O banner é visto por várias famílias.</span></label>
     <p id="ev-erro" class="pill danger oculto" style="margin-top:12px;white-space:normal"></p>
-    <button class="btn" type="submit" style="margin-top:14px;max-width:220px">Criar evento</button></form>` : ""}`;
+    <div class="acoes" style="margin-top:14px"><button class="btn" type="submit" id="ev-salvar" style="max-width:220px">Criar evento</button>
+      <button class="btn outline oculto" type="button" id="ev-cancelar">Cancelar edição</button></div></form>` : ""}`;
 }
 function desenharCalendario() {
   const [ano, mes] = dados.calMes.split("-").map(Number), hoje = hojeLocalISO();
@@ -1633,17 +2011,23 @@ function desenharCalendario() {
     const iso = `${dados.calMes}-${String(d).padStart(2, "0")}`, evs = eventosDoDia(iso);
     const chips = evs.slice(0, 2).map((e) => `<span class="cal-chip ban-${tipoClasse(e.tipo)}">${esc(e.titulo)}</span>`).join("") + (evs.length > 2 ? `<span class="cal-mais">+${evs.length - 2}</span>` : "");
     const pontos = evs.slice(0, 3).map((e) => `<i class="ban-${tipoClasse(e.tipo)}" aria-hidden="true">${esc(e.tipo.slice(0, 2))}</i>`).join("");
-    html += `<button class="cal-dia ${iso === hoje ? "hoje" : ""} ${iso === dados.calDia ? "sel" : ""}" data-dia="${iso}">
-      <span class="cal-num">${d}</span><span class="cal-chips">${chips}</span><span class="cal-pontos">${pontos}</span><span class="so-leitor">${evs.length ? `, ${evs.length} evento(s)` : ""}</span></button>`;
+    html += `<button class="cal-dia ${iso === hoje ? "hoje" : ""} ${iso < hoje ? "passado" : ""} ${iso === dados.calDia ? "sel" : ""}" data-dia="${iso}">
+      <span class="cal-num">${d}</span><span class="cal-chips">${chips}</span><span class="cal-pontos">${pontos}</span><span class="so-leitor">${evs.length ? `, ${pl(evs.length, "evento", "eventos")}` : ""}</span></button>`;
   }
   document.getElementById("cal-grade").innerHTML = html;
-  document.querySelectorAll("[data-dia]").forEach((b) => b.onclick = () => { dados.calDia = b.dataset.dia; desenharCalendario(); });
+  document.querySelectorAll("[data-dia]").forEach((b) => b.onclick = () => {
+    dados.calDia = b.dataset.dia; desenharCalendario();
+    const campo = document.getElementById("ev-data"); // o dia clicado já vai para o "Novo evento", se não tiver passado
+    if (campo && dados.calDia >= hoje) { campo.value = dados.calDia; campo.dispatchEvent(new Event("change")); }
+  });
   const doDia = eventosDoDia(dados.calDia), titulo = new Date(dados.calDia + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
-  document.getElementById("cal-dia").innerHTML = `<h2>${titulo.charAt(0).toUpperCase() + titulo.slice(1)}</h2>${doDia.length ? doDia.map(cartaoEvento).join("") : vazio("Nenhum evento neste dia.")}`;
+  const avisoPassado = dados.calDia < hoje && usuarioLogado.papel !== "pai" ? `<p class="cal-aviso-passado">${ico("cadeado")} Este dia já passou. Novos eventos só podem ser marcados para hoje ou para os próximos dias.</p>` : "";
+  document.getElementById("cal-dia").innerHTML = `<h2>${titulo.charAt(0).toUpperCase() + titulo.slice(1)}</h2>${avisoPassado}${doDia.length ? doDia.map(cartaoEvento).join("") : vazio("Nenhum evento neste dia.")}`;
   document.getElementById("cal-proximos").innerHTML = dados.cal.proximos.length ? dados.cal.proximos.map((e) => `<button class="proximo" data-ir-dia="${e.data}">
       <span class="proximo-data ban-${tipoClasse(e.tipo)}"><b>${Number(e.data.slice(8))}</b><small>${new Date(e.data + "T12:00:00").toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</small></span>
       <span><b>${esc(e.titulo)}</b><small>${esc(e.tipo)} • ${quandoEvento(e)}${e.sala ? " • " + esc(e.sala) : ""}</small></span></button>`).join("") : vazio("Nenhum evento marcado.");
   document.querySelectorAll("[data-ir-dia]").forEach((b) => b.onclick = seguro(async () => { await irParaMes(b.dataset.irDia.slice(0, 7), b.dataset.irDia); }));
+  document.querySelectorAll("[data-editar-evento]").forEach((b) => b.onclick = () => editarEvento(Number(b.dataset.editarEvento)));
   document.querySelectorAll("[data-excluir-evento]").forEach((b) => b.onclick = seguro(async () => {
     if (!(await confirmar({ titulo: "Excluir este evento?", texto: `"${b.dataset.titulo}" sai do calendário e dos banners para todas as pessoas. Essa ação não pode ser desfeita.`, botao: "Excluir evento", perigo: true }))) return;
     await api(`/api/eventos/${b.dataset.excluirEvento}`, { method: "DELETE" });
@@ -1655,6 +2039,35 @@ async function irParaMes(mes, dia) {
   dados.calMes = mes; dados.calDia = dia || null;
   dados.cal = await api("/api/eventos?mes=" + mes);
   desenharCalendario();
+}
+// Editar evento (só a gestão): o formulário "Novo evento" vira "Editar evento" com os dados preenchidos
+function modoFormEvento(e) {
+  const $ = (id) => document.getElementById(id), hoje = hojeLocalISO();
+  dados.eventoEditando = e || null;
+  $("ev-form-titulo").textContent = e ? "Editar evento" : "Novo evento";
+  $("ev-salvar").textContent = e ? "Salvar alterações" : "Criar evento";
+  $("ev-cancelar").classList.toggle("oculto", !e);
+  $("ev-remover").checked = false; $("ev-remover-box").classList.toggle("oculto", !(e && e.tem_banner));
+  $("ev-erro").classList.add("oculto");
+  if (!e) { $("form-evento").reset(); $("ev-eca-box").classList.add("oculto"); }
+  $("ev-titulo").value = e ? e.titulo : ""; $("ev-desc").value = e ? e.descricao || "" : "";
+  if (e) $("ev-tipo").value = e.tipo;
+  $("ev-hora").value = e ? e.hora || "" : ""; $("ev-local").value = e ? e.local || "" : "";
+  if ($("ev-sala")) $("ev-sala").value = e ? e.sala || "" : "";
+  $("ev-destaque").checked = !!(e && e.destaque);
+  // um evento que já aconteceu pode manter a data dele, mas não pode ir para outro dia que já passou
+  $("ev-data").min = e && e.data < hoje ? e.data : hoje;
+  $("ev-data").value = e ? e.data : (dados.calDia >= hoje ? dados.calDia : hoje);
+  $("ev-fim").value = e ? e.data_fim || "" : "";
+  $("ev-data").onchange();
+}
+function editarEvento(id) {
+  const e = [...dados.cal.eventos, ...dados.cal.proximos].find((x) => x.id === id);
+  if (!e || !document.getElementById("form-evento")) return;
+  modoFormEvento(e);
+  const form = document.getElementById("form-evento");
+  form.scrollIntoView({ behavior: menosMovimento() ? "auto" : "smooth", block: "start" });
+  setTimeout(() => document.getElementById("ev-titulo").focus({ preventScroll: true }), 300);
 }
 function ligarCalendario() {
   const mover = (delta) => seguro(async () => {
@@ -1668,20 +2081,30 @@ function ligarCalendario() {
   const form = document.getElementById("form-evento");
   if (!form) return;
   const $ = (id) => document.getElementById(id);
-  $("ev-data").value = dados.calDia;
+  // Eventos só de hoje em diante: o calendário do navegador não deixa escolher dia passado
+  const hoje = hojeLocalISO();
+  $("ev-data").min = hoje; $("ev-fim").min = hoje;
+  $("ev-data").value = dados.calDia >= hoje ? dados.calDia : hoje;
+  $("ev-data").onchange = () => { $("ev-fim").min = $("ev-data").value || hoje; };
+  $("ev-data").onchange();
+  dados.eventoEditando = null;
+  $("ev-cancelar").onclick = () => modoFormEvento(null);
   $("ev-imagem").onchange = () => $("ev-eca-box").classList.toggle("oculto", !$("ev-imagem").files.length);
   form.onsubmit = async (e) => {
     e.preventDefault(); $("ev-erro").classList.add("oculto");
     try {
       const arquivo = $("ev-imagem").files[0];
+      const editando = dados.eventoEditando;
+      if (!$("ev-data").value || ($("ev-data").value < hojeLocalISO() && !(editando && editando.data === $("ev-data").value))) throw new Error("Não é possível marcar evento em uma data que já passou. Escolha hoje ou um dia futuro");
+      if ($("ev-fim").value && $("ev-fim").value < $("ev-data").value) throw new Error("A data de término precisa ser igual ou depois da data de início");
       if (arquivo && arquivo.size > 2 * 1024 * 1024) throw new Error("A imagem do banner precisa ter até 2 MB");
       if (arquivo && !$("ev-eca").checked) throw new Error("Confirme que a imagem não mostra alunos, ou que todos têm autorização de uso de imagem");
       const sala = $("ev-sala");
-      await api("/api/eventos", { method: "POST", body: JSON.stringify({ titulo: $("ev-titulo").value, tipo: $("ev-tipo").value, data: $("ev-data").value,
+      await api(editando ? `/api/eventos/${editando.id}` : "/api/eventos", { method: editando ? "PUT" : "POST", body: JSON.stringify({ remover_banner: editando ? $("ev-remover").checked : undefined, titulo: $("ev-titulo").value, tipo: $("ev-tipo").value, data: $("ev-data").value,
         data_fim: $("ev-fim").value || undefined, hora: $("ev-hora").value || undefined, local: $("ev-local").value, sala: sala ? sala.value : undefined,
         descricao: $("ev-desc").value, destaque: $("ev-destaque").checked, imagem_sem_alunos: $("ev-eca").checked,
         banner: arquivo ? { nome_arquivo: arquivo.name, conteudo: await lerBase64(arquivo) } : undefined }) });
-      dados.calMsg = `Evento "${$("ev-titulo").value.trim()}" criado.`; dados.calMes = $("ev-data").value.slice(0, 7); dados.calDia = $("ev-data").value;
+      dados.calMsg = `Evento "${$("ev-titulo").value.trim()}" ${editando ? "atualizado" : "criado"}.`; dados.eventoEditando = null; dados.calMes = $("ev-data").value.slice(0, 7); dados.calDia = $("ev-data").value;
       await mostrar("calendario");
     } catch (erro) { if (erro.message !== "Sessão expirada") mostrarErro("ev-erro", erro.message); }
   };
@@ -1747,10 +2170,11 @@ function telaSeguranca() {
   <div class="grade dois" style="margin-top:20px;align-items:start">
     <section class="card"><div class="linha"><div><h2>Passagens de hoje</h2><small>Reconhecimento facial nos portões</small></div><span class="pill success">● AO VIVO</span></div><div id="mon-eventos"></div></section>
     <section class="card"><h2>Liberação de saída</h2><small>Consulte os responsáveis autorizados antes de liberar a retirada.</small>
-      <input id="buscaSaida" placeholder="Digite o nome do aluno (ex.: João Pedro)" style="margin-top:16px"><div id="resultado"></div></section>
+      <div style="margin-top:16px"><small>Turma e aluno</small><select id="saida-aluno" data-filtro-turma><option value="">Escolha o aluno...</option>${opcoesAlunos(dados.mon.alunos)}</select></div>
+      <input id="buscaSaida" aria-label="Ou digite o nome do aluno" placeholder="Ou digite o nome do aluno (ex.: João Pedro)" style="margin-top:10px"><div id="resultado"></div></section>
   </div>
   <section class="card" style="margin-top:20px"><div class="linha" style="flex-wrap:wrap;gap:8px"><div><h2>Situação dos alunos agora</h2><small>Atualiza sozinha a cada 5 segundos.</small></div>
-    <input id="mon-busca" class="campo-busca" placeholder="Buscar aluno..." style="max-width:240px"></div>
+    <div class="linha" style="gap:8px;flex-wrap:wrap"><select id="mon-turma" class="filtro-turma-tabela" aria-label="Filtrar por turma" style="width:auto"><option value="">Todas as turmas</option>${turmasDe(dados.mon.alunos).map((s) => `<option${s === dados.turmaMon ? " selected" : ""}>${esc(s)}</option>`).join("")}</select><input id="mon-busca" class="campo-busca" placeholder="Buscar aluno..." aria-label="Buscar aluno" style="max-width:240px"></div></div>
     <div class="tabela"><table><caption class="so-leitor">Situação dos alunos agora</caption><thead><tr><th scope="col">Aluno</th><th scope="col">Agora</th><th scope="col">Cadastro facial</th><th scope="col">Portaria</th></tr></thead><tbody id="mon-alunos"></tbody></table></div></section>
   <form id="form-camera" class="card" style="margin-top:20px"><h2>Nova câmera</h2>
     <small>Câmeras só em áreas comuns: o sistema recusa banheiros, vestiários e trocadores (ECA, art. 17). Reconhecimento facial só nos portões.</small>
@@ -1765,8 +2189,8 @@ function desenharMonMetricas() {
   const m = dados.mon, r = m.resumo, ativas = m.cameras.filter((c) => c.ativa).length;
   document.getElementById("mon-metricas").innerHTML =
     metrica(ico("escola"), "Na escola agora", r.na_escola, `${r.nao_chegou} não chegaram • ${r.saiu} saíram`, "success", "Ao vivo") +
-    metrica(ico("camera"), "Câmeras online", `${ativas}/${m.cameras.length}`, ativas === m.cameras.length ? "Todas funcionando" : `${m.cameras.length - ativas} desligada(s)`, ativas === m.cameras.length ? "info" : "warning", "Agora") +
-    metrica(ico("rosto"), "Reconhecidos hoje", r.reconhecidos_hoje, `${r.com_cadastro_facial} aluno(s) com cadastro facial`, "info", "Hoje") +
+    metrica(ico("camera"), "Câmeras online", `${ativas}/${m.cameras.length}`, ativas === m.cameras.length ? "Todas funcionando" : pl(m.cameras.length - ativas, "desligada", "desligadas"), ativas === m.cameras.length ? "info" : "warning", "Agora") +
+    metrica(ico("rosto"), "Reconhecidos hoje", r.reconhecidos_hoje, `${pl(r.com_cadastro_facial, "aluno", "alunos")} com cadastro facial`, "info", "Hoje") +
     metrica(ico("proibido"), "Sem cadastro facial", r.sem_cadastro_hoje, "imagens descartadas hoje", "neutral", "Hoje");
 }
 function desenharMonFacial() {
@@ -1792,7 +2216,7 @@ function videoDaCamera(c) {
   return `<video src="assets/cameras/${cena}.mp4" poster="assets/cameras/${cena}.jpg" muted loop playsinline ${parado ? "" : "autoplay"} preload="auto" aria-hidden="true" tabindex="-1"></video>`;
 }
 function desenharMonCameras() {
-  const alunos = dados.mon.alunos.map((a) => `<option value="${a.id}">${esc(a.nome)} — ${esc(a.sala)}</option>`).join("");
+  const alunos = opcoesAlunos(dados.mon.alunos);
   document.getElementById("mon-cams").innerHTML = dados.mon.cameras.map((c) => `<article class="cam ${c.ativa ? "" : "desligada"}" data-cam="${c.id}">
     <div class="cam-video" role="img" aria-label="Imagem simulada da câmera ${esc(c.nome)}">
       ${c.ativa ? `${videoDaCamera(c)}<span class="cam-rec">● REC</span>` : `<span class="cam-sem-sinal">${ico("semSinal")} Sem sinal</span>`}
@@ -1800,7 +2224,7 @@ function desenharMonCameras() {
       <div class="cam-alerta oculto" data-cam-alerta="${c.id}"></div></div>
     <div class="cam-info"><div class="linha" style="gap:6px;flex-wrap:wrap"><small>${ico("local")} ${esc(c.local)}</small><span>${pill(c.tipo, "neutral")} ${c.reconhecimento ? pill("Facial", "info") : ""}</span></div>
       ${c.reconhecimento ? `<small>${c.passagens_hoje} passagem(ns) hoje</small>` : "<small>Só gravação (área comum)</small>"}
-      ${c.reconhecimento && c.ativa ? `<div style="margin-top:8px"><small>Simular passagem de</small><select data-cam-aluno="${c.id}"><option value="">Aluno escolhido pelo sistema</option><option value="desconhecido">Visitante (rosto desconhecido)</option>${alunos}</select></div>
+      ${c.reconhecimento && c.ativa ? `<div style="margin-top:8px"><small>Simular passagem de</small><select data-cam-aluno="${c.id}" data-filtro-turma><option value="">Aluno escolhido pelo sistema</option><option value="desconhecido">Visitante (rosto desconhecido)</option>${alunos}</select></div>
         <button class="btn pequeno" data-simular="${c.id}" style="margin-top:8px">${ico("foto")} Simular passagem</button>` : ""}
       <button class="btn outline pequeno" data-cam-ativa="${c.id}" data-ligar="${c.ativa ? 0 : 1}" style="margin-top:8px">${c.ativa ? "Desligar câmera" : "Ligar câmera"}</button></div></article>`).join("");
   document.querySelectorAll("[data-simular]").forEach((b) => b.onclick = seguro(async () => {
@@ -1856,7 +2280,8 @@ function desenharMonEventos() {
 function desenharMonAlunos() {
   const busca = (document.getElementById("mon-busca").value || "").toLowerCase();
   const camEntrada = dados.mon.cameras.find((c) => c.tipo === "Entrada"), camSaida = dados.mon.cameras.find((c) => c.tipo === "Saída");
-  document.getElementById("mon-alunos").innerHTML = dados.mon.alunos.filter((a) => a.nome.toLowerCase().includes(busca)).map((a) => `<tr>
+  const turmaMon = document.getElementById("mon-turma").value;
+  document.getElementById("mon-alunos").innerHTML = dados.mon.alunos.filter((a) => (!turmaMon || a.sala === turmaMon) && a.nome.toLowerCase().includes(busca)).map((a) => `<tr>
     <td><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><div><b>${esc(a.nome)}</b><small>${esc(a.sala)}</small></div></div></td>
     <td>${pillAgora(a)}<small>${esc(a.detalhe)}</small></td>
     <td>${a.facial.ok ? pill(ico("visto") + " Ativo", "success") : pill("Sem cadastro", "neutral")}<small>${esc(a.facial.motivo)}</small></td>
@@ -1873,7 +2298,9 @@ async function recarregarMonitoramento(cameras) {
 function ligarMonitoramento() {
   desenharMonMetricas(); desenharMonFacial(); desenharMonCameras(); desenharMonEventos(); desenharMonAlunos(); desenharMonResultado(); desenharSaida();
   document.getElementById("mon-busca").oninput = desenharMonAlunos;
-  document.getElementById("buscaSaida").oninput = () => { liberada = false; desenharSaida(); };
+  document.getElementById("mon-turma").onchange = (e) => { dados.turmaMon = e.target.value; desenharMonAlunos(); };
+  document.getElementById("buscaSaida").oninput = () => { liberada = false; const s = document.getElementById("saida-aluno"); if (s.value) s.value = ""; desenharSaida(); };
+  document.getElementById("saida-aluno").onchange = (e) => { liberada = false; if (e.target.value) document.getElementById("buscaSaida").value = ""; desenharSaida(); };
   // demonstração: quem ainda não chegou passa pelo portão principal, um de cada vez
   document.getElementById("mon-chegada").onclick = seguro(async () => {
     const cam = dados.mon.cameras.find((c) => c.tipo === "Entrada" && c.reconhecimento && c.ativa);
@@ -1903,11 +2330,11 @@ function ligarMonitoramento() {
   timerTela = setInterval(() => recarregarMonitoramento(false).catch(() => {}), 5000);
 }
 async function desenharSaida() {
-  const texto = document.getElementById("buscaSaida").value.trim();
+  const texto = document.getElementById("buscaSaida").value.trim(), escolhido = (document.getElementById("saida-aluno") || {}).value;
   const box = document.getElementById("resultado");
-  const vazioSaida = `<div class="vazio"><b>Busque pelo nome do aluno</b><small>Os responsáveis autorizados aparecerão aqui.</small></div>`;
-  if (texto.length < 3) { box.innerHTML = vazioSaida; return; }
-  const r = await api("/api/saida?nome=" + encodeURIComponent(texto));
+  const vazioSaida = `<div class="vazio"><b>Escolha a turma e o aluno</b><small>Ou digite o nome. Os responsáveis autorizados aparecem aqui.</small></div>`;
+  if (!escolhido && texto.length < 3) { box.innerHTML = vazioSaida; return; }
+  const r = await api(escolhido ? "/api/saida?id=" + encodeURIComponent(escolhido) : "/api/saida?nome=" + encodeURIComponent(texto));
   if (!r) { box.innerHTML = vazioSaida; return; }
   const naEscola = r.status && r.status.situacao === "na_escola";
   box.innerHTML = `<div class="linha info" style="padding:12px;border-radius:8px;margin-top:20px;flex-wrap:wrap;gap:8px"><div><b>${esc(r.aluno.nome)}</b><small>${esc(r.aluno.sala)} • Matrícula ${esc(r.aluno.matricula || "—")}</small></div>${r.status ? pillAgora(r.status) : ""}</div>
@@ -1956,7 +2383,7 @@ function telaCadastroAluno() {
     ${fora}
   </section>
   <section class="card" style="margin-top:20px">
-    <h2>Turmas</h2><small>O aluno, o professor, os comunicados e os eventos só podem usar turmas desta lista. Renomear uma turma atualiza tudo sozinho.</small>
+    <h2>Turmas</h2><small>O aluno, o docente, os comunicados e os eventos só podem usar turmas desta lista. Renomear uma turma atualiza tudo sozinho.</small>
     <div class="tabela" style="margin-top:12px"><table><caption class="so-leitor">Turmas cadastradas</caption><thead><tr><th scope="col">Turma</th><th scope="col">Ano letivo</th><th scope="col">Turno</th><th scope="col">Alunos</th><th scope="col">Professores</th><th scope="col">Situação</th><th scope="col"><span class="so-leitor">Ações</span></th></tr></thead><tbody>
       ${(dados.turmas || []).map((t) => `<tr><td><b>${esc(t.nome)}</b></td><td>${t.ano_letivo}</td><td>${esc(t.turno || "—")}</td><td>${t.alunos}</td><td>${esc(t.professores || "—")}</td>
         <td>${t.ativa ? pill("Em uso", "success") : pill("Encerrada", "neutral")}</td><td><button type="button" class="btn outline pequeno" data-tur-editar="${t.id}">Editar</button></td></tr>`).join("")}
@@ -1993,7 +2420,7 @@ function telaCadastroAluno() {
       <form id="form-aluno">
         <small>Nome da criança</small><input id="ca-nome" required>
         <div class="grade dois" style="margin-top:12px">
-          <div><small>Turma / sala</small><select id="ca-sala" required><option value="">Escolha a turma...</option>${nomesTurmas().map((s) => `<option>${esc(s)}</option>`).join("")}</select></div>
+          <div><small>Turma</small><select id="ca-sala" required><option value="">Escolha a turma...</option>${nomesTurmas().map((s) => `<option>${esc(s)}</option>`).join("")}</select></div>
           <div><small>Matrícula</small><input id="ca-matricula" placeholder="Opcional"></div>
         </div>
         <div class="linha" style="margin-top:22px"><b>Responsáveis (pais, etc.)</b>
@@ -2060,12 +2487,12 @@ function desenharPrevia(r, importado) {
     return `<tr><td>${l.linha}</td><td style="min-width:180px">${pill(rotulo, tom)}${problemas}</td><td><b>${esc(l.nome) || "—"}</b></td><td>${esc(l.sala) || "—"}</td><td>${esc(l.matricula) || "—"}</td><td>${resp}</td></tr>`;
   }).join("");
   const resumo = importado
-    ? `${pill(`${ico("confere")} ${r.importados} aluno(s) importado(s)`, "success")} ${r.ignorados ? pill(`${r.ignorados} linha(s) não importada(s)`, "warning") : ""}`
-    : `${pill(`${r.total} linha(s)`, "info")} ${pill(`${r.prontos} pronta(s)`, "success")} ${r.duplicados ? pill(`${r.duplicados} já cadastrada(s)`, "warning") : ""} ${r.com_erro ? pill(`${r.com_erro} com erro`, "danger") : ""}`;
+    ? `${pill(`${ico("confere")} ${pl(r.importados, "aluno importado", "alunos importados")}`, "success")} ${r.ignorados ? pill(pl(r.ignorados, "linha não importada", "linhas não importadas"), "warning") : ""}`
+    : `${pill(pl(r.total, "linha", "linhas"), "info")} ${pill(pl(r.prontos, "pronta", "prontas"), "success")} ${r.duplicados ? pill(pl(r.duplicados, "já cadastrada", "já cadastradas"), "warning") : ""} ${r.com_erro ? pill(`${r.com_erro} com erro`, "danger") : ""}`;
   const ignoradas = r.ignoradas && r.ignoradas.length ? `<small style="display:block;margin-top:6px">Colunas que não fazem parte do cadastro e foram ignoradas: ${r.ignoradas.map(esc).join(", ")}.</small>` : "";
   const acoes = importado
     ? `<button type="button" class="btn outline" id="imp-nova" style="width:auto;padding:8px 16px">Importar outra planilha</button>`
-    : `<button type="button" class="btn" id="imp-confirmar" style="width:auto;padding:8px 18px" ${r.prontos ? "" : "disabled"}>Importar ${r.prontos} aluno(s)</button>
+    : `<button type="button" class="btn" id="imp-confirmar" style="width:auto;padding:8px 18px" ${r.prontos ? "" : "disabled"}>Importar ${pl(r.prontos, "aluno", "alunos")}</button>
        <button type="button" class="btn outline" id="imp-cancelar" style="width:auto;padding:8px 16px">Cancelar</button>`;
   document.getElementById("imp-previa").innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><b style="word-break:break-all">${esc(impArquivo ? impArquivo.nome : "")}</b></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">${resumo}</div>
@@ -2112,7 +2539,7 @@ function desenharCadastroAluno() {
     const linhas = [...document.querySelectorAll("#ca-linhas tr")];
     linhas.forEach((tr) => { tr.classList.toggle("oculto", (turma && tr.dataset.turma !== turma) || (busca && !tr.dataset.nome.includes(busca))); });
     const visiveis = linhas.filter((tr) => !tr.classList.contains("oculto")).length;
-    $("ca-contagem").textContent = `${visiveis} de ${linhas.length} aluno(s)`;
+    $("ca-contagem").textContent = `${visiveis} de ${pl(linhas.length, "aluno", "alunos")}`;
   };
   if ($("ca-filtro-turma")) { $("ca-filtro-turma").onchange = filtrarAlunos; $("ca-busca").oninput = filtrarAlunos; filtrarAlunos(); }
   // Mudar a situação: janela com a escolha, o motivo e a consequência explicada
@@ -2184,14 +2611,14 @@ function telaUsuarios() {
         <div><small>Usuário (login)</small><input id="nu-usuario" required></div>
       </div>
       <label class="campo-bloco" style="margin-top:12px"><small>E-mail (para recuperar a senha)</small><input id="nu-email" type="email" maxlength="120" autocomplete="off"></label>
-      <div style="margin-top:12px"><small>Papel</small>
+      <div style="margin-top:12px"><small>Perfil</small>
         <select id="nu-papel">
           <option value="admin">Gestão (administração)</option>
           <option value="pai">Pai / responsável</option>
-          <option value="professor">Professor(a)</option>
+          <option value="professor">Docente</option>
         </select>
       </div>
-      <div id="nu-campo-aluno" style="margin-top:12px"><small>Aluno (filho)</small><select id="nu-aluno"></select></div>
+      <div id="nu-campo-aluno" style="margin-top:12px"><small>Turma e aluno (filho)</small><select id="nu-aluno" data-filtro-turma></select></div>
       <div id="nu-campo-sala" class="oculto" style="margin-top:12px"><small>Turma que leciona (outras turmas podem ser marcadas depois, na lista abaixo)</small><select id="nu-sala"><option value="">Escolha a turma...</option>${nomesTurmas().map((s) => `<option>${esc(s)}</option>`).join("")}</select></div>
       <p id="nu-erro" class="pill danger oculto" style="margin-top:12px"></p>
       <div id="nu-sucesso" class="oculto pill success" style="margin-top:12px;display:block"></div>
@@ -2200,7 +2627,7 @@ function telaUsuarios() {
   </section>
   <section class="card" style="margin-top:20px">
     <h2>Usuários cadastrados</h2>
-    <div class="tabela"><table><caption class="so-leitor">Usuários cadastrados</caption><thead><tr><th scope="col">Nome</th><th scope="col">Login</th><th scope="col">Papel</th><th scope="col">Vínculo</th><th scope="col">Último acesso</th><th scope="col">Status</th><th scope="col">Ações</th></tr></thead>
+    <div class="tabela"><table><caption class="so-leitor">Usuários cadastrados</caption><thead><tr><th scope="col">Nome</th><th scope="col">Usuário</th><th scope="col">Perfil</th><th scope="col">Vínculo</th><th scope="col">Último acesso</th><th scope="col">Status</th><th scope="col">Ações</th></tr></thead>
     <tbody id="lista-usuarios"></tbody></table></div>
   </section>
   <div id="modal-vinculo" class="modal oculto" role="dialog" aria-modal="true" aria-labelledby="vinculo-titulo">
@@ -2213,7 +2640,7 @@ function telaUsuarios() {
 }
 function desenharUsuarios() {
   const selectAluno = document.getElementById("nu-aluno");
-  selectAluno.innerHTML = dados.alunos.map((a) => `<option value="${a.id}">${esc(a.nome)} — ${esc(a.sala)}</option>`).join("");
+  selectAluno.innerHTML = `<option value="">Escolha o aluno...</option>` + opcoesAlunos(dados.alunos);
   const papelSel = document.getElementById("nu-papel");
   papelSel.onchange = () => {
     document.getElementById("nu-campo-aluno").classList.toggle("oculto", papelSel.value !== "pai");
@@ -2264,7 +2691,7 @@ function acoesUsuario(u) {
   if (!u.ativo && u.inativado_motivo === "inatividade") return `<button class="btn pequeno" data-reativar="${u.id}" data-nome="${esc(u.nome)}">Reativar</button>`;
   if (!u.ativo) return `<button class="btn outline pequeno" data-id="${u.id}" data-ativo="1" data-nome="${esc(u.nome)}">Ativar</button>`;
   return `${u.senha_pedida_em ? `<button class="btn pequeno" data-nova-senha="${u.id}" data-nome="${esc(u.nome)}">Gerar senha nova</button> ` : ""}<details class="menu-acoes"><summary class="btn outline pequeno" aria-label="Mais ações para ${esc(u.nome)}" title="Mais ações">${ico("mais")}</summary>
-    <div class="menu-acoes-lista"><button type="button" data-nova-senha="${u.id}" data-nome="${esc(u.nome)}">Gerar senha nova…</button>${botaoEmail("", u.email ? "Alterar e-mail…" : "Definir e-mail…")}${u.dois_fatores ? `<button type="button" data-zerar-2fa="${u.id}" data-nome="${esc(u.nome)}">Zerar duas etapas…</button>` : ""}
+    <div class="menu-acoes-lista"><button type="button" data-nova-senha="${u.id}" data-nome="${esc(u.nome)}">Gerar senha nova…</button>${botaoEmail("", u.email ? "Alterar e-mail…" : "Definir e-mail…")}${u.dois_fatores ? `<button type="button" data-zerar-2fa="${u.id}" data-nome="${esc(u.nome)}">Redefinir duas etapas…</button>` : ""}
       <button type="button" class="perigo" data-id="${u.id}" data-ativo="0" data-nome="${esc(u.nome)}">Desativar acesso…</button></div></details>`;
 }
 function desenharListaUsuarios() {
@@ -2294,9 +2721,9 @@ function desenharListaUsuarios() {
     await recarregarUsuarios(`Senha nova de ${b.dataset.nome}: ${r.senha_provisoria} (repasse à pessoa; ela troca no próximo acesso).`);
   }));
   document.querySelectorAll("#lista-usuarios [data-zerar-2fa]").forEach((b) => b.onclick = seguro(async () => {
-    if (!(await confirmar({ titulo: `Zerar as duas etapas de ${b.dataset.nome}?`, texto: "Use só se a pessoa perdeu o celular. O login dela é encerrado em todos os aparelhos e ela configura o aplicativo de novo no próximo acesso.", botao: "Zerar duas etapas", perigo: true }))) return;
+    if (!(await confirmar({ titulo: `Redefinir a verificação em duas etapas de ${b.dataset.nome}?`, texto: "Use só se a pessoa perdeu o celular. O login dela é encerrado em todos os aparelhos e ela configura o aplicativo de novo no próximo acesso.", botao: "Redefinir", perigo: true }))) return;
     await api(`/api/usuarios/${b.dataset.zerar2fa}/2fa/zerar`, { method: "PUT", body: "{}" });
-    await recarregarUsuarios(`Verificação em duas etapas de ${b.dataset.nome} zerada.`);
+    await recarregarUsuarios(`Verificação em duas etapas de ${b.dataset.nome} redefinida.`);
   }));
   document.querySelectorAll("#lista-usuarios [data-vinculo]").forEach((b) => b.onclick = () => abrirVinculo(dados.usuarios.find((u) => u.id === Number(b.dataset.vinculo))));
 }
@@ -2324,16 +2751,16 @@ function abrirVinculo(u) {
     $("vinculo-titulo").textContent = `Filhos de ${u.nome.split(" ")[0]}`;
     corpo.innerHTML = `<small>O responsável entra com o mesmo login e troca de filho pelo seletor no topo da tela.</small>
       <div style="margin-top:10px">${u.filhos.map((f) => `<div class="linha" style="padding:8px 0;border-top:1px solid var(--border)"><span>${esc(f.nome)}${f.id === u.aluno_id ? ' <small style="display:inline">(principal)</small>' : ""}</span>
-        ${f.id === u.aluno_id ? "" : `<button type="button" class="btn outline pequeno" data-desligar="${f.id}">Desligar</button>`}</div>`).join("")}</div>
-      <div class="grade dois" style="margin-top:12px"><div><small>Ligar outro aluno</small><select id="vinculo-aluno"><option value="">Escolha...</option>${dados.alunos.filter((a) => !ligados.has(a.id)).map((a) => `<option value="${a.id}">${esc(a.nome)} — ${esc(a.sala)}</option>`).join("")}</select></div>
+        ${f.id === u.aluno_id ? "" : `<button type="button" class="btn outline pequeno" data-desligar="${f.id}">Remover</button>`}</div>`).join("")}</div>
+      <div class="grade dois" style="margin-top:12px"><div><small>Adicionar outro filho</small><select id="vinculo-aluno" data-filtro-turma><option value="">Escolha o aluno...</option>${opcoesAlunos(dados.alunos.filter((a) => !ligados.has(a.id)))}</select></div>
         <div><small>Parentesco</small><select id="vinculo-parentesco"><option>Mãe</option><option>Pai</option><option>Responsável</option></select></div></div>
-      <button type="button" class="btn pequeno" id="vinculo-ligar" style="margin-top:12px">Ligar aluno</button>`;
+      <button type="button" class="btn pequeno" id="vinculo-ligar" style="margin-top:12px">Adicionar filho</button>`;
     $("vinculo-ligar").onclick = async () => {
       try { await api(`/api/usuarios/${u.id}/filhos`, { method: "POST", body: JSON.stringify({ aluno_id: Number($("vinculo-aluno").value), parentesco: $("vinculo-parentesco").value }) }); await depois(); }
       catch (e) { falhou(e); }
     };
     corpo.querySelectorAll("[data-desligar]").forEach((b) => b.onclick = async () => {
-      if (!(await confirmar({ titulo: "Desligar este aluno do responsável?", texto: "O responsável deixa de ver este aluno no Portal dos Pais. Os registros já feitos continuam guardados.", botao: "Desligar", perigo: true }))) return;
+      if (!(await confirmar({ titulo: "Remover este aluno do responsável?", texto: "O responsável deixa de ver este aluno no Portal da Família. Os registros já feitos continuam guardados.", botao: "Remover", perigo: true }))) return;
       try { await api(`/api/usuarios/${u.id}/filhos/${b.dataset.desligar}`, { method: "DELETE" }); await depois(); }
       catch (e) { falhou(e); }
     });
@@ -2357,24 +2784,24 @@ function vinculoUsuario(u) {
 }
 // ---------- Reativação de professores (60 dias sem acessar) ----------
 const reativarProfessor = (b) => seguro(async () => {
-  if (!(await confirmar({ titulo: `Reativar o acesso de ${b.dataset.nome}?`, texto: "O sistema gera uma senha provisória nova, que você repassa ao professor. Ele troca a senha no primeiro acesso e o prazo de 60 dias volta a contar.", botao: "Reativar" }))) return;
+  if (!(await confirmar({ titulo: `Reativar o acesso de ${b.dataset.nome}?`, texto: "O sistema gera uma senha provisória nova, que você repassa ao docente. A senha é trocada no primeiro acesso e o prazo de 60 dias volta a contar.", botao: "Reativar" }))) return;
   const r = await api(`/api/usuarios/${b.dataset.reativar}/reativar`, { method: "PUT", body: "{}" });
-  await recarregarUsuarios(`Acesso de ${b.dataset.nome} reativado. Senha provisória: ${r.senha_provisoria} (repasse ao professor; ele troca no primeiro acesso).`);
+  await recarregarUsuarios(`Acesso de ${b.dataset.nome} reativado. Senha provisória: ${r.senha_provisoria} (repasse ao docente; a senha é trocada no primeiro acesso).`);
 });
 function desenharReativacao() {
   const r = dados.reat, caixa = document.getElementById("reativacao");
   const msg = dados.reatMsg; dados.reatMsg = "";
   const inativos = r.inativos.map((u) => `<div class="item"><div class="linha" style="flex-wrap:wrap;gap:8px">
-      <div class="aluno"><span class="avatar">${iniciais(u.nome)}</span><div><b>${esc(u.nome)}</b><small>${esc(u.sala || "—")} • login ${esc(u.usuario)} • último acesso ${u.ultimo_acesso || "nunca"} • inativado em ${u.inativado_em}</small></div></div>
+      <div class="aluno"><span class="avatar">${iniciais(u.nome)}</span><div><b>${esc(u.nome)}</b><small>${esc(u.sala || "—")} • usuário ${esc(u.usuario)} • último acesso ${u.ultimo_acesso || "nunca"} • inativado em ${u.inativado_em}</small></div></div>
       <div>${u.pedido_em ? pill(`Pediu reativação em ${u.pedido_em}`, "danger") : pill(`${u.dias_sem_acesso} dias sem acesso`, "warning")}</div></div>
       <div class="acoes"><button class="btn pequeno" data-reativar="${u.id}" data-nome="${esc(u.nome)}">Reativar com senha nova</button></div></div>`).join("");
-  const perto = r.perto.map((u) => `<div class="linha" style="padding:8px 0;border-top:1px solid var(--border);flex-wrap:wrap;gap:8px"><span><b>${esc(u.nome)}</b> <small style="display:inline">(${esc(u.sala || "—")}) • último acesso ${u.ultimo_acesso || "nunca"}</small></span>${pill(`Faltam ${u.faltam} dia(s) para a suspensão`, "warning")}</div>`).join("");
-  caixa.innerHTML = `<div class="linha" style="flex-wrap:wrap;gap:8px"><h2>Reativação de professores</h2>${r.inativos.length ? pill(`${r.inativos.length} inativo(s)`, "warning") : pill("Nenhum inativo", "success")}</div>
-    <small>Professores que ficam ${r.dias} dias sem entrar no sistema têm o acesso suspenso automaticamente. Ao tentar entrar, o pedido de reativação chega aqui. A reativação gera uma senha provisória nova e o prazo volta a contar.</small>
+  const perto = r.perto.map((u) => `<div class="linha" style="padding:8px 0;border-top:1px solid var(--border);flex-wrap:wrap;gap:8px"><span><b>${esc(u.nome)}</b> <small style="display:inline">(${esc(u.sala || "—")}) • último acesso ${u.ultimo_acesso || "nunca"}</small></span>${pill(`Faltam ${pl(u.faltam, "dia", "dias")} para a suspensão`, "warning")}</div>`).join("");
+  caixa.innerHTML = `<div class="linha" style="flex-wrap:wrap;gap:8px"><h2>Reativação de docentes</h2>${r.inativos.length ? pill(pl(r.inativos.length, "inativo", "inativos"), "warning") : pill("Nenhum inativo", "success")}</div>
+    <small>Docentes que ficam ${r.dias} dias sem entrar no sistema têm o acesso suspenso automaticamente. Ao tentar entrar, o pedido de reativação chega aqui. A reativação gera uma senha provisória nova e o prazo volta a contar.</small>
     ${msg ? `<p class="pill success" style="margin-top:12px;white-space:normal">${esc(msg)}</p>` : ""}
     ${inativos || ""}
     ${perto ? `<small style="margin-top:14px;font-weight:700;text-transform:uppercase">Perto do limite (${r.aviso} dias ou mais sem acesso)</small>${perto}` : ""}
-    ${!inativos && !perto ? `<div class="vazio" style="padding:20px"><small>Nenhum professor parado há ${r.aviso} dias ou mais.</small></div>` : ""}`;
+    ${!inativos && !perto ? `<div class="vazio" style="padding:20px"><small>Nenhum docente parado há ${r.aviso} dias ou mais.</small></div>` : ""}`;
   caixa.querySelectorAll("[data-reativar]").forEach((b) => b.onclick = reativarProfessor(b));
 }
 
@@ -2395,7 +2822,7 @@ function desenharLogs() {
   const lista = dados.logs.filter((l) => (!pessoa || l.nome_usuario === pessoa) && (!busca || `${acaoLabel(l.acao)} ${l.detalhe || ""}`.toLowerCase().includes(busca)));
   document.getElementById("logs-linhas").innerHTML = lista.length ? lista.map((l) => `<tr><td>${l.quando}</td><td>${esc(l.nome_usuario)}</td><td>${papelLabel(l.papel)}</td><td>${acaoLabel(l.acao)}</td><td>${esc(l.detalhe || "—")}</td></tr>`).join("")
     : `<tr><td colspan="5">${vazio("Nenhum registro com esse filtro.")}</td></tr>`;
-  document.getElementById("logs-contagem").textContent = `${lista.length} de ${dados.logs.length} registro(s)`;
+  document.getElementById("logs-contagem").textContent = `${lista.length} de ${pl(dados.logs.length, "registro", "registros")}`;
 }
 
 // ---------- Minha Turma e chamada (professor) ----------
@@ -2421,7 +2848,7 @@ function telaTurma() {
       <tbody id="chamada-linhas"></tbody></table></div>
       <div class="chamada-cards so-celular" id="chamada-cards"></div>
       <div class="chamada-rodape"><button class="btn" id="chamada-salvar">Salvar chamada de hoje</button></div>`
-      : `<div class="vazio"><b>Nenhum aluno cadastrado nesta turma</b><small>Peça à administração para cadastrar os alunos da sala ${esc(usuarioLogado.sala)}.</small></div>`}
+      : `<div class="vazio"><b>Nenhum aluno cadastrado nesta turma</b><small>Peça à gestão para cadastrar os alunos da turma ${esc(usuarioLogado.sala)}.</small></div>`}
   </section>
   ${blocoBanners()}`;
 }
@@ -2443,21 +2870,21 @@ function desenharChamada() {
   document.getElementById("chamada-cards").innerHTML = alunos.map((a) => {
     const s = dados.chamada[a.id];
     return `<article class="chamada-card ${s ? "" : "sem-marcacao"}">
-      <div class="linha"><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><div><b>${esc(a.nome)}</b>${origem(a) || `<small>${a.faltas ? `${a.faltas} falta(s) em ${dados.turma.dias_faltas} dias` : "Sem faltas recentes"}</small>`}</div></div>
+      <div class="linha"><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><div><b>${esc(a.nome)}</b>${origem(a) || `<small>${a.faltas ? `${pl(a.faltas, "falta", "faltas")} em ${dados.turma.dias_faltas} dias` : "Sem faltas recentes"}</small>`}</div></div>
         <button class="btn outline pequeno" data-ficha="${a.id}">Ficha</button></div>
       ${botoes(a, s)}</article>`;
   }).join("");
   const presentes = alunos.filter((a) => dados.chamada[a.id] === "Presente").length, ausentes = alunos.filter((a) => dados.chamada[a.id] === "Ausente").length;
   const faltam = alunos.length - presentes - ausentes;
-  document.getElementById("chamada-resumo").innerHTML = `<span>${pill(`${presentes} presente(s)`, "success")} ${pill(`${ausentes} ausente(s)`, ausentes ? "danger" : "neutral")} ${faltam ? pill(`${faltam} sem marcar`, "warning") : pill("Todos marcados", "info")}</span>
-    ${faltam ? `<button type="button" class="btn outline pequeno" id="chamada-restantes">Marcar os ${faltam} restante(s) como presentes</button>` : ""}`;
+  document.getElementById("chamada-resumo").innerHTML = `<span>${pill(pl(presentes, "presente", "presentes"), "success")} ${pill(pl(ausentes, "ausente", "ausentes"), ausentes ? "danger" : "neutral")} ${faltam ? pill(`${faltam} sem marcar`, "warning") : pill("Todos marcados", "info")}</span>
+    ${faltam ? `<button type="button" class="btn outline pequeno" id="chamada-restantes">${faltam === 1 ? "Marcar o restante como presente" : `Marcar os ${faltam} restantes como presentes`}</button>` : ""}`;
   document.querySelectorAll("#tela [data-aluno]").forEach((b) => b.onclick = () => { dados.chamada[b.dataset.aluno] = b.dataset.status; desenharChamada(); });
   document.querySelectorAll("#tela [data-ficha]").forEach((b) => b.onclick = () => abrirFicha(Number(b.dataset.ficha), "turma"));
   const restantes = document.getElementById("chamada-restantes");
   if (restantes) restantes.onclick = () => { alunos.forEach((a) => { if (!dados.chamada[a.id]) dados.chamada[a.id] = "Presente"; }); desenharChamada(); };
   document.getElementById("chamada-salvar").onclick = seguro(async () => {
     if (faltam) {
-      avisar(`Falta marcar ${faltam} aluno(s). Marque cada um ou use "Marcar os restantes como presentes".`, "warning");
+      avisar(`Falta marcar ${pl(faltam, "aluno", "alunos")}. Marque cada um ou use "Marcar os restantes como presentes".`, "warning");
       const primeiro = document.querySelector(`#${matchMedia("(max-width: 760px)").matches ? "chamada-cards" : "chamada-linhas"} .sem-marcacao`);
       if (primeiro) primeiro.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
@@ -2465,12 +2892,12 @@ function desenharChamada() {
     await api("/api/chamada", { method: "POST", body: JSON.stringify({
       registros: Object.entries(dados.chamada).map(([id, status]) => ({ aluno_id: Number(id), status })),
     }) });
-    avisar(`Chamada salva: ${presentes} presente(s) e ${ausentes} ausente(s).`);
+    avisar(`Chamada salva: ${pl(presentes, "presente", "presentes")} e ${pl(ausentes, "ausente", "ausentes")}.`);
     await mostrar("turma");
   });
 }
 
-// ---------- Portal dos Pais ----------
+// ---------- Portal da Família ----------
 // Cartão "Status agora" (Fase 5): entrada e saída de hoje, atualizado sozinho a cada 30 segundos
 const seloAgora = { na_escola: "● Seguro", saiu: "● Saiu da escola", nao_chegou: "● Aguardando chegada", ausente: "● Ausente" };
 function cartaoStatusAgora() {
@@ -2486,10 +2913,10 @@ function cartaoStatusAgora() {
 function itensAtencao() {
   const f = dados.ficha, itens = [];
   f.autorizacoes.filter((a) => !a.assinada && !a.vencida).forEach((a) => itens.push({ icone: "caneta", texto: `Autorização para assinar: <b>${esc(a.titulo)}</b>${a.valida_ate ? ` <small style="display:inline">• até ${a.valida_ate}</small>` : ""}`, botao: "Assinar", aba: "autorizacoes" }));
-  if (dados.ocorrenciasNovas) itens.push({ icone: "prancheta", texto: `<b>${dados.ocorrenciasNovas} ocorrência(s)</b> registrada(s) pelo professor esperando a sua ciência`, botao: "Ler e assinar", tela: "ocorrencias" });
+  if (dados.ocorrenciasNovas) itens.push({ icone: "prancheta", texto: dados.ocorrenciasNovas === 1 ? "<b>1 ocorrência</b> registrada pelo docente esperando a sua ciência" : `<b>${dados.ocorrenciasNovas} ocorrências</b> registradas pelo docente esperando a sua ciência`, botao: "Ler e assinar", tela: "ocorrencias" });
   f.pendencias.filter((p) => p.status === "Aberta" && p.tipo === "Documento").forEach((p) => itens.push({ icone: "documento", texto: `A escola pediu: <b>${esc(p.descricao)}</b>`, botao: "Enviar documento", aba: "documentos" }));
   const naoLidos = f.comunicados.filter((c) => !c.lido).length;
-  if (naoLidos) itens.push({ icone: "megafone", texto: `<b>${naoLidos} comunicado(s)</b> ainda não lido(s)`, botao: "Ler", aba: "comunicados" });
+  if (naoLidos) itens.push({ icone: "megafone", texto: naoLidos === 1 ? "<b>1 comunicado</b> ainda não lido" : `<b>${naoLidos} comunicados</b> ainda não lidos`, botao: "Ler", aba: "comunicados" });
   if (f.consentimento && f.consentimento.status === "pendente") itens.push({ icone: "termo", texto: "<b>Termo de consentimento</b> (imagem e informações) ainda sem resposta", botao: "Responder", consent: true });
   return itens;
 }
@@ -2598,7 +3025,7 @@ function abaOcorrencias(f, podeRegistrar) {
   return lista + (podeRegistrar ? `<form id="form-ocor" class="item" style="background:var(--muted)"><b>Registrar ação ou advertência</b>
     <div class="grade dois" style="margin-top:8px"><div><small>Tipo</small><select id="ocor-tipo"><option value="Advertencia">Advertência</option><option value="Acao">Ação</option></select></div>
       <div><small>Data</small><input type="date" id="ocor-data"></div></div>
-    <div style="margin-top:8px"><small>Descrição (só fatos, sem rótulos nem julgamentos sobre a criança: ECA, arts. 17 e 18)</small><textarea id="ocor-desc" rows="3" maxlength="500" required></textarea></div>
+    <div style="margin-top:8px"><small>Descrição (só os fatos, sem rótulos nem julgamentos sobre a criança)</small><textarea id="ocor-desc" rows="3" maxlength="500" required></textarea></div>
     ${erroBox("ocor-erro")}<button class="btn pequeno" type="submit" style="margin-top:10px">Registrar</button></form>` : "");
 }
 function abrirComprovante(a, aluno) {
@@ -2636,8 +3063,8 @@ function desenharFicha() {
   const aba = dados.fichaAba;
   const naoLidos = f.comunicados.filter((c) => !c.lido).length, autPend = f.autorizacoes.filter((a) => !a.assinada && !a.vencida).length;
   const pendAbertas = f.pendencias.filter((p) => p.status === "Aberta").length;
-  const abas = [["comunicados", "Comunicados", naoLidos ? `${naoLidos} novo(s)` : ""], ["autorizacoes", "Autorizações", autPend ? `${autPend} pendente(s)` : ""],
-    ["documentos", "Documentos", f.documentos.length || ""], ["pendencias", "Pendências", pendAbertas ? `${pendAbertas} aberta(s)` : ""], ["ocorrencias", "Ocorrências", f.ocorrencias.length || ""]];
+  const abas = [["comunicados", "Comunicados", naoLidos ? pl(naoLidos, "novo", "novos") : ""], ["autorizacoes", "Autorizações", autPend ? pl(autPend, "pendente", "pendentes") : ""],
+    ["documentos", "Documentos", f.documentos.length || ""], ["pendencias", "Pendências", pendAbertas ? pl(pendAbertas, "aberta", "abertas") : ""], ["ocorrencias", "Ocorrências", f.ocorrencias.length || ""]];
   const cabecalho = ehPai ? "" : `<section class="card"><div class="aluno"><span class="avatar">${iniciais(f.aluno.nome)}</span><div><h2>${esc(f.aluno.nome)}</h2><small>${esc(f.aluno.sala)} • Matrícula ${esc(f.aluno.matricula || "—")}</small>${f.aluno.situacao && f.aluno.situacao !== "Ativo" ? pill(`${esc(f.aluno.situacao)}${f.aluno.situacao_em ? " em " + f.aluno.situacao_em : ""}${f.aluno.situacao_motivo ? " — " + esc(f.aluno.situacao_motivo) : ""}`, "warning") : ""}</div></div>
     <small style="margin-top:10px;font-weight:700;text-transform:uppercase">Responsáveis</small>
     ${f.responsaveis.length ? f.responsaveis.map((r) => `<small>${esc(r.nome)} (${esc(r.parentesco)}) • ${ico("telefone")} ${esc(r.telefone || "—")}${r.telefone2 ? " / " + esc(r.telefone2) : ""}${r.email ? " • " + ico("email") + " " + esc(r.email) : ""} • prefere ${esc(r.contato_preferido || "WhatsApp")}</small>`).join("") : "<small>Nenhum responsável cadastrado.</small>"}${consentimentoNaFicha(f)}
@@ -2750,13 +3177,13 @@ const mesPorExtenso = (mesIso) => { const t = new Date(mesIso + "-01T12:00:00").
 const dataBR = (iso) => iso.split("-").reverse().join("/");
 function telaOcorrencias() {
   const msg = dados.ocorrenciaMsg || ""; dados.ocorrenciaMsg = "";
-  const alunos = dados.turma.alunos.map((a) => `<option value="${a.id}">${esc(a.nome)}</option>`).join("");
+  const alunos = opcoesAlunos(dados.turma.alunos, usuarioLogado.sala);
   return `<div class="topo"><h2>Ocorrências</h2><small>Registre o que aconteceu com um aluno da sua turma. Cada registro é assinado e fica arquivado abaixo.</small></div>
   ${msg ? `<p class="pill success" style="white-space:normal;margin-bottom:14px">${esc(msg)}</p>` : ""}
   <form id="form-ocorrencia" class="card" style="margin-bottom:20px">
     <b>Nova ocorrência</b>
     <div class="grade dois" style="margin-top:10px">
-      <div><small>Nome do aluno</small><select id="oc-aluno" required><option value="">Escolha o aluno...</option>${alunos}</select></div>
+      <div><small>Turma e aluno</small><select id="oc-aluno" data-filtro-turma required><option value="">Escolha o aluno...</option>${alunos}</select></div>
       <div><small>Turma</small><input value="${esc(usuarioLogado.sala)}" disabled></div>
     </div>
     <div class="grade dois">
@@ -2765,9 +3192,9 @@ function telaOcorrencias() {
     </div>
     <div><small>Quando o responsável foi notificado</small><input type="datetime-local" id="oc-notificado" required></div>
     <div style="margin-top:12px"><small>Ocorrência (descreva os fatos e as providências tomadas)</small><textarea id="oc-descricao" rows="4" maxlength="1000" required></textarea></div>
-    <div style="margin-top:12px"><small>Quem foi buscar o aluno (nome e parentesco)</small><input id="oc-buscado" maxlength="100" required></div>
+    <div style="margin-top:12px"><small>Quem buscou o aluno (nome e parentesco, se alguém buscou)</small><input id="oc-buscado" maxlength="100" required></div>
     <div class="assinatura-caixa">
-      <small><b>Assinatura digital do professor</b></small>
+      <small><b>Assinatura digital do docente</b></small>
       <small>Ao registrar, você assina digitalmente a ocorrência. Confirme com a sua senha do sistema.</small>
       <input type="password" id="oc-senha" autocomplete="current-password" required placeholder="Sua senha" aria-label="Sua senha para assinar" style="max-width:260px">
     </div>
@@ -2787,12 +3214,12 @@ function pastasOcorrencias(lista) {
     meses.get(mes).push(o);
   }
   return [...meses].map(([mes, itens], i) => `<details class="pasta" ${i === 0 ? "open" : ""}>
-    <summary><b>${ico("pasta")} ${mesPorExtenso(mes)}</b> <small style="display:inline">(${itens.length} ocorrência(s))</small></summary>
+    <summary><b>${ico("pasta")} ${mesPorExtenso(mes)}</b> <small style="display:inline">(${pl(itens.length, "ocorrência", "ocorrências")})</small></summary>
     ${itens.map((o) => `<div class="item">
       <div class="linha" style="flex-wrap:wrap;gap:8px"><div><b>${esc(o.aluno_nome)}</b><small>${esc(o.turma)} • ${dataBR(o.data)} às ${o.horario}</small></div>${pill("Código " + esc(o.codigo), "neutral")}</div>
       <p style="margin-top:8px;white-space:pre-line">${esc(o.descricao)}</p>
       <small>Responsável notificado em ${o.notificado_em} • Buscado por ${esc(o.buscado_por)}</small>
-      ${seloAssinatura("Registrado e assinado pelo professor", o.professor_nome, o.assinada_em, o.codigo)}
+      ${seloAssinatura("Registrado e assinado pelo docente", o.professor_nome, o.assinada_em, o.codigo)}
       ${o.resp_assinada_em
         ? seloAssinatura("Ciência do responsável", o.resp_nome, o.resp_assinada_em, o.resp_codigo)
         : `<div style="margin-top:10px">${pill("Aguardando a assinatura do responsável", "warning")}</div>`}
@@ -2819,7 +3246,7 @@ function ligarOcorrencias() {
   };
 }
 
-// ---------- Ocorrências no Portal dos Pais: o responsável lê o registro do professor e assina que tomou ciência ----------
+// ---------- Ocorrências no Portal da Família: o responsável lê o registro do professor e assina que tomou ciência ----------
 function telaOcorrenciasPai() {
   const msg = dados.ocorrenciaMsg || ""; dados.ocorrenciaMsg = "";
   const cartao = (o) => {
@@ -2829,12 +3256,12 @@ function telaOcorrenciasPai() {
       ${nova ? pill("Nova • aguardando sua assinatura", "warning") : pill("Assinada", "success")}</div>
     <p style="margin-top:10px;white-space:pre-line">${esc(o.descricao)}</p>
     <small style="margin-top:6px">Responsável notificado em ${o.notificado_em} • Buscado por ${esc(o.buscado_por)}</small>
-    ${seloAssinatura("Registrado e assinado pelo professor", o.professor_nome, o.assinada_em, o.codigo)}
+    ${seloAssinatura("Registrado e assinado pelo docente", o.professor_nome, o.assinada_em, o.codigo)}
     ${nova ? caixaAssinar("Sua assinatura digital (responsável)", `data-oc-assin="${o.id}"`)
       : seloAssinatura("Sua ciência (responsável)", o.resp_nome, o.resp_assinada_em, o.resp_codigo)}
   </article>`;
   };
-  return `<div class="topo"><h2>Ocorrências</h2><small>Registros feitos pelo professor sobre o seu filho. Leia e assine para confirmar que você tomou ciência.</small></div>
+  return `<div class="topo"><h2>Ocorrências</h2><small>Registros feitos pelo docente sobre o seu filho. Leia e assine para confirmar que você tomou ciência.</small></div>
   ${msg ? `<p class="pill success" style="white-space:normal;margin-bottom:14px">${esc(msg)}</p>` : ""}
   ${dados.ocorrencias.length ? dados.ocorrencias.map(cartao).join("") : vazio("Nenhuma ocorrência registrada.")}`;
 }
@@ -2861,7 +3288,7 @@ function telaComunicados() {
     <small>${prof ? `Será enviado aos responsáveis da turma ${esc(usuarioLogado.sala)}.` : "Escolha uma turma ou envie para a escola toda."}</small>
     <form id="form-com" style="margin-top:14px"><small>Título</small><input id="com-titulo" required maxlength="120">
       ${prof ? "" : `<div style="margin-top:12px"><small>Destino</small><select id="com-sala"><option value="">Escola toda</option>${salas.map((s) => `<option>${esc(s)}</option>`).join("")}</select></div>`}
-      <div style="margin-top:12px"><small>Texto (não cite nomes de alunos: todas as famílias leem este aviso — ECA, arts. 17 e 18)</small><textarea id="com-texto" rows="4" maxlength="1500" required></textarea></div>
+      <div style="margin-top:12px"><small>Texto (não cite nomes de alunos: todas as famílias leem este aviso)</small><textarea id="com-texto" rows="4" maxlength="1500" required></textarea></div>
       <p class="pill danger oculto" id="com-erro" style="margin-top:12px"></p><p class="pill success oculto" id="com-ok" style="margin-top:12px">Comunicado publicado!</p>
       <button class="btn" type="submit" style="margin-top:16px;max-width:240px">Publicar comunicado</button></form></section>
     <div class="topo" style="margin-top:24px"><h2>Comunicados publicados</h2><small>Acompanhe quantos responsáveis já leram cada um.</small></div><div id="com-lista"></div>`;
@@ -2872,7 +3299,7 @@ function desenharComunicados() {
     return `<article class="card" style="margin-bottom:12px">
       <div class="linha" style="gap:8px;flex-wrap:wrap"><div><b>${esc(c.titulo)}</b><small>${c.criado_em} • ${esc(c.criado_por_nome)}</small></div>${pill(c.sala ? esc(c.sala) : "Escola toda", "info")}</div>
       <p style="margin-top:8px">${esc(c.texto)}</p>
-      <div class="linha" style="margin-top:12px"><small>Lido por <b>${c.lidos}</b> de <b>${c.destinatarios}</b> aluno(s)</small><small>${p}%</small></div>
+      <div class="linha" style="margin-top:12px"><small>Lido por <b>${c.lidos}</b> de <b>${c.destinatarios}</b> ${c.destinatarios === 1 ? "aluno" : "alunos"}</small><small>${p}%</small></div>
       <div class="barra"><i style="width:${p}%"></i></div>
       <button class="btn outline pequeno" data-leituras="${c.id}" style="margin-top:12px">Ver quem leu</button><div id="leit-${c.id}" class="oculto" style="margin-top:10px"></div></article>`;
   }).join("") : vazio("Nenhum comunicado publicado ainda.");
@@ -2895,7 +3322,7 @@ function ligarComunicados() {
       try { await api("/api/comunicados", { method: "POST", body: JSON.stringify(corpo) }); }
       catch (e) {
         if (e.codigo !== "NOME_DE_ALUNO") throw e;
-        if (!(await confirmar({ titulo: "O comunicado cita o nome de aluno(s)", texto: `Nomes encontrados: ${e.alunos.join(", ")}. Todas as famílias que recebem o aviso vão ler (ECA, arts. 17 e 18). Publique só se for necessário.`, botao: "Publicar mesmo assim", perigo: true }))) return;
+        if (!(await confirmar({ titulo: "O comunicado cita nomes de alunos", texto: `Nomes encontrados: ${e.alunos.join(", ")}. Todas as famílias que recebem o aviso vão ler (ECA, arts. 17 e 18). Publique só se for necessário.`, botao: "Publicar mesmo assim", perigo: true }))) return;
         await api("/api/comunicados", { method: "POST", body: JSON.stringify({ ...corpo, confirmar_nomes: true }) });
       }
       document.getElementById("form-com").reset();
@@ -2923,7 +3350,7 @@ function desenharGrupos() {
     const p = g.total ? Math.round(g.assinadas * 100 / g.total) : 0;
     return `<article class="card" style="margin-bottom:12px">
       <div class="linha" style="gap:8px;flex-wrap:wrap"><div><b>${esc(g.titulo)}</b><small>${ico("calendario")} ${esc(g.validade || "—")}${g.valida_ate ? ` • assinar até ${g.valida_ate}` : ""} • criada em ${g.criada_em} por ${esc(g.criada_por_nome)}</small></div>
-        ${g.assinadas === g.total ? pill("Todas assinadas", "success") : g.vencida ? pill(`Prazo encerrado • ${g.total - g.assinadas} sem assinatura`, "neutral") : pill(`${g.total - g.assinadas} pendente(s)`, "warning")}</div>
+        ${g.assinadas === g.total ? pill("Todas assinadas", "success") : g.vencida ? pill(`Prazo encerrado • ${g.total - g.assinadas} sem assinatura`, "neutral") : pill(pl(g.total - g.assinadas, "pendente", "pendentes"), "warning")}</div>
       ${g.detalhe ? `<small style="margin-top:6px">${esc(g.detalhe)}</small>` : ""}
       <div class="linha" style="margin-top:12px"><small>Assinadas: <b>${g.assinadas}</b> de <b>${g.total}</b></small><small>${p}%</small></div><div class="barra"><i style="width:${p}%"></i></div>
       <button class="btn outline pequeno" data-grupo="${g.grupo}" style="margin-top:12px">Ver detalhes</button><div id="grp-${g.grupo}" class="oculto" style="margin-top:10px"></div></article>`;
@@ -2948,13 +3375,14 @@ function ligarAutorizacoes() {
         validade: document.getElementById("aut-validade").value, valida_ate: document.getElementById("aut-valida-ate").value || undefined, detalhe: document.getElementById("aut-detalhe").value, sala: document.getElementById("aut-sala").value }) });
       document.getElementById("form-aut").reset();
       dados.grupos = await api("/api/autorizacoes-grupos"); desenharGrupos();
-      ok.textContent = `Autorização enviada para ${r.alunos} aluno(s)!`; ok.classList.remove("oculto");
+      ok.textContent = `Autorização enviada para ${pl(r.alunos, "aluno", "alunos")}!`; ok.classList.remove("oculto");
     } catch (erro) { if (erro.message !== "Sessão expirada") mostrarErro("aut-erro", erro.message); }
   };
 }
 
 // ---------- Navegação ----------
 async function mostrar(id) {
+  const trocouDeAba = id !== tela; // recarregar a mesma tela (ex.: depois de salvar) mantém a rolagem
   tela = id;
   clearInterval(timerTela); clearInterval(timerBanner);
   document.getElementById("titulo").textContent = titulos[id];
@@ -3018,6 +3446,7 @@ async function mostrar(id) {
       ficha: telaFicha, comunicados: telaComunicados, autorizacoes: telaAutorizacoes, consentimentos: telaConsentimentos, protecao: telaProtecao,
       calendario: telaCalendario, perfil: telaPerfil, ocorrencias: usuarioLogado.papel === "pai" ? telaOcorrenciasPai : telaOcorrencias,
     }[id]();
+    if (trocouDeAba) { window.scrollTo({ top: 0, behavior: "instant" }); document.getElementById("tela").scrollTop = 0; } // cada aba abre do topo
     if (["secretaria", "turma", "pais"].includes(id)) ligarBanners();
     if (id === "secretaria") ligarGestao();
     if (id === "seguranca") ligarMonitoramento();
@@ -3036,7 +3465,7 @@ async function mostrar(id) {
       document.getElementById("logs-pessoa").onchange = desenharLogs; document.getElementById("logs-busca").oninput = desenharLogs;
       document.getElementById("logs-conferir").onclick = seguro(async () => {
         const r = await api("/api/logs/integridade"), caixa = document.getElementById("logs-integridade");
-        caixa.innerHTML = r.ok ? `<p class="pill success aviso-largo" style="margin-top:10px">${ico("confere")} Tudo certo: ${r.conferidos} registro(s) conferido(s), nenhum foi apagado ou alterado.</p>`
+        caixa.innerHTML = r.ok ? `<p class="pill success aviso-largo" style="margin-top:10px">${ico("confere")} Tudo certo: ${pl(r.conferidos, "registro conferido", "registros conferidos")}, nenhum foi apagado ou alterado.</p>`
           : `<p class="pill danger aviso-largo" style="margin-top:10px">${ico("aviso")} Atenção: o registro nº ${r.problema_em.id} (${esc(r.problema_em.quando)}, ${esc(acaoLabel(r.problema_em.acao))}) ou o anterior a ele foi apagado ou alterado por fora do sistema. Avise o responsável pela segurança dos dados.</p>`;
       });
     }
@@ -3058,7 +3487,7 @@ function desenharMenu() {
   const menus = menusPorPapel[usuarioLogado.papel];
   const ativa = tela === "ficha" ? dados.fichaOrigem : tela;
   const novas = usuarioLogado.papel === "pai" ? dados.ocorrenciasNovas || 0 : 0;
-  const contador = (m) => (m.id === "ocorrencias" && novas ? `<span class="contador" title="${novas} ocorrência(s) nova(s)">${novas}</span>` : "");
+  const contador = (m) => (m.id === "ocorrencias" && novas ? `<span class="contador" title="${pl(novas, "ocorrência nova", "ocorrências novas")}">${novas}</span>` : "");
   const trocouAba = ativa !== ultimaAbaAtiva; ultimaAbaAtiva = ativa;
   const classe = (m) => (m.id === ativa ? `ativo${trocouAba ? " entrou" : ""}` : "");
   document.getElementById("nav").innerHTML = menus.map((m, i) => `${m.grupo && m.grupo !== (menus[i - 1] || {}).grupo ? `<div class="nav-grupo">${m.grupo}</div>` : ""}<button class="${classe(m)}" data-id="${m.id}" ${m.id === ativa ? 'aria-current="page"' : ""}>${iconeMenu(m.icone)}<span><b>${m.nome}</b><small>${m.dica}</small></span>${contador(m)}</button>`).join("");
@@ -3095,7 +3524,7 @@ const PASSOS_TUTORIAL = {
     { alvo: '#nav [data-id="comunicados"]', titulo: "Comunicados", texto: "Publique avisos para as famílias e veja quem já leu." },
     { alvo: '#nav [data-id="autorizacoes"]', titulo: "Autorizações", texto: "Peça a assinatura digital dos responsáveis, defina o último dia para assinar e acompanhe quem já assinou." },
     { alvo: '#nav [data-id="cadastro"]', titulo: "Alunos e turmas", texto: "Cadastre os alunos um a um ou importe uma turma inteira por planilha." },
-    { alvo: '#nav [data-id="usuarios"]', titulo: "Usuários", texto: "Crie os acessos de professores e responsáveis. O sistema gera uma senha provisória, que você repassa à pessoa." },
+    { alvo: '#nav [data-id="usuarios"]', titulo: "Usuários", texto: "Crie os acessos de docentes e responsáveis. O sistema gera uma senha provisória, que você repassa à pessoa." },
     { alvo: "#busca-rapida", opcional: true, titulo: "Busca rápida", texto: "Digite o nome de um aluno para abrir a ficha dele. O atalho é a tecla /." },
   ],
   professor: [
@@ -3113,7 +3542,7 @@ const PASSOS_TUTORIAL = {
     { alvo: ".card.atencao > .linha", opcional: true, titulo: "Precisa da sua atenção", texto: "Tudo o que espera uma resposta sua fica aqui: autorizações, ocorrências, documentos e comunicados. Cada item tem um botão que leva direto ao lugar certo." },
     { alvo: "#btn-avisos", opcional: true, titulo: "Sino de avisos", texto: "Mostra as entradas e saídas do seu filho e as novidades da escola. O número indica quantos avisos são novos." },
     { alvo: "#seletor-contexto", opcional: true, titulo: "Trocar de filho", texto: "Você tem mais de um filho na escola. Escolha aqui quem quer acompanhar." },
-    { alvo: '#nav [data-id="ocorrencias"]', titulo: "Ocorrências", texto: "Leia os registros feitos pelo professor e assine que tomou ciência." },
+    { alvo: '#nav [data-id="ocorrencias"]', titulo: "Ocorrências", texto: "Leia os registros feitos pelo docente e assine que tomou ciência." },
     { alvo: '#nav [data-id="calendario"]', titulo: "Calendário", texto: "Veja os eventos da escola e da turma do seu filho." },
     { alvo: '#nav [data-id="perfil"]', titulo: "Meu perfil", texto: "Atualize o telefone e o e-mail para a escola conseguir falar com você. Também é aqui que você baixa os dados do seu filho." },
   ],
@@ -3244,6 +3673,7 @@ document.getElementById("form-acessibilidade").onchange = (e) => {
   ["daltonismo", "fonte", "espaco", "links", "semMovimento", "voz"].forEach((c) => { p[c] = f.elements[c].checked; });
   if (!p.voz) pararVoz();
   aplicarPreferencias(p); guardarPreferencias(p); atualizarAreaVoz();
+  if (p.voz && e.target.name === "voz") { vozAquecida = false; aquecerVoz(); } // ligar a leitura já deixa a voz carregada
 };
 document.getElementById("a11y-padrao").onclick = () => {
   pararVoz(); aplicarPreferencias({}); guardarPreferencias({}); preencherPainel();
@@ -3262,26 +3692,60 @@ const vozDoAparelho = () => {
 };
 const vozBloqueada = () => !!usuarioLogado && tela === "protecao";
 const vozLigada = () => !!preferenciasAtuais().voz;
-let falaAtual = 0, vozAquecida = false;
-function pararVoz() { falaAtual++; if (temVoz) speechSynthesis.cancel(); }
+// Por que a voz demorava: cada fala nova mandada antes da anterior começar entrava na fila do motor de voz do Windows,
+// e passando o mouse por vários itens a fala certa chegava a demorar 3–5 s. Agora só uma fala espera para começar por vez:
+// um pedido novo substitui o anterior em vez de entrar na fila. O item que vai ser lido ganha um contorno na hora,
+// para a pessoa ver que foi acionado. (O motor de voz do aparelho ainda leva por volta de 1 s para começar a falar: isso é dele.)
+let ocupado = false, pendente = null, geracao = 0, vozAquecida = false, lendoAgora = null;
+function marcarLendo(el) {
+  if (lendoAgora) lendoAgora.classList.remove("lendo-voz");
+  lendoAgora = el && el.classList ? el : null;
+  if (lendoAgora) lendoAgora.classList.add("lendo-voz");
+}
+function pararVoz() {
+  geracao++; pendente = null; ocupado = false; marcarLendo(null);
+  if (temVoz) speechSynthesis.cancel();
+}
 const novaFala = (texto, voz) => { const fala = new SpeechSynthesisUtterance(texto); fala.voice = voz; fala.lang = voz.lang; fala.rate = VELOCIDADE_VOZ; return fala; };
-function falar(texto) {
+// Primeiro trecho curto (a voz começa antes) e o resto em trechos de até 180 letras
+function dividirTexto(t) {
+  t = t.slice(0, 12000);
+  const primeiro = (t.match(/^.{1,70}(?:[.!?;:,]\s|\s|$)/) || [t])[0];
+  return [primeiro, ...(t.slice(primeiro.length).match(/.{1,180}(?:[.!?;:,]\s|\s|$)/g) || [])].map((x) => x.trim()).filter(Boolean);
+}
+function falar(texto, alvo = null) {
   const voz = vozDoAparelho(), limpo = String(texto || "").replace(/\s+/g, " ").trim();
   if (!voz || vozBloqueada() || !limpo) return;
-  pararVoz();
-  const minha = falaAtual;
-  // Trechos curtos: a voz começa antes, sem esperar o texto inteiro. O setTimeout evita o Chrome perder a fala que vem logo depois do cancel().
-  setTimeout(() => {
-    if (minha !== falaAtual) return;
-    (limpo.slice(0, 12000).match(/.{1,180}(?:[.!?;:,]\s|\s|$)/g) || []).forEach((trecho) => speechSynthesis.speak(novaFala(trecho, voz)));
-  }, 0);
+  vozAquecida = true;
+  marcarLendo(alvo); // retorno na hora, antes mesmo de a voz começar
+  pendente = { texto: limpo, voz, alvo };
+  if (!ocupado) iniciarFala();
 }
-// O navegador só fala depois de um clique ou tecla, e a primeira fala demora porque a voz ainda está carregando: uma fala muda já deixa tudo pronto
+function iniciarFala() {
+  const p = pendente; pendente = null;
+  if (!p) return;
+  const minha = ++geracao;
+  ocupado = true;
+  if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
+  const falas = dividirTexto(p.texto).map((t) => novaFala(t, p.voz));
+  let trava;
+  const liberar = () => { // a fala começou (ou falhou): libera para o próximo pedido, se houver
+    if (minha !== geracao || !ocupado) return;
+    ocupado = false; clearTimeout(trava);
+    if (pendente) iniciarFala();
+  };
+  trava = setTimeout(liberar, 4000); // segurança: se o navegador não avisar que começou
+  falas[0].onstart = liberar;
+  falas[0].onerror = liberar;
+  falas[falas.length - 1].onend = () => { if (minha === geracao) marcarLendo(null); };
+  falas.forEach((f) => speechSynthesis.speak(f));
+}
+// O navegador só libera a voz depois de um clique ou tecla: no primeiro, uma fala muda e curta já deixa a voz carregada
 function aquecerVoz() {
   const voz = vozDoAparelho();
   if (vozAquecida || !voz || !vozLigada()) return;
   vozAquecida = true;
-  const fala = novaFala(".", voz); fala.volume = 0;
+  const fala = novaFala("ok", voz); fala.volume = 0;
   speechSynthesis.speak(fala);
 }
 function nomeDoControle(el) {
@@ -3324,7 +3788,7 @@ document.getElementById("a11y-parar").onclick = pararVoz;
 ["pointerdown", "keydown"].forEach((evento) => document.addEventListener(evento, aquecerVoz, true));
 document.addEventListener("keydown", (e) => { if (e.key === "Control" && vozLigada()) pararVoz(); });
 document.addEventListener("focusin", (e) => {
-  if (vozLigada() && e.target.matches(CONTROLES)) { alvoSobMouse = e.target; falar(descreverControle(e.target)); }
+  if (vozLigada() && e.target.matches(CONTROLES)) { alvoSobMouse = e.target; falar(descreverControle(e.target), e.target); }
 });
 let alvoSobMouse = null, timerMouseVoz, mouseX, mouseY;
 document.addEventListener("mouseover", (e) => {
@@ -3333,12 +3797,12 @@ document.addEventListener("mouseover", (e) => {
   const alvo = alvoDeLeitura(e.target);
   if (alvo === alvoSobMouse) return;
   alvoSobMouse = alvo; clearTimeout(timerMouseVoz);
-  if (alvo) timerMouseVoz = setTimeout(() => falar(textoParaLer(alvo)), 120); // espera só o mouse parar de atravessar a tela
+  if (alvo) timerMouseVoz = setTimeout(() => falar(textoParaLer(alvo), alvo), 80); // espera só o mouse parar de atravessar a tela
 });
 document.addEventListener("click", (e) => {
   if (!vozLigada() || e.target.closest(`${CONTROLES},label,dialog`)) return;
   const alvo = alvoDeLeitura(e.target);
-  if (alvo) falar(textoParaLer(alvo));
+  if (alvo) falar(textoParaLer(alvo), alvo);
 });
 
 // ---------- Data e hora no cabeçalho (atualiza sozinha a cada segundo) ----------

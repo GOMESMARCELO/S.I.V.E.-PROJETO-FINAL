@@ -3,7 +3,7 @@ S.I.V.E. — HTML, CSS, JavaScript, JSON, Node.js e MySQL
 PASSO A PASSO
 1. Abra o MySQL Workbench conectado ao seu servidor local e execute, nessa ordem:
      a) database/criar-usuario.sql   (cria um usuário chamado "sive", senha "sive123", só para este projeto)
-     b) database/sive.sql            (cria o banco "sive" com as tabelas e os dados)
+     b) database/sive.sql            (cria o banco "db_sive" com as tabelas tb_... e os dados)
 2. O config.json já vem pronto com usuário "sive" e senha "sive123" — não precisa mexer,
    a menos que você prefira usar outro usuário do seu MySQL (ex.: root).
 3. No terminal, dentro desta pasta:
@@ -18,7 +18,7 @@ Ficam os 14 mais recentes. Para mudar a pasta ou a quantidade, no config.json:
 Para fazer um na hora:  npm run backup
 Para restaurar:
     node backup.js --decifrar backups/<pasta>/sive.sql.enc      (gera o sive.sql)
-    mysql -u root -p sive < backups/<pasta>/sive.sql           (e copie a pasta uploads/ de volta)
+    mysql -u root -p db_sive < backups/<pasta>/sive.sql           (e copie a pasta uploads/ de volta)
     depois APAGUE o sive.sql gerado (ele tem os dados em texto aberto).
 IMPORTANTE: guarde uma cópia do config.json em OUTRO lugar seguro, separada dos backups.
 Sem ele, os backups, os documentos e as assinaturas não abrem; com ele junto dos backups, quem pegar os dois lê tudo.
@@ -42,16 +42,12 @@ VLIBRAS (TRADUÇÃO PARA LIBRAS)
 O botão do VLibras precisa de internet. Depois de atualizar o sistema, reinicie o servidor (npm start): sem isso o navegador bloqueia o avatar.
 O texto em que a pessoa clica é enviado ao servidor de tradução do governo. Na tela Proteção, o tradutor fica desligado.
 
-BANCO JÁ EXISTENTE (atualização)
-Se o seu banco foi criado com uma versão anterior, rode database/migracao-atualizacao.sql
-(depois de um backup). Ele não apaga dados.
-Se o seu banco JÁ ESTAVA atualizado até 31/10/2026, rode só database/migracao-2026-11-02.sql
-(duas colunas novas: prazo das autorizações e avisos vistos). Também não apaga dados.
-XAMPP (MariaDB): o sive.sql agora roda nele também.
-Se o seu banco JÁ ESTAVA atualizado até 02/11/2026, rode só database/migracao-2026-11-03.sql
-(tabela nova das escolas interessadas). Também não apaga dados.
-Se o seu banco JÁ ESTAVA atualizado até 03/11/2026, rode só database/migracao-2026-11-04.sql
-(uma coluna nova: quem já viu o tutorial do primeiro acesso). Também não apaga dados. Sem ela, o login não funciona.
+BANCO DE DADOS (desde 11/11/2026)
+O sistema usa o banco "db_sive", com tabelas tb_... e chaves id_... (ex.: tb_alunos.id_aluno), do database/sive.sql.
+Os arquivos database/migracao-*.sql são do banco antigo "sive" e NÃO servem para o db_sive: não rode.
+Para recriar o banco, rode o database/sive.sql de novo (ele apaga e recria o db_sive).
+O usuário "sive" precisa de permissão no db_sive: rode o database/criar-usuario.sql (ou, no Workbench:
+    GRANT ALL PRIVILEGES ON db_sive.* TO 'sive'@'localhost'; FLUSH PRIVILEGES; )
 
 LOGIN
 O sistema pede login. Três tipos de usuário, já cadastrados no banco (senhas de DEMONSTRAÇÃO: no primeiro login

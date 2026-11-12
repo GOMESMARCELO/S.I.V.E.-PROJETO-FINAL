@@ -720,26 +720,24 @@ body.sem-rolagem{overflow:hidden}
 
 /* ===== Grená na página inicial: é a cor do logo, usada como marca. O azul continua sendo a cor da ação (botões).
    Contrastes (WCAG): branco/grená 12,3:1 · grená/creme 11,3:1 · creme/grená-vivo 7,9:1. Grená nunca como texto sobre índigo. ===== */
-.lp-progresso{background:linear-gradient(90deg,var(--grena),var(--grena-vivo),var(--primary))}
-.lp-nav a::after{background:var(--grena)}
-.lp-nav a.ativo{color:var(--grena-texto)}
-.lp-topo .lp-btn-escola{color:var(--grena-texto);border-color:var(--grena-texto)}
-.lp-topo .lp-btn-escola:hover{background:var(--grena);color:#fff}
+.lp-progresso{background:linear-gradient(90deg,var(--primary),#7CC4EA)}
+.lp-nav a::after{background:var(--primary)}
+.lp-nav a.ativo{color:var(--primary-ink)}
+.lp-topo .lp-btn-escola{color:var(--primary-ink);border-color:var(--primary-ink)}
+.lp-topo .lp-btn-escola:hover{background:var(--primary);border-color:var(--primary);color:#fff}
 .lp-bolha.b2{background:radial-gradient(circle,#B4412F,transparent 70%);opacity:.5}
-.lp-mock,.lp-entrar .login-caixa{border-top-color:var(--grena-texto)}
-.lp-ticker{background:linear-gradient(90deg,var(--grena),var(--grena-vivo),var(--grena))}
-.lp-sobretitulo,.lp-nota-centro{color:var(--grena-texto)}
+.lp-mock,.lp-entrar .login-caixa{border-top-color:var(--primary)}
+.lp-ticker{background:linear-gradient(90deg,#0A4A72,#085C8A,#0A4A72)}
+.lp-sobretitulo,.lp-nota-centro{color:var(--primary-ink)}
 .lp-titulo::after{content:"";display:block;width:56px;height:4px;margin-top:12px;border-radius:4px;background:var(--grena-texto)}
 .lp-azul .lp-titulo::after{background:var(--creme)}
-.lp-card::after{background:linear-gradient(90deg,var(--grena),var(--primary))}
-.lp-card:hover{border-color:var(--grena-texto)}
+.lp-card::after{background:linear-gradient(90deg,var(--primary),#7CC4EA)}
+.lp-card:hover{border-color:var(--primary)}
 .lp-azul .lp-card:hover{border-color:#fff}
-#o-que-faz .lp-card:nth-child(even) .lp-ico{background:var(--grena-suave);color:var(--grena-texto)}
-#o-que-faz .lp-card:nth-child(even):hover .lp-ico{background:var(--grena);color:#fff}
-.lp-faq summary::after{color:var(--grena-texto)}
-.lp-faq:hover,.lp-faq[open]{border-color:var(--grena-texto)}
+.lp-faq summary::after{color:var(--primary)}
+.lp-faq:hover,.lp-faq[open]{border-color:var(--primary)}
 .lp-azul .lp-faq:hover,.lp-azul .lp-faq[open]{border-color:#fff}
-.lp-chamada{background:linear-gradient(135deg,#4A0E06 0%,var(--grena) 50%,var(--grena-vivo) 100%);background-size:200% 200%}
+.lp-chamada{background:linear-gradient(135deg,#140040 0%,#0B5E8E 50%,#0B78B3 100%);background-size:200% 200%}
 .lp-chamada p{color:var(--creme)}
 
 /* Título da home sempre em três linhas: cada parte tem a sua, e a frase que troca nunca empurra o texto. No celular estreito, a letra diminui para caber.
@@ -902,7 +900,7 @@ caption.so-leitor{caption-side:top}
 /* O que faz: blocos largos nas pontas se equilibram na diagonal; os dois têm fundo cheio */
 #o-que-faz .lp-card:is(:first-child,:last-child){border-color:transparent;color:#fff}
 #o-que-faz .lp-card:first-child{background:#140040}
-#o-que-faz .lp-card:last-child{background:#68150A}
+#o-que-faz .lp-card:last-child{background:#0B78B3}
 #o-que-faz .lp-card:is(:first-child,:last-child) p{color:#F3EEF9}
 #o-que-faz .lp-card:is(:first-child,:last-child) .lp-ico{background:rgba(255,255,255,.16);color:#fff}
 #o-que-faz .lp-card:is(:first-child,:last-child):hover .lp-ico{background:#fff;color:#140040}
@@ -913,12 +911,17 @@ caption.so-leitor{caption-side:top}
   #o-que-faz .lp-card:is(:first-child,:last-child) h3{font-size:1.375rem;line-height:1.2;letter-spacing:-.01em}
     }
 
-/* Para quem: os três perfis num painel só, separados por filetes */
-@media(min-width:1000px){
-  #para-quem .lp-grade{gap:0;border:1px solid rgba(255,255,255,.3);border-radius:24px;overflow:hidden}
-  #para-quem .lp-card{border:0;border-radius:0;background:transparent;backdrop-filter:none;padding:22px 24px}
-  #para-quem .lp-card+.lp-card{border-left:1px solid rgba(255,255,255,.3)}
-  #para-quem .lp-card:hover{transform:none;box-shadow:none;background:rgba(255,255,255,.1)}
+/* Para quem: os três perfis, cada um com o texto e uma tela ilustrativa.
+   Assim como está aqui é o modo simples (um perfil abaixo do outro). O modo preso na tela fica no fim deste arquivo (.lp-passos-vivo). */
+.lp-passo{display:grid;gap:16px;align-items:center;padding:22px 0;border-top:1px solid rgba(255,255,255,.25)}
+.lp-passo-num{font-family:Manrope,Arial,sans-serif;font-weight:800;font-size:0.875rem;letter-spacing:.14em;color:#BFE3F6}
+.lp-passo-texto h3{font-size:clamp(1.375rem,2.4vw,1.875rem);line-height:1.1;letter-spacing:-.02em;margin:4px 0 6px}
+.lp-passo-texto p{color:#E3F1FA;line-height:1.55;text-align:left;max-width:46ch}
+.lp-passo-tela{width:100%;max-width:440px;justify-self:center;flex:none;font-size:0.8125rem;box-shadow:0 30px 60px rgba(0,0,0,.35)}
+.lp-passos-progresso{display:none}
+@media(min-width:700px){
+  .lp-passo{grid-template-columns:1fr 1fr;gap:32px}
+  .lp-passo:nth-of-type(odd) .lp-passo-tela{order:-1} /* alterna o lado da tela (o cabeçalho é o 1º div, então os perfis pares/ímpares ficam invertidos) */
 }
 
 /* Depoimentos: um em destaque ao lado de dois menores, com o aviso na coluna da direita do cabeçalho */
@@ -976,3 +979,366 @@ main .metrica:nth-child(odd){background-image:radial-gradient(var(--textura-clar
 .lp-hero::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(var(--textura-clara) 1px,transparent 1px);background-size:22px 22px}
 #o-que-faz .lp-card:is(:first-child,:last-child){background-image:radial-gradient(var(--textura-clara) 1px,transparent 1px),linear-gradient(160deg,rgba(255,255,255,.08),transparent 60%);background-size:16px 16px,auto}
 @media print{body,#menu,.card,.modal-caixa{background-image:none !important}}
+
+/* ---- Por dentro do sistema: miniaturas de telas (dados fictícios, aria-hidden) ---- */
+.lp-telas-aviso{display:flex;gap:8px;align-items:center;margin:-8px 0 16px;font-weight:600;font-size:0.875rem;color:var(--muted-fg)}
+.lp-tela-fig{margin:0;display:flex;flex-direction:column;gap:12px}
+.lp-tela{flex:1;border-radius:16px;overflow:hidden;background:var(--bg);border:1px solid var(--border);box-shadow:0 14px 30px rgba(20,0,64,.12);font-size:0.75rem;color:var(--fg)}
+.lp-tela-barra{display:flex;align-items:center;gap:6px;padding:8px 12px;background:#140040;color:#fff}
+.lp-tela-barra i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.35)}
+.lp-tela-barra b{margin-left:6px;font-size:0.75rem}
+.lp-tela-corpo{padding:12px;display:grid;gap:7px}
+.lp-tela-linha{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:9px;background:var(--card);border:1px solid var(--border)}
+.lp-tela-linha span{font-weight:600}
+.lp-tela-chip{font-style:normal;padding:2px 9px;border-radius:99px;font-weight:700;font-size:0.6875rem}
+.lp-tela-chip.ok{background:var(--success-soft);color:var(--success)}
+.lp-tela-chip.falta{background:var(--warning-soft);color:var(--warning)}
+.lp-tela-chip.azul{background:var(--primary);color:#fff}
+.lp-tela-botao{text-align:center;padding:8px;border-radius:9px;background:var(--primary);color:#fff;font-weight:700}
+.lp-tela-numero{font-family:Manrope,Arial;font-size:1.75rem;font-weight:800;line-height:1}
+.lp-tela-barra-prog{height:8px;border-radius:99px;background:var(--primary-soft);overflow:hidden}
+.lp-tela-texto .lp-tela-barra-prog i{display:block;height:100%;width:96%;background:var(--primary)}
+.lp-tela-texto{display:grid;gap:5px;padding:10px;border-radius:9px;background:var(--card);border:1px solid var(--border)}
+.lp-tela-texto i{display:block;height:7px;border-radius:4px;background:var(--border)}
+.lp-tela-texto i:last-child{width:62%}
+.lp-tela-fig figcaption h3{font-size:1.125rem;margin:0 0 4px}
+.lp-tela-fig figcaption p{color:var(--muted-fg);line-height:1.5}
+
+/* ---- WhatsApp flutuante: só aparece quando há número em data-numero (index.html) ---- */
+.lp-whatsapp{position:fixed;left:20px;bottom:20px;z-index:36;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;background:#128C4A;color:#fff;box-shadow:0 10px 24px rgba(18,140,74,.4);transition:transform .2s}
+.lp-rodape .lp-whatsapp{display:grid;margin:0} /* fica dentro do rodapé: sem isso herdaria o estilo dos links de lá */
+.lp-rodape .lp-whatsapp[hidden]{display:none}
+.lp-rodape .lp-whatsapp:hover{transform:scale(1.08);color:#fff}
+.lp-whatsapp:focus-visible{outline:3px solid #140040;outline-offset:3px}
+@media print{.lp-whatsapp{display:none}}
+
+/* ---- Para quem: telas ilustrativas dos três perfis (peças novas, usadas só nesta seção) ---- */
+.lp-passo-tela .lp-tela-barra b{font-size:1em}
+.lp-passo-tela .lp-tela-chip{font-size:.85em}
+.lp-passo-tela .lp-tela-numero{font-size:2em}
+.lp-passo-tela .lp-tela-texto .lp-tela-barra-prog i{width:92%} /* 22 de 24 famílias */
+.lp-tela-metricas{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.lp-tela-metricas div{display:grid;gap:2px;padding:9px 10px;border-radius:9px;background:var(--card);border:1px solid var(--border)}
+.lp-tela-metricas span{font-weight:600;color:var(--muted-fg)}
+.lp-tela-metricas b{font-size:1.7em;line-height:1}
+.lp-tela-status{display:grid;gap:3px;padding:12px;border-radius:9px;background:linear-gradient(135deg,#140040,#0B5E8E);color:#fff}
+.lp-tela-status b{font-size:1.5em;line-height:1.1}
+.lp-tela-status span{color:#DCEEF8}
+
+/* ---- Para quem, modo preso na tela: a seção para e a rolagem troca o perfil (01, 02, 03) e a tela ao lado ----
+   Quem liga a classe .lp-passos-vivo é o app.js, e só em telas grandes, sem letra ampliada e sem "menos movimento".
+   O app.js também escreve as variáveis: --p (0 a 1, quanto da seção já passou), --d (distância de cada tela até o perfil atual) e --a (a mesma distância, sem sinal).
+   --passos-topo é a altura do cabeçalho fixo: a seção para logo abaixo dele. */
+.lp-passos-vivo{--passos-topo:92px;padding:0;overflow:clip} /* clip (e não hidden): com hidden o "sticky" deixa de funcionar */
+.lp-passos-vivo .lp-passos-trilho{height:calc(250vh - var(--passos-topo))} /* uma tela parada + 1,5 tela de rolagem para as duas trocas */
+.lp-passos-vivo .lp-passos-palco{position:sticky;top:var(--passos-topo);height:calc(100vh - var(--passos-topo));display:grid;grid-template-columns:5fr 6fr;grid-template-rows:1fr auto auto auto auto auto 1fr;column-gap:56px}
+.lp-passos-vivo .lp-passos-cabeca{grid-column:1;grid-row:2}
+.lp-passos-vivo .lp-passo{display:contents} /* o texto e a tela de cada perfil viram itens diretos da grade do palco */
+.lp-passos-vivo .lp-passo-texto{grid-column:1;grid-row:calc(3 + var(--i));padding:12px 0 12px 20px;border-left:3px solid rgba(255,255,255,.25);cursor:pointer;transition:border-color .35s}
+.lp-passos-vivo .lp-passo-texto h3{margin-bottom:0;color:rgba(255,255,255,.72);transition:color .35s}
+.lp-passos-vivo .lp-passo-texto p{max-height:0;opacity:0;overflow:hidden;transition:max-height .45s ease,opacity .35s,margin-top .35s}
+.lp-passos-vivo .lp-passo.ativo .lp-passo-texto{border-left-color:#fff}
+.lp-passos-vivo .lp-passo.ativo .lp-passo-texto h3{color:#fff}
+.lp-passos-vivo .lp-passo.ativo .lp-passo-texto p{max-height:9em;opacity:1;margin-top:6px}
+.lp-passos-vivo .lp-passo-tela{--d:0;--a:0;grid-column:2;grid-row:1/-1;align-self:center;max-width:520px;font-size:1rem;order:0;will-change:transform,opacity;
+  opacity:calc(1 - var(--a)*1.4);
+  transform:perspective(1200px) translate3d(0,calc(var(--d)*105%),0) rotateX(calc(var(--d)*-24deg)) rotate(calc(var(--d)*3deg)) scale(calc(1 - var(--a)*.12))} /* 105%: a tela que sai e a que entra não se sobrepõem */
+.lp-passos-vivo .lp-passos-progresso{display:block;grid-column:1;grid-row:6;height:4px;max-width:260px;margin-top:22px;border-radius:99px;background:rgba(255,255,255,.25);overflow:hidden}
+.lp-passos-vivo .lp-passos-progresso i{display:block;height:100%;background:#fff;transform-origin:left;transform:scaleX(var(--p,0))}
+
+/* ---- Faixa gigante: duas linhas grandes em sentidos opostos, a de baixo só com o contorno das letras ----
+   A rolagem empurra as linhas pelo --r (escrito no app.js, sempre menor que uma cópia da lista: --copia).
+   Linha de cima: anda para a esquerda. Linha de baixo: anda ao contrário e começa uma cópia para trás, para nunca mostrar a ponta vazia. */
+.lp-ticker{padding:clamp(14px,2vw,24px) 0;display:grid;gap:clamp(2px,.6vw,8px);--r:0px;--copia:0px}
+.lp-ticker-trilho{animation-duration:110s}
+.lp-ticker li{font-family:Manrope,Arial,sans-serif;font-weight:800;font-size:clamp(1.75rem,4.6vw,4.25rem);line-height:1.1;letter-spacing:-.02em;gap:.3em;margin-right:.5em}
+.lp-ticker li::after{content:"";width:.22em;height:.22em;border-radius:50%;background:currentColor;opacity:.45;margin-left:.2em} /* ponto entre os itens */
+.lp-ticker i{width:1.05em;height:1.05em}
+.lp-ticker i .ico{width:.6em;height:.6em}
+.lp-ticker-trilho:not(.contorno){translate:calc(var(--r)*-1) 0}
+.lp-ticker-trilho.contorno{animation-direction:reverse;translate:calc(var(--r) - var(--copia)) 0}
+.lp-ticker-trilho.contorno li{color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.85)}
+.lp-ticker-trilho.contorno li::after{background:rgba(255,255,255,.85)}
+.lp-ticker-trilho.contorno i{display:none}
+.lp-pausar{top:auto;bottom:8px;transform:none}
+html[data-sem-movimento] .lp-ticker-trilho{translate:none}
+@media (prefers-reduced-motion:reduce){.lp-ticker-trilho{translate:none !important}}
+@supports not (-webkit-text-stroke:1px #fff){.lp-ticker-trilho.contorno li{color:rgba(255,255,255,.35)}}
+
+/* ---- Hero: o painel da Central do Dia começa inclinado em 3D e endireita conforme a rolagem (--h vai de 0 a 1, escrito no app.js).
+   Sem JavaScript ou com "menos movimento", --h fica 1 e o painel aparece reto. A inclinação fica na .lp-vitrine porque o .lp-mock já usa transform na animação de entrada. */
+@media(min-width:960px){
+  .lp-vitrine{--t:calc(1 - var(--h,1));transform:perspective(1400px) rotateX(calc(var(--t)*14deg)) rotateY(calc(var(--t)*-22deg)) rotate(calc(var(--t)*2.5deg)) scale(calc(.93 + .07*var(--h,1)));transform-origin:65% 55%;will-change:transform}
+  .lp-mock{box-shadow:calc(var(--t,0)*30px) 30px 60px rgba(0,0,0,.4)}
+}
+
+/* ---- Assinatura digital: seção escura (índigo) com a linha do tempo da ocorrência ----
+   Branco e azul-claro sobre o índigo passam de 12:1. Os passos só ficam apagados no modo animado (.lp-fluxo-vivo, ligado pelo app.js). */
+.lp-fluxo{background:radial-gradient(ellipse 60% 70% at 85% 10%,rgba(11,120,179,.45),transparent 70%),radial-gradient(ellipse 50% 60% at 0% 100%,rgba(124,196,234,.18),transparent 70%),#140040;color:#fff;overflow:hidden}
+.lp-fluxo .lp-sobretitulo{color:#BFE3F6}
+.lp-fluxo .lp-titulo{font-size:clamp(2rem,4.6vw,3.75rem);max-width:none}
+.lp-fluxo-destaque{background:linear-gradient(90deg,#7CC4EA,#FFF2EB);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lp-fluxo-sub{color:#DCEEF8;font-size:1.0625rem;line-height:1.6;max-width:60ch;text-align:left;margin-bottom:34px}
+.lp-fluxo-passos{list-style:none;margin:0;padding:0;display:grid;gap:26px;position:relative;--f:1}
+.lp-fluxo-passos li{position:relative;padding-left:72px;transition:opacity .45s}
+.lp-fluxo-passos small{color:#BFE3F6;font-weight:700;letter-spacing:.1em}
+.lp-fluxo-passos h3{font-size:1.375rem;margin:2px 0 4px}
+.lp-fluxo-passos p{color:#DCEEF8;line-height:1.5;text-align:left}
+.lp-fluxo-ico{position:absolute;left:0;top:0;width:52px;height:52px;border-radius:16px;display:grid;place-items:center;background:#0B78B3;color:#fff;box-shadow:0 0 0 6px rgba(11,120,179,.25),0 0 30px rgba(124,196,234,.45);transition:background .45s,box-shadow .45s;z-index:1}
+.lp-fluxo-ico .ico{width:26px;height:26px}
+.lp-fluxo-passos::before,.lp-fluxo-passos::after{content:"";position:absolute;left:25px;top:26px;bottom:26px;width:3px;border-radius:3px;background:rgba(255,255,255,.18)} /* linha vertical (celular) */
+.lp-fluxo-passos::after{background:linear-gradient(#7CC4EA,#FFF2EB);transform-origin:top;transform:scaleY(var(--f))}
+.lp-fluxo-vivo li:not(.aceso){opacity:.5}
+.lp-fluxo-vivo li:not(.aceso) .lp-fluxo-ico{background:rgba(255,255,255,.12);box-shadow:none}
+@media(min-width:760px){
+  .lp-fluxo-passos{grid-template-columns:repeat(3,1fr);gap:28px}
+  .lp-fluxo-passos li{padding:72px 0 0}
+  .lp-fluxo-passos::before,.lp-fluxo-passos::after{left:26px;right:calc(33.33% - 26px);top:25px;bottom:auto;width:auto;height:3px} /* linha horizontal ligando os ícones */
+  .lp-fluxo-passos::after{transform-origin:left;transform:scaleX(var(--f));background:linear-gradient(90deg,#7CC4EA,#FFF2EB)}
+}
+.lp-fluxo-codigo{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:30px;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);font-weight:600}
+.lp-fluxo-codigo b{letter-spacing:.12em;color:#7EE2B8}
+.lp-fluxo-codigo small{display:inline;color:#BFE3F6}
+.lp-fluxo-codigo .ico{color:#7EE2B8}
+html[data-contraste="alto"] .lp-fluxo{background:#000}
+html[data-contraste="alto"] .lp-fluxo-destaque{background:none;color:#fff}
+
+/* ---- Fechamento: a chamada final começa como um painel menor e arredondado e cresce até ocupar a largura (--c vai de 0 a 1, escrito no app.js) ---- */
+.lp-chamada{--t:calc(1 - var(--c,1));transform:scale(calc(1 - var(--t)*.16));border-radius:calc(var(--t)*56px);margin-inline:0;transform-origin:50% 100%}
+.lp-chamada .lp-faixa{opacity:calc(.25 + .75*var(--c,1));translate:0 calc(var(--t)*30px)}
+.lp-chamada h2{font-size:clamp(2rem,5.2vw,4.25rem);line-height:1.02}
+.lp-contorno{color:transparent;-webkit-text-stroke:2px #fff}
+@supports not (-webkit-text-stroke:1px #fff){.lp-contorno{color:#fff}}
+html[data-contraste="alto"] .lp-contorno{color:#fff;-webkit-text-stroke:0}
+
+/* ---- Ajustes depois da revisão: títulos mais contidos e o painel do topo animado sozinho (como o cartão girando do vídeo de referência) ---- */
+.lp-ticker li{font-size:clamp(1.375rem,3vw,2.625rem)}
+.lp-ticker-trilho.contorno li{-webkit-text-stroke-width:1.2px}
+.lp-fluxo .lp-titulo{font-size:clamp(1.625rem,3.2vw,2.375rem)}
+.lp-chamada h2{font-size:clamp(1.625rem,3.4vw,2.625rem);line-height:1.08}
+.lp-contorno{-webkit-text-stroke-width:1.5px}
+.lp-passos-vivo .lp-passo-texto h3{font-size:clamp(1.25rem,2vw,1.625rem)}
+/* Painel do topo: entra girando em 3D e depois fica balançando devagar. A inclinação da rolagem (--h) continua por cima.
+   A perspectiva fica no pai, para a rotação dos filhos ter profundidade. "rotate" e "transform" são propriedades separadas e se somam. */
+.lp-hero-grade{perspective:1400px}
+.lp-vitrine{--t:calc(1 - var(--h,1));transform:rotateX(calc(var(--t)*10deg)) rotateY(calc(var(--t)*-14deg)) scale(calc(.95 + .05*var(--h,1)));transform-origin:60% 50%;transform-style:preserve-3d;
+  animation:lp-vitrine-entra 1.4s cubic-bezier(.2,.8,.2,1) both,lp-vitrine-balanca 7s 1.4s ease-in-out infinite alternate}
+@keyframes lp-vitrine-entra{from{rotate:1 -.7 0 55deg;scale:.7;opacity:0}to{rotate:.25 1 0 -7deg;scale:1;opacity:1}}
+@keyframes lp-vitrine-balanca{from{rotate:.25 1 0 -7deg}to{rotate:.35 1 0 6deg}}
+@media (prefers-reduced-motion:reduce){.lp-vitrine{animation:none;transform:none}}
+html[data-sem-movimento] .lp-vitrine{transform:none}
+
+/* ---- Perguntas frequentes mais compactas: título curto à esquerda, perguntas em duas colunas, caixas mais baixas ---- */
+#perguntas{padding:clamp(24px,3vw,36px) 0}
+#perguntas .lp-titulo{font-size:clamp(1.375rem,2.4vw,1.875rem);margin-bottom:14px}
+.lp-faq{padding:8px 14px;margin-bottom:6px;border-radius:10px}
+.lp-faq summary{font-size:0.9375rem;line-height:1.35;align-items:center}
+.lp-faq summary::after{font-size:1.125rem}
+.lp-faq p{margin-top:6px;font-size:0.9063rem;line-height:1.5}
+@media(min-width:760px){#perguntas .lp-faq-grade{grid-template-columns:1fr 1fr;column-gap:8px}}
+@media(min-width:1000px){
+  #perguntas .lp-faixa{grid-template-columns:3fr 9fr;column-gap:32px}
+  #perguntas .lp-titulo{top:120px}
+}
+
+/* ---- Depoimentos mais compactos: os três lado a lado, do mesmo tamanho, com menos espaço por dentro ---- */
+#depoimentos{padding:clamp(24px,3vw,36px) 0}
+#depoimentos .lp-titulo{font-size:clamp(1.375rem,2.4vw,1.875rem);margin-bottom:10px}
+.lp-depoimentos-aviso{font-size:0.8125rem;margin-bottom:12px}
+#depoimentos .lp-grade{gap:10px}
+.lp-depoimento{padding:14px 16px;gap:6px;border-radius:14px}
+.lp-card p.lp-estrelas{font-size:0.9375rem;letter-spacing:1px}
+.lp-depoimento blockquote p{font-size:0.9063rem;line-height:1.45}
+.lp-depoimento img{width:36px;height:36px}
+.lp-depoimento figcaption{gap:10px}
+.lp-depoimento figcaption b{font-size:0.875rem}
+@media(min-width:760px){#depoimentos .lp-grade{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:1000px){
+  #depoimentos .lp-grade{grid-template-columns:repeat(3,1fr)}
+  .lp-depoimentos-aviso{margin-bottom:12px}
+  .lp-depoimento:first-child{grid-row:auto;padding:14px 16px}
+  .lp-depoimento:first-child blockquote{display:block}
+  .lp-depoimento:first-child blockquote p{font-size:0.9063rem;line-height:1.45;font-weight:400;letter-spacing:0;color:var(--muted-fg)}
+  .lp-depoimento:first-child img{width:36px;height:36px}
+}
+.lp-depoimento blockquote p{text-align:left} /* sem justificar: em colunas estreitas o justificado abre buracos entre as palavras */
+
+/* ---- Faixa com uma linha só (a linha de contorno foi retirada): o botão de pausar volta para o meio da altura ---- */
+.lp-pausar{top:50%;bottom:auto;transform:translateY(-50%)}
+
+/* ---- Rodapé compacto: menos espaço, logo menor e os links de cada grupo lado a lado (quebram linha quando não cabem) ---- */
+.lp-rodape{padding:22px 0 12px}
+.lp-rodape-grade{gap:14px 28px;align-items:start}
+.lp-rodape-logo{height:34px;margin-bottom:6px}
+.lp-rodape-grade>div p{font-size:0.8125rem;line-height:1.45;max-width:34ch;text-align:left}
+.lp-rodape b,.lp-rodape h2{font-size:0.875rem;margin-bottom:6px}
+.lp-rodape nav{display:flex;flex-wrap:wrap;gap:4px 14px}
+.lp-rodape nav h2{flex-basis:100%}
+.lp-rodape nav a{margin-bottom:0;font-size:0.8438rem}
+.lp-copy{margin-top:14px;padding-top:10px;font-size:0.75rem}
+@media(min-width:760px){.lp-rodape-grade{grid-template-columns:1.2fr 1.6fr 1fr 1fr}}
+
+/* ---- Rodapé só com o logo e as redes sociais (o menu saiu: ele já está no topo da página) ---- */
+.lp-rodape{padding:20px 0 12px}
+.lp-rodape-linha{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.lp-rodape .lp-rodape-marca{display:block;margin:0}
+.lp-rodape .lp-rodape-marca:hover{transform:none}
+.lp-rodape-logo{height:40px;margin:0;display:block}
+.lp-redes{list-style:none;margin:0;padding:0;display:flex;gap:10px}
+.lp-rodape .lp-redes a{display:grid;place-items:center;width:42px;height:42px;margin:0;border-radius:50%;color:#fff;background:rgba(255,242,235,.1);border:1px solid rgba(255,242,235,.22);transition:background .2s,color .2s,transform .2s}
+.lp-rodape .lp-redes a:hover{background:var(--creme);color:var(--menu);transform:translateY(-3px)}
+.lp-rodape .lp-redes a:focus-visible{outline:3px solid #7CC4EA;outline-offset:3px}
+.lp-copy{margin-top:14px}
+@media(max-width:480px){.lp-rodape-linha{justify-content:center}}
+
+/* ---- Cenários de uso (no lugar dos depoimentos): horário e lugar no alto de cada cartão ---- */
+.lp-card p.lp-cenario-hora{font-family:Manrope,Arial,sans-serif;font-weight:800;font-size:0.75rem;letter-spacing:.1em;text-transform:uppercase;color:var(--primary-ink);text-align:left}
+
+/* ---- Chamada final: "para a sua escola." em destaque de marca-texto (letras cheias em creme, faixa azul-clara atrás da metade de baixo) ----
+   O texto continua claro sobre o fundo escuro (creme sobre o azul passa de 4,5:1); a faixa é só decoração. */
+.lp-marca-texto{color:var(--creme);background:linear-gradient(transparent 46%,rgba(124,196,234,.5) 46%,rgba(124,196,234,.5) 80%,transparent 80%);padding:0 .12em;margin-left:-.12em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+html[data-contraste="alto"] .lp-marca-texto{background:none;text-decoration:underline;text-decoration-thickness:.12em;text-underline-offset:.12em}
+.lp-chamada h2:has(.lp-marca-texto){margin-bottom:12px}
+
+/* ---- Faixa com velocidade constante (a rolagem não empurra mais) e um pouco mais baixa ---- */
+.lp-ticker-trilho:not(.contorno){translate:none}
+.lp-ticker{padding:14px 0}
+.lp-ticker li{font-size:clamp(1.25rem,2.4vw,2rem)}
+/* ---- Topo encaixado na primeira tela (o app.js define a altura e liga os níveis de ajuste quando falta espaço) ---- */
+@media(min-width:960px){.lp-hero{display:flex;align-items:center}.lp-hero>.lp-faixa{width:100%}}
+.lp-hero.lp-hero-ajuste1{padding-top:14px;padding-bottom:14px}
+.lp-hero-ajuste1 .lp-hero-grade{gap:24px}
+.lp-hero.lp-hero-ajuste1 h1{font-size:min(2.75rem,calc((100vw - 32px)/12));margin:10px 0 8px}
+.lp-hero-ajuste1 .lp-sub{font-size:1rem;line-height:1.5}
+.lp-hero-ajuste1 .lp-checks{margin:10px 0 14px;gap:4px}
+.lp-hero-ajuste1 .lp-vitrine{max-width:480px}
+.lp-hero-ajuste2 .lp-chip{display:none}
+.lp-hero-ajuste2 .lp-checks{display:none}
+.lp-hero-ajuste2 .lp-vitrine{max-width:430px}
+
+/* ---- Dentro do sistema (tema padrão): mais contraste entre o fundo e os quadros ----
+   O fundo da área de trabalho fica um tom de creme mais fundo; os quadros ficam brancos, com borda e sombra mais definidas.
+   Os quadros de número azuis (.metrica ímpar) e os azul-claros continuam como estão. Modo escuro e alto contraste não mudam. */
+html:not([data-contraste]) #app .conteudo{background-color:#F3E3D9;background-image:radial-gradient(rgba(20,0,64,.05) 1px,transparent 1px);background-size:22px 22px;min-height:100vh}
+html:not([data-contraste]) #app header{background:rgba(255,251,248,.97)}
+html:not([data-contraste]) #app main .card:not(.metrica),html:not([data-contraste]) #app main .metrica:nth-child(odd):not(:is(.card)){background-color:#fff;background-image:linear-gradient(160deg,rgba(255,250,247,0),rgba(255,242,235,.35))}
+html:not([data-contraste]) #app main .card:not(.metrica:nth-child(odd)){border-color:#E3CCBE;border-top-color:var(--primary);box-shadow:0 1px 2px rgba(20,0,64,.07),0 10px 26px rgba(20,0,64,.08)}
+html:not([data-contraste]) #app main .card .item,html:not([data-contraste]) #app main .card .pasta{background-color:#FFFBF8}
+html:not([data-contraste]) #app main .vazio{background-color:rgba(255,255,255,.55)}
+
+/* ======================= Dinamismo e mobilidade (11/11) ======================= */
+
+/* ---- Painel do topo vivo: sino com contador e notificação que desliza dentro da tela de exemplo ---- */
+.lp-mock-tela{position:relative}
+.lp-mock-sino{position:relative;margin-left:auto;display:inline-grid;place-items:center}
+.lp-mock-topo .lp-mock-sino+.pill{margin-left:0}
+.lp-mock-sino-num{position:absolute;top:-6px;right:-8px;min-width:15px;height:15px;padding:0 4px;border-radius:99px;background:#C2410C;color:#fff;font-style:normal;font-size:0.5625rem;font-weight:800;display:grid;place-items:center;border:2px solid #fff}
+.lp-mock-sino-num.pulou{animation:lp-sino-pula .5s ease-out}
+.lp-mock-sino.balanca .ico,.lp-mock-sino-num.pulou+*{animation:none}
+.lp-mock-aviso{position:absolute;right:10px;top:44px;z-index:3;display:flex;align-items:center;gap:8px;max-width:72%;padding:8px 12px 8px 8px;border-radius:12px;background:#fff;color:var(--fg);box-shadow:0 14px 30px rgba(20,0,64,.25),0 0 0 1px rgba(20,0,64,.06);opacity:0;transform:translateY(-10px) scale(.96);pointer-events:none}
+.lp-mock-aviso.mostrar{animation:lp-aviso-chega 3.2s cubic-bezier(.2,.8,.2,1) forwards}
+.lp-mock-aviso b{display:block;font-size:0.6875rem;line-height:1.25}
+.lp-mock-aviso small{display:block;font-size:0.625rem;line-height:1.25;color:var(--muted-fg)}
+.lp-mock-aviso-ico{width:26px;height:26px;flex:none;border-radius:8px;display:grid;place-items:center;background:var(--primary-soft);color:var(--primary-ink)}
+.lp-mock-aviso-ico .ico{width:15px;height:15px}
+.lp-mock .mudou{animation:lp-numero-muda .6s ease-out}
+@keyframes lp-aviso-chega{0%{opacity:0;transform:translateY(-10px) scale(.96)}10%,82%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-6px) scale(.98)}}
+@keyframes lp-sino-pula{0%{transform:scale(.4)}60%{transform:scale(1.25)}100%{transform:none}}
+@keyframes lp-numero-muda{0%{color:inherit}30%{color:#7EE2B8;transform:translateY(-2px)}100%{transform:none}}
+.lp-mock-metricas>div:nth-child(2) .mudou,.lp-mock-alerta .mudou{display:inline-block}
+
+/* ---- No dia a dia: trilho com o sol andando de 7h30 a 17h40 (só em telas largas) ---- */
+.lp-dia-trilho{display:none}
+@media(min-width:760px){
+  .lp-dia-trilho{display:block;position:relative;height:46px;margin:4px 0 6px;--d:1}
+  .lp-dia-linha{position:absolute;left:16.66%;right:16.66%;top:21px;height:3px;border-radius:3px;background:rgba(20,0,64,.12);overflow:hidden}
+  .lp-dia-linha i{display:block;height:100%;background:linear-gradient(90deg,#F5B041,var(--primary));transform-origin:left;transform:scaleX(var(--d))}
+  .lp-dia-sol{position:absolute;top:6px;left:calc(16.66% + var(--d)*66.66%);width:32px;height:32px;margin-left:-16px;border-radius:50%;display:grid;place-items:center;background:#FBE7C4;color:#B45309;box-shadow:0 0 0 5px rgba(245,176,65,.2),0 6px 16px rgba(180,83,9,.25);z-index:1}
+  .lp-dia-sol .ico{width:18px;height:18px;animation:lp-sol-gira 12s linear infinite}
+  .lp-dia-marca{display:none} /* os horários já aparecem em cada cartão */
+  .lp-dia-vivo .lp-depoimento{transition:opacity .45s,transform .45s,box-shadow .45s}
+  .lp-dia-vivo .lp-depoimento:not(.aceso){opacity:.55;transform:translateY(6px)}
+  .lp-dia-vivo .lp-depoimento.aceso{box-shadow:0 14px 30px rgba(20,0,64,.12)}
+}
+@keyframes lp-sol-gira{to{transform:rotate(360deg)}}
+
+/* ---- Transição do "Entrar": o botão clicado vira a caixa de login ---- */
+.lp-vt-origem,.lp-entrar:not(.oculto) .lp-entrar-caixa{view-transition-name:sive-entrar}
+::view-transition-group(sive-entrar){animation-duration:.45s;animation-timing-function:cubic-bezier(.2,.8,.2,1)}
+::view-transition-old(root),::view-transition-new(root){animation-duration:.3s}
+
+/* ---- Celular: barra fixa com "Entrar" e "Quero o S.I.V.E." ---- */
+.lp-barra-movel{display:none}
+@media(max-width:759px){
+  .lp-barra-movel{display:flex;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:38;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(20,0,64,.96);box-shadow:0 -10px 30px rgba(20,0,64,.25);transform:translateY(110%);transition:transform .3s ease}
+  .lp-com-barra .lp-barra-movel{transform:none}
+  .lp-barra-movel .lp-btn{flex:1;display:flex;justify-content:center;text-align:center;padding:12px 10px;font-size:0.9375rem;white-space:nowrap}
+  .lp-barra-movel .lp-btn-cheio{flex:1.4;background:var(--bg);color:var(--fg)}
+  .lp-com-barra .lp-whatsapp,.lp-com-barra .lp-topo-btn{bottom:84px}
+  .lp-whatsapp,.lp-topo-btn{transition:bottom .3s ease,opacity .3s,transform .3s}
+}
+@media(prefers-reduced-motion:reduce){.lp-barra-movel{transition:none}}
+
+/* ---- Celular: carrosséis que deslizam com o dedo (Recursos, Perfis, Situações) ---- */
+.lp-carrossel-pontos{display:none}
+@media(max-width:759px){
+  [data-carrossel]{display:flex !important;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:16px;margin-inline:-16px;padding:4px 16px 10px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  [data-carrossel]::-webkit-scrollbar{display:none}
+  [data-carrossel]>*{flex:0 0 84%;scroll-snap-align:center;margin:0}
+  [data-carrossel] .lp-revela{opacity:1;transform:none} /* sem o efeito de surgir: o cartão de fora da tela já precisa estar pronto */
+  .lp-carrossel-pontos{display:flex;justify-content:center;gap:8px;margin-top:6px}
+  .lp-carrossel-pontos button{width:8px;height:8px;padding:0;border-radius:99px;background:rgba(20,0,64,.22);transition:width .25s,background .25s}
+  .lp-carrossel-pontos button[aria-current="true"]{width:22px;background:var(--primary)}
+  .lp-azul .lp-carrossel-pontos button{background:rgba(255,255,255,.35)}
+  .lp-azul .lp-carrossel-pontos button[aria-current="true"]{background:#fff}
+  /* Para quem no celular: cada perfil vira um cartão com o texto em cima e a tela embaixo */
+  .lp-passos:not(.lp-passos-vivo) .lp-passo{display:flex;flex-direction:column;gap:14px;padding:16px;border:1px solid rgba(255,255,255,.25);border-radius:18px;background:rgba(255,255,255,.08)}
+  .lp-passos:not(.lp-passos-vivo) .lp-passo-tela{order:0;max-width:none;font-size:0.75rem}
+}
+/* Para quem, modo preso na tela: a lista não interfere na grade do palco */
+.lp-passos-vivo .lp-passos-lista{display:contents}
+@media(min-width:700px){
+  .lp-passo:nth-of-type(odd) .lp-passo-tela{order:0}
+  .lp-passo:nth-of-type(even) .lp-passo-tela{order:-1} /* alterna o lado da tela (agora os perfis ficam dentro de .lp-passos-lista) */
+}
+
+/* ---- Dentro do sistema, no celular: botões da chamada maiores, fáceis de tocar com o polegar ---- */
+@media(max-width:640px){
+  .seg{display:flex;width:100%}
+  .seg button{flex:1;min-height:44px;padding:10px 12px;font-size:0.9375rem}
+}
+
+/* ---- Botão do WhatsApp: ícone cheio e branco (antes a cor dos links do rodapé deixava o ícone lilás e apagado) ---- */
+.lp-rodape .lp-whatsapp,.lp-whatsapp{color:#fff;background:#128C4A;width:58px;height:58px;box-shadow:0 10px 24px rgba(18,140,74,.45),0 0 0 3px rgba(255,255,255,.9)}
+.lp-whatsapp svg{width:34px;height:34px;display:block}
+.lp-rodape .lp-whatsapp:hover{background:#0F7A40}
+
+/* ---- Leitura em voz alta: contorno no item que está sendo lido ---- */
+.lendo-voz{outline:3px solid #F5B041 !important;outline-offset:3px;border-radius:6px;box-shadow:0 0 0 6px rgba(245,176,65,.22)}
+
+/* Calendário: dias que já passaram ficam mais apagados (dá para ver os eventos, mas não marcar novos) */
+.cal-dia.passado{background:color-mix(in srgb,var(--card) 70%,var(--border))}
+.cal-dia.passado .cal-num{opacity:.55}
+.cal-aviso-passado{display:flex;gap:8px;align-items:flex-start;margin:10px 0 4px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--primary) 8%,transparent);color:var(--muted-fg);font-size:.9rem;line-height:1.4}
+.cal-aviso-passado .ico{flex:none;margin-top:2px;color:var(--primary)}
+/* Proteção: link para o ECA completo (site oficial, abre em outra aba) */
+.link-eca{color:var(--primary-ink);font-weight:600;text-decoration:underline;text-underline-offset:3px;display:inline-flex;align-items:center;gap:4px}
+.link-eca:hover{color:var(--primary)}
+.link-eca .ico{width:1em;height:1em}
+/* Filtro Turma -> Aluno: a turma vem antes do aluno, lado a lado (empilha no celular) */
+.par-turma-aluno{display:grid;grid-template-columns:minmax(120px,38%) 1fr;gap:8px;width:100%}
+.par-turma-aluno select{width:100%;min-width:0}
+@media(max-width:560px){.par-turma-aluno{grid-template-columns:1fr}}
+.filtro-turma-tabela{min-width:150px}
+.cams .par-turma-aluno{grid-template-columns:1fr} /* cartões de câmera são estreitos: turma em cima, aluno embaixo */
+/* Calendário: ícones de editar e excluir no cartão do evento (só a gestão vê) */
+.item.evento.com-acoes{position:relative}
+.item.evento.com-acoes>.linha{padding-right:80px}
+.evento-acoes{position:absolute;top:10px;right:10px;display:flex;gap:6px;z-index:1}
+.evento-icone{width:34px;height:34px;display:inline-grid;place-items:center;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--primary-ink);cursor:pointer;padding:0;transition:background .15s,color .15s,border-color .15s}
+.evento-icone:hover,.evento-icone:focus-visible{background:var(--primary-soft);border-color:var(--primary)}
+.evento-icone.perigo{color:var(--danger)}
+.evento-icone.perigo:hover,.evento-icone.perigo:focus-visible{background:var(--danger-soft);border-color:var(--danger)}
+.evento-icone .ico{width:17px;height:17px}
+.item.evento.com-acoes .evento-img+.linha{padding-right:0}
+.evento-icone{box-shadow:0 1px 3px rgba(20,0,64,.12)}

@@ -5,7 +5,7 @@
     "port": 3306,
     "user": "sive",
     "password": "sive123",
-    "database": "sive",
+    "database": "db_sive",
     "charset": "utf8mb4"
   },
   "escola": {
