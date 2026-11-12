@@ -5,3 +5,5 @@ config.json
 uploads/
 backups/
 escolas-interessadas.csv
+# cópias de segurança feitas durante as alterações (uma delas tem o config.json com as chaves)
+_backup-*/

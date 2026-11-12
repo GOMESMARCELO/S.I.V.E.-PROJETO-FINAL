@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#140040">
   <meta name="description" content="S.I.V.E.: frequência, portaria, ocorrências, comunicados e autorizações da escola em um só sistema, para gestão, docentes e famílias.">
-  <title>S.I.V.E. — Vigilância Escolar Inteligente</title>
+  <title>S.I.V.E. — Gestão e segurança escolar</title>
   <link rel="icon" type="image/png" href="assets/favicon.png">
-  <link rel="apple-touch-icon" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/app-192.png">
   <script src="js/preferencias.js"></script>
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -20,7 +20,7 @@
       <div class="lp-faixa">
         <a href="#inicio" class="lp-marca"><img src="assets/logo-sive.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar"></a>
         <nav class="lp-nav" aria-label="Seções da página">
-          <a href="#quem-somos">Quem Somos</a><a href="#o-que-faz">O que faz</a><a href="#para-quem">Para quem</a><a href="#seguranca">Segurança</a><a href="#perguntas">Perguntas</a>
+          <a href="#quem-somos">Quem somos</a><a href="#o-que-faz">O que faz</a><a href="#para-quem">Para quem</a><a href="#assinatura">Assinatura</a><a href="#seguranca">Segurança</a><a href="#perguntas">Perguntas</a>
         </nav>
         <button type="button" class="lp-btn lp-btn-escola" data-cadastro-escola><span data-ico="escola"></span> Para escolas</button>
         <a href="#entrar" class="lp-btn lp-btn-cheio">Entrar</a>
@@ -33,13 +33,13 @@
       <span class="lp-bolha b1" aria-hidden="true"></span><span class="lp-bolha b2" aria-hidden="true"></span><span class="lp-bolha b3" aria-hidden="true"></span>
       <div class="lp-faixa lp-hero-grade">
         <div class="lp-hero-texto">
-          <p class="lp-selo"><span data-ico="escudoOk"></span> Vigilância escolar inteligente</p>
+          <p class="lp-selo"><span data-ico="escudoOk"></span> Gestão e segurança escolar</p>
           <h1 id="lp-titulo-principal">A escola inteira<br><span class="lp-troca" id="lp-troca">segura e conectada</span><br>em um só sistema</h1>
-          <p class="lp-sub">Frequência, portaria, ocorrências, comunicados e autorizações no mesmo lugar. Gestão, docentes e famílias acessam a mesma informação, de qualquer lugar, pelo navegador.</p>
+          <p class="lp-sub">Chamada, portaria, ocorrências e recados da sua escola num só lugar. A secretaria ganha tempo, o docente foca na aula e a família sabe do filho na hora.</p>
           <ul class="lp-checks">
             <li><span data-ico="confere"></span> Sem instalação: funciona no computador e no celular</li>
             <li><span data-ico="confere"></span> Assinatura digital de ocorrências e autorizações</li>
-            <li><span data-ico="confere"></span> Feito de acordo com a LGPD e o ECA</li>
+            <li><span data-ico="confere"></span> Desenvolvido seguindo a LGPD e o ECA</li>
           </ul>
           <div class="lp-acoes"><button type="button" class="lp-btn lp-btn-cheio" data-cadastro-escola>Quero o S.I.V.E. na minha escola</button><a href="#entrar" class="lp-btn lp-btn-linha">Já tenho acesso</a></div>
         </div>
@@ -63,19 +63,20 @@
               <span class="lp-mock-item"><span data-ico="caneta"></span>Autorizações</span>
             </div>
             <div class="lp-mock-tela">
-              <div class="lp-mock-topo"><b>Central do Dia</b><span data-ico="sino"></span><span class="pill success">● Conectado</span></div>
+              <div class="lp-mock-topo"><b>Central do Dia</b><span class="lp-mock-sino"><span data-ico="sino"></span><i class="lp-mock-sino-num" hidden></i></span><span class="pill success">● Conectado</span></div>
+              <div class="lp-mock-aviso"></div>
               <div class="lp-mock-corpo">
                 <small class="lp-mock-destaque">Visão geral</small>
                 <b class="lp-mock-ola">Bom dia, Mariana</b>
                 <div class="lp-mock-metricas">
-                  <div><span data-ico="familia"></span><small>Total de Alunos</small><b>312</b><small>alunos cadastrados</small></div>
-                  <div><span data-ico="confere"></span><small>Presentes hoje</small><b>298</b><small>14 ausentes</small></div>
+                  <div><span data-ico="familia"></span><small>Total de alunos</small><b>312</b><small>alunos cadastrados</small></div>
+                  <div><span data-ico="confere"></span><small>Presentes hoje</small><b data-presentes>298</b><small data-ausentes>14 ausentes</small></div>
                   <div><span data-ico="prancheta"></span><small>Ocorrências</small><b>4</b><small>aguardando a gestão</small></div>
                 </div>
                 <b class="lp-mock-secao">Atenção necessária</b>
-                <div class="lp-mock-alerta"><span class="danger" data-ico="aviso"></span><div><b>Crianças em busca ativa</b><small>Por excesso de faltas</small></div><b>3</b></div>
-                <div class="lp-mock-alerta"><span class="warning" data-ico="pasta"></span><div><b>Documentos recebidos</b><small>Enviados pelos responsáveis</small></div><b>2</b></div>
-                <div class="lp-mock-alerta"><span class="info" data-ico="caneta"></span><div><b>Autorizações recebidas</b><small>Assinadas nas últimas 24h</small></div><b>5</b></div>
+                <div class="lp-mock-alerta"><span class="danger" data-ico="aviso"></span><div><b>Crianças em Busca Ativa</b><small>Por excesso de faltas</small></div><b>3</b></div>
+                <div class="lp-mock-alerta"><span class="warning" data-ico="pasta"></span><div><b>Documentos recebidos</b><small>Enviados pelos responsáveis</small></div><b data-documentos>2</b></div>
+                <div class="lp-mock-alerta"><span class="info" data-ico="caneta"></span><div><b>Autorizações recebidas</b><small>Assinadas nas últimas 24h</small></div><b data-autorizacoes>5</b></div>
               </div>
             </div>
           </div>
@@ -87,73 +88,143 @@
 
     <section class="lp-ticker" aria-label="Recursos do sistema">
       <ul class="lp-ticker-trilho">
-        <li><i data-ico="presenca"></i> Chamada online</li><li><i data-ico="lupa"></i> Busca Ativa</li><li><i data-ico="olho"></i> Reconhecimento nos portões</li><li><i data-ico="prancheta"></i> Ocorrências assinadas</li><li><i data-ico="megafone"></i> Comunicados</li><li><i data-ico="caneta"></i> Autorizações digitais</li><li><i data-ico="familia"></i> Portal dos Pais</li><li><i data-ico="escudo"></i> Proteção da criança</li><li><i data-ico="cadeado"></i> LGPD</li>
+        <li><i data-ico="presenca"></i> Chamada online</li><li><i data-ico="lupa"></i> Busca Ativa</li><li><i data-ico="olho"></i> Reconhecimento nos portões</li><li><i data-ico="prancheta"></i> Ocorrências assinadas</li><li><i data-ico="megafone"></i> Comunicados</li><li><i data-ico="caneta"></i> Autorizações digitais</li><li><i data-ico="familia"></i> Portal da Família</li><li><i data-ico="escudo"></i> Proteção da criança</li><li><i data-ico="cadeado"></i> LGPD</li>
       </ul>
       <button type="button" class="lp-pausar" id="lp-pausar" aria-pressed="false">Pausar animações</button>
     </section>
 
     <section class="lp-secao" id="o-que-faz" aria-labelledby="lp-secao-3">
       <div class="lp-faixa">
-        <p class="lp-sobretitulo">O que o sistema faz</p>
-        <h2 class="lp-titulo" id="lp-secao-3">Tudo o que a rotina da escola pede</h2>
-        <div class="lp-grade lp-g3">
+        <p class="lp-sobretitulo">Recursos</p>
+        <h2 class="lp-titulo" id="lp-secao-3">Menos papel, menos retrabalho, mais tempo para educar</h2>
+        <div class="lp-grade lp-g3" data-carrossel="Recursos">
           <article class="lp-card lp-revela"><span class="lp-ico" data-ico="presenca"></span><h3>Nenhuma falta passa despercebida</h3><p>Chamada online, frequência por turma e Busca Ativa automática.</p><ul><li>Chamada pelo docente</li><li>Relatório mensal em PDF e planilha</li><li>Alerta de faltas seguidas</li></ul></article>
-          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="olho"></span><h3>Portões monitorados</h3><p>Entrada e saída registradas pelas câmeras, só para quem a família autorizou.</p><ul><li>Reconhecimento facial nos portões</li><li>Quem está na escola agora</li><li>Liberação de saída pela portaria</li></ul></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="olho"></span><h3>Entrada e saída registradas</h3><p>Entrada e saída registradas pelas câmeras, só para quem a família autorizou.</p><ul><li>Reconhecimento facial nos portões</li><li>Quem está na escola agora</li><li>Liberação de saída pela portaria</li></ul></article>
           <article class="lp-card lp-revela"><span class="lp-ico" data-ico="prancheta"></span><h3>Ocorrências com assinatura</h3><p>O docente registra, a família toma ciência e a gestão arquiva.</p><ul><li>Assinatura digital confirmada com senha</li><li>Código de verificação</li><li>Arquivo por mês</li></ul></article>
           <article class="lp-card lp-revela"><span class="lp-ico" data-ico="megafone"></span><h3>Comunicação que chega</h3><p>Comunicados com confirmação de leitura e autorizações digitais.</p><ul><li>Comunicados por turma</li><li>Autorizações assinadas pelo celular</li><li>Calendário e banners de eventos</li></ul></article>
-          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="familia"></span><h3>Portal dos Pais</h3><p>A família acompanha o filho de qualquer lugar.</p><ul><li>Frequência, entradas e saídas</li><li>Documentos e pendências</li><li>Aviso de ocorrências novas</li></ul></article>
+          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="familia"></span><h3>Portal da Família</h3><p>A família acompanha o filho de qualquer lugar.</p><ul><li>Frequência, entradas e saídas</li><li>Documentos e pendências</li><li>Aviso de ocorrências novas</li></ul></article>
           <article class="lp-card lp-revela"><span class="lp-ico" data-ico="escudo"></span><h3>Proteção da criança</h3><p>Casos sensíveis tratados com sigilo, como pede o ECA.</p><ul><li>Registro sigiloso de casos</li><li>Comunicação ao Conselho Tutelar</li><li>Histórico protegido</li></ul></article>
         </div>
       </div>
     </section>
 
-    <section class="lp-secao lp-azul" id="para-quem" aria-labelledby="lp-secao-4">
-      <div class="lp-faixa">
-        <p class="lp-sobretitulo">Para quem</p>
-        <h2 class="lp-titulo" id="lp-secao-4">Um sistema, três jeitos de usar</h2>
-        <div class="lp-grade lp-g3">
-          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="casa"></span><h3>Gestão e secretaria</h3><p>Central do Dia com indicadores, cadastro de alunos, documentos, usuários e logs de auditoria.</p></article>
-          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="livro"></span><h3>Docentes</h3><p>Minha Turma com chamada e contatos, comunicados, ocorrências e calendário da turma.</p></article>
-          <article class="lp-card lp-revela"><span class="lp-ico" data-ico="pessoa"></span><h3>Responsáveis</h3><p>Portal dos Pais com a vida escolar do filho, assinaturas e consentimentos.</p></article>
+    <!-- Para quem: em telas grandes a seção fica presa enquanto a rolagem passa pelos três perfis (o app.js liga a classe .lp-passos-vivo).
+         Sem JavaScript, no celular, com letra ampliada ou com "menos movimento", os três perfis aparecem um abaixo do outro.
+         As telas são ilustrativas, com dados fictícios (aria-hidden: o texto ao lado já diz o que elas mostram). -->
+    <section class="lp-secao lp-azul lp-passos" id="para-quem" aria-labelledby="lp-secao-4">
+      <div class="lp-passos-trilho">
+        <div class="lp-faixa lp-passos-palco">
+          <div class="lp-passos-cabeca">
+            <p class="lp-sobretitulo">Para quem</p>
+            <h2 class="lp-titulo" id="lp-secao-4">Um sistema, três jeitos de usar</h2>
+          </div>
+
+          <div class="lp-passos-lista" data-carrossel="Perfis">
+          <div class="lp-passo ativo" style="--i:0">
+            <div class="lp-passo-texto"><span class="lp-passo-num">01</span><h3>Gestão e secretaria</h3><p>Central do Dia com indicadores, cadastro de alunos, documentos, usuários e o histórico de quem acessou o quê.</p></div>
+            <div class="lp-tela lp-passo-tela" aria-hidden="true">
+              <div class="lp-tela-barra"><i></i><i></i><i></i><b>Central do Dia</b></div>
+              <div class="lp-tela-corpo">
+                <div class="lp-tela-metricas"><div><span>Alunos</span><b>312</b></div><div><span>Presentes</span><b>298</b></div><div><span>Ocorrências</span><b>4</b></div></div>
+                <div class="lp-tela-linha"><span>Crianças em Busca Ativa</span><em class="lp-tela-chip falta">3 casos</em></div>
+                <div class="lp-tela-linha"><span>Documentos recebidos hoje</span><em class="lp-tela-chip azul">2 novos</em></div>
+                <div class="lp-tela-linha"><span>Histórico de acessos</span><em class="lp-tela-chip ok">Conferido</em></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="lp-passo" style="--i:1">
+            <div class="lp-passo-texto"><span class="lp-passo-num">02</span><h3>Docentes</h3><p>Minha Turma com chamada e contatos, comunicados, ocorrências e calendário da turma.</p></div>
+            <div class="lp-tela lp-passo-tela" aria-hidden="true">
+              <div class="lp-tela-barra"><i></i><i></i><i></i><b>Minha Turma • 3º Ano A</b></div>
+              <div class="lp-tela-corpo">
+                <div class="lp-tela-texto"><span>Comunicado: reunião de pais</span><span class="lp-tela-numero">22 de 24</span><span>famílias já leram</span><span class="lp-tela-barra-prog"><i></i></span></div>
+                <div class="lp-tela-linha"><span>Chamada de hoje</span><em class="lp-tela-chip ok">Registrada</em></div>
+                <div class="lp-tela-linha"><span>Ocorrência • 06/11</span><em class="lp-tela-chip ok">Assinada</em></div>
+                <div class="lp-tela-botao">Nova ocorrência</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="lp-passo" style="--i:2">
+            <div class="lp-passo-texto"><span class="lp-passo-num">03</span><h3>Responsáveis</h3><p>Portal da Família com a vida escolar do filho, assinaturas e consentimentos.</p></div>
+            <div class="lp-tela lp-passo-tela" aria-hidden="true">
+              <div class="lp-tela-barra"><i></i><i></i><i></i><b>Portal da Família</b></div>
+              <div class="lp-tela-corpo">
+                <div class="lp-tela-status"><span>Status agora</span><b>Na escola</b><span>Entrada às 07:32 • Portão principal</span></div>
+                <div class="lp-tela-linha"><span>Autorização do passeio</span><em class="lp-tela-chip azul">Assinar</em></div>
+                <div class="lp-tela-linha"><span>Frequência do mês</span><em class="lp-tela-chip ok">96%</em></div>
+                <div class="lp-tela-linha"><span>Consentimento de imagem</span><em class="lp-tela-chip ok">Autorizado</em></div>
+              </div>
+            </div>
+          </div>
+
+          </div>
+
+          <div class="lp-passos-progresso" aria-hidden="true"><i></i></div>
         </div>
       </div>
     </section>
 
-    <!-- Exemplos ilustrativos: troque por depoimentos reais, com autorização de cada pessoa, e retire o aviso .lp-depoimentos-aviso -->
+    <!-- Cenários de uso (situações ilustrativas, sem pessoas reais). Quando a escola piloto der depoimentos reais, com autorização de cada pessoa, eles podem entrar aqui. -->
     <section class="lp-secao lp-suave" id="depoimentos" aria-labelledby="lp-secao-depoimentos">
       <div class="lp-faixa">
-        <p class="lp-sobretitulo">Depoimentos</p>
-        <h2 class="lp-titulo" id="lp-secao-depoimentos">O que a escola ganha no dia a dia</h2>
-        <p class="lp-depoimentos-aviso"><span data-ico="aviso"></span> Exemplos ilustrativos, com pessoas fictícias, criados para mostrar o uso do sistema.</p>
-        <div class="lp-grade lp-g3">
+        <p class="lp-sobretitulo">No dia a dia</p>
+        <h2 class="lp-titulo" id="lp-secao-depoimentos">Como fica a rotina com o S.I.V.E.</h2>
+        <p class="lp-depoimentos-aviso"><span data-ico="olho"></span> Situações ilustrativas de uso do sistema.</p>
+        <div class="lp-dia-trilho" aria-hidden="true"><span class="lp-dia-linha"><i></i></span><span class="lp-dia-sol" data-ico="sol"></span><span class="lp-dia-marca" style="--i:0">7h30</span><span class="lp-dia-marca" style="--i:1">10h15</span><span class="lp-dia-marca" style="--i:2">17h40</span></div>
+        <div class="lp-grade lp-g3" data-carrossel="Situações">
           <figure class="lp-card lp-revela lp-depoimento">
-            <p class="lp-estrelas" role="img" aria-label="5 de 5 estrelas">★★★★★</p>
-            <blockquote><p>Abro a Central do Dia e já vejo quem faltou, quais documentos chegaram e o que espera a minha assinatura. Adorei ter tudo em um lugar só.</p></blockquote>
-            <figcaption><img src="assets/depoimentos/gestao.svg" alt="" width="52" height="52"><span><b>Helena Moura</b><small>Diretora escolar (exemplo)</small></span></figcaption>
+            <p class="lp-cenario-hora">7h30 · Secretaria</p>
+            <blockquote><p>A Central do Dia já mostra quem faltou, quais documentos chegaram e o que espera assinatura. Ninguém precisa procurar papel.</p></blockquote>
+            <figcaption><img src="assets/depoimentos/gestao.svg" alt="" width="52" height="52"><span><b>Gestão e secretaria</b></span></figcaption>
           </figure>
           <figure class="lp-card lp-revela lp-depoimento">
-            <p class="lp-estrelas" role="img" aria-label="5 de 5 estrelas">★★★★★</p>
-            <blockquote><p>Faço a chamada pelo celular e registro uma ocorrência com um clique. A família e a gestão recebem na hora, e eu ganho tempo para a aula.</p></blockquote>
-            <figcaption><img src="assets/depoimentos/docente.svg" alt="" width="52" height="52"><span><b>Rafael Teixeira</b><small>Docente (exemplo)</small></span></figcaption>
+            <p class="lp-cenario-hora">10h15 · Sala de aula</p>
+            <blockquote><p>O docente faz a chamada pelo celular e registra uma ocorrência em poucos toques. A família e a gestão recebem na hora.</p></blockquote>
+            <figcaption><img src="assets/depoimentos/docente.svg" alt="" width="52" height="52"><span><b>Docentes</b></span></figcaption>
           </figure>
           <figure class="lp-card lp-revela lp-depoimento">
-            <p class="lp-estrelas" role="img" aria-label="5 de 5 estrelas">★★★★★</p>
-            <blockquote><p>Acompanho a frequência do meu filho, leio os comunicados e assino as autorizações pelo celular. Não preciso mais de bilhete na mochila.</p></blockquote>
-            <figcaption><img src="assets/depoimentos/familia.svg" alt="" width="52" height="52"><span><b>Juliana Prado</b><small>Mãe de aluno (exemplo)</small></span></figcaption>
+            <p class="lp-cenario-hora">17h40 · Em casa</p>
+            <blockquote><p>A família vê a frequência do filho, lê os comunicados e assina a autorização do passeio. Sem bilhete na mochila.</p></blockquote>
+            <figcaption><img src="assets/depoimentos/familia.svg" alt="" width="52" height="52"><span><b>Famílias</b></span></figcaption>
           </figure>
         </div>
+      </div>
+    </section>
+
+    <!-- Assinatura digital: seção escura com os três passos de uma ocorrência. Em telas com movimento, a linha se preenche e os passos acendem com a rolagem (app.js). -->
+    <section class="lp-secao lp-fluxo" id="assinatura" aria-labelledby="lp-secao-fluxo">
+      <div class="lp-faixa">
+        <p class="lp-sobretitulo">Assinatura digital</p>
+        <h2 class="lp-titulo" id="lp-secao-fluxo">O docente registra.<br><span class="lp-fluxo-destaque">A família assina.</span><br>A escola arquiva.</h2>
+        <p class="lp-fluxo-sub">Uma ocorrência passa por três pessoas e não se perde no caminho. Cada assinatura é confirmada com senha e ganha um código que qualquer pessoa confere.</p>
+        <ol class="lp-fluxo-passos">
+          <li style="--i:0"><span class="lp-fluxo-ico" data-ico="prancheta"></span><small>14:05</small><h3>O docente registra</h3><p>Descreve os fatos e assina com a própria senha.</p></li>
+          <li style="--i:1"><span class="lp-fluxo-ico" data-ico="caneta"></span><small>14:32</small><h3>A família assina</h3><p>Recebe no Portal da Família e confirma que tomou ciência.</p></li>
+          <li style="--i:2"><span class="lp-fluxo-ico" data-ico="escudoOk"></span><small>15:10</small><h3>A gestão arquiva</h3><p>Assina por último, e a ocorrência vai para o arquivo do mês.</p></li>
+        </ol>
+        <p class="lp-fluxo-codigo"><span data-ico="confere"></span> Código de verificação <b>7F3A-91C2</b> <small>(exemplo)</small></p>
       </div>
     </section>
 
     <section class="lp-secao" id="seguranca" aria-labelledby="lp-secao-5">
       <div class="lp-faixa">
-        <h2 class="lp-titulo" id="lp-secao-5">Segurança e privacidade desde o início</h2>
-        <p class="lp-texto">Dados de crianças pedem cuidado redobrado. No S.I.V.E., cada perfil vê só o que precisa, os documentos ficam criptografados, cada acesso fica registrado e o reconhecimento facial só funciona com o consentimento do responsável, que pode revogá-lo a qualquer momento (LGPD, arts. 11 e 14).</p>
+        <h2 class="lp-titulo" id="lp-secao-5">Dados de criança pedem cuidado redobrado</h2>
+        <p class="lp-texto">No S.I.V.E., cada perfil vê só o que precisa. Os documentos ficam criptografados e cada acesso fica registrado. O reconhecimento facial só funciona com o consentimento do responsável, que pode revogá-lo quando quiser (LGPD, arts. 11 e 14).</p>
         <ul class="lp-grade lp-g3 lp-selos">
           <li><span data-ico="cadeado"></span> Arquivos criptografados</li>
           <li><span data-ico="atividade"></span> Registro de cada acesso</li>
           <li><span data-ico="termo"></span> Consentimento dos responsáveis</li>
         </ul>
+      </div>
+    </section>
+
+    <section class="lp-chamada" aria-labelledby="lp-secao-7">
+      <div class="lp-faixa lp-estreita">
+        <h2 id="lp-secao-7">Leve o S.I.V.E.<br><span class="lp-marca-texto">para a sua escola.</span></h2>
+        <p>Peça um orçamento: a nossa equipe responde em até 2 dias úteis.</p>
+        <div class="lp-chamada-acoes"><button type="button" class="lp-btn lp-btn-claro" data-cadastro-escola>Quero o S.I.V.E. na minha escola</button><a href="#entrar" class="lp-btn lp-btn-linha">Já tenho acesso</a></div>
       </div>
     </section>
 
@@ -163,29 +234,22 @@
         <div class="lp-faq-grade">
         <details class="lp-faq"><summary>Preciso instalar alguma coisa?</summary><p>Não. O S.I.V.E. funciona no navegador do computador ou do celular. Basta entrar com o usuário e a senha fornecidos pela escola.</p></details>
         <details class="lp-faq"><summary>Quem pode acessar o sistema?</summary><p>A gestão da escola, os docentes (cada um vê a própria turma) e os responsáveis (cada um vê o próprio filho).</p></details>
-        <details class="lp-faq"><summary>Como funciona a assinatura digital?</summary><p>Quem assina confirma com a própria senha do sistema. O S.I.V.E. guarda a data, a hora, uma impressão digital (SHA-256) do texto assinado e um selo criptográfico. Cada assinatura tem um código e um QR code: qualquer pessoa confere a autenticidade em "Verificar assinatura", e qualquer alteração feita depois é detectada.</p></details>
+        <details class="lp-faq"><summary>Como funciona a assinatura digital?</summary><p>Quem assina confirma com a própria senha do sistema. O S.I.V.E. guarda a data, a hora e um selo que prova que o texto não mudou. Cada assinatura ganha um código e um QR code: qualquer pessoa confere a autenticidade em <a href="#verificar">Verificar assinatura</a>, e qualquer alteração feita depois é detectada. (Para quem é da área: impressão digital SHA-256 e selo criptográfico Ed25519.)</p></details>
         <details class="lp-faq"><summary>O reconhecimento facial é obrigatório?</summary><p>Não. Ele só funciona para alunos cujo responsável autorizou no Termo de Consentimento, só nos portões e sem guardar fotos. O responsável pode revogar quando quiser.</p></details>
-        <details class="lp-faq"><summary>Os dados dos alunos estão seguros?</summary><p>Sim. O acesso é separado por perfil, os documentos ficam criptografados e cada acesso fica registrado, como pede a LGPD.</p></details>
-        <details class="lp-faq"><summary>Como levo o S.I.V.E. para a minha escola?</summary><p>Clique em "Quero o S.I.V.E. na minha escola" e preencha a ficha com os dados da escola e de quem devemos procurar. Você recebe um número de protocolo na hora, e a nossa equipe entra em contato para apresentar o sistema e combinar a implantação.</p></details>
+        <details class="lp-faq"><summary>Como os dados dos alunos são protegidos?</summary><p>O acesso é separado por perfil, os documentos ficam criptografados e cada acesso fica registrado, como orienta a LGPD.</p></details>
+        <details class="lp-faq"><summary>Como levo o S.I.V.E. para a minha escola?</summary><p>Clique em "Quero o S.I.V.E. na minha escola" e preencha a ficha com os dados da escola e de quem devemos procurar. Você recebe um número de protocolo na hora, e a nossa equipe envia o orçamento em até 2 dias úteis e combina uma apresentação do sistema.</p></details>
         <details class="lp-faq"><summary>Esqueci minha senha. E agora?</summary><p>Procure a secretaria da escola: a gestão gera uma senha provisória, e você cria uma nova no primeiro acesso.</p></details>
         </div>
       </div>
     </section>
 
-    <section class="lp-chamada" aria-labelledby="lp-secao-7">
-      <div class="lp-faixa lp-estreita">
-        <h2 id="lp-secao-7">Pronto para começar o dia com tudo sob controle?</h2>
-        <p>Sua escola ainda não usa o S.I.V.E.? Faça o cadastro e a nossa equipe entra em contato.</p>
-        <div class="lp-chamada-acoes"><button type="button" class="lp-btn lp-btn-claro" data-cadastro-escola>Quero o S.I.V.E. na minha escola</button><a href="#entrar" class="lp-btn lp-btn-linha">Já tenho acesso</a></div>
-      </div>
-    </section>
     </main>
 
     <!-- ===== Página "Quem Somos" (#quem-somos): usa o mesmo cabeçalho e rodapé do site. Texto baseado no planejamento do projeto ===== -->
     <main id="lp-quem-somos" class="oculto" hidden>
       <section class="lp-secao lp-azul" aria-labelledby="qs-titulo">
         <div class="lp-faixa">
-          <p class="lp-sobretitulo">Quem Somos</p>
+          <p class="lp-sobretitulo">Quem somos</p>
           <h1 class="lp-titulo" id="qs-titulo">A rotina da escola em um só lugar</h1>
           <p class="lp-texto"><b>O S.I.V.E. (Sistema Inteligente de Vigilância Escolar) é um sistema online que reúne a rotina de segurança e de comunicação da escola.</b> Ele nasceu como Trabalho de Conclusão de Curso em Desenvolvimento de Sistemas, no Senai, a partir de uma pergunta simples: como ajudar a escola a saber, com segurança, o que acontece com cada aluno?</p>
           <p class="lp-texto">Como tudo fica na mesma base, a informação não se perde entre a sala de aula, a secretaria e a casa do aluno: uma falta vira alerta de Busca Ativa, uma ocorrência chega à família para assinatura e a gestão acompanha tudo pela Central do Dia.</p>
@@ -194,7 +258,7 @@
 
       <section class="lp-secao" aria-labelledby="qs-dores">
         <div class="lp-faixa">
-          <p class="lp-sobretitulo">As dores que encontramos</p>
+          <p class="lp-sobretitulo">Os problemas que encontramos</p>
           <h2 class="lp-titulo" id="qs-dores">O que atrapalha o dia a dia da escola</h2>
           <p class="lp-texto">As escolas precisam acompanhar a frequência, falar com as famílias, controlar a entrada e a saída das crianças e guardar documentos e autorizações. Quando isso fica em papel, planilhas e conversas de aplicativo, surgem estes problemas:</p>
           <div class="lp-grade lp-g3">
@@ -212,14 +276,14 @@
         <div class="lp-faixa">
           <p class="lp-sobretitulo">Nossos objetivos</p>
           <h2 class="lp-titulo" id="qs-objetivos">Por que desenvolvemos o S.I.V.E.</h2>
-          <p class="lp-texto"><b>Objetivo geral:</b> desenvolver um sistema web que integre cadastro, frequência, comunicação, autorizações digitais e segurança escolar, com acesso diferenciado para a gestão, os docentes e os responsáveis.</p>
+          <p class="lp-texto">Queríamos um só sistema para a rotina de segurança e de comunicação da escola, em que a gestão, os docentes e as famílias vejam a mesma informação, cada um com o acesso que precisa. Na prática, o S.I.V.E.:</p>
           <ul class="lp-objetivos">
-            <li><span data-ico="confere"></span> Cadastrar alunos, responsáveis e usuários, com níveis de acesso por perfil.</li>
-            <li><span data-ico="confere"></span> Registrar a chamada diária e identificar automaticamente os alunos com muitas faltas (Busca Ativa).</li>
-            <li><span data-ico="confere"></span> Dar à gestão uma visão geral da escola, com indicadores e uma tabela de gestão dos alunos.</li>
-            <li><span data-ico="confere"></span> Centralizar comunicados, documentos, pendências e ocorrências na ficha de cada aluno.</li>
-            <li><span data-ico="confere"></span> Substituir autorizações em papel por autorizações digitais com assinatura registrada.</li>
-            <li><span data-ico="confere"></span> Registrar quem fez cada ação no sistema.</li>
+            <li><span data-ico="confere"></span> Reúne o cadastro de alunos, responsáveis e usuários, e cada perfil vê só o que precisa.</li>
+            <li><span data-ico="confere"></span> Recebe a chamada do dia e avisa sozinho quando um aluno começa a faltar demais (Busca Ativa).</li>
+            <li><span data-ico="confere"></span> Mostra à gestão, logo cedo, o resumo da escola e o que precisa de atenção.</li>
+            <li><span data-ico="confere"></span> Junta comunicados, documentos, pendências e ocorrências na ficha de cada aluno.</li>
+            <li><span data-ico="confere"></span> Troca as autorizações em papel por autorizações assinadas pelo celular.</li>
+            <li><span data-ico="confere"></span> Guarda o histórico de quem fez cada ação.</li>
           </ul>
         </div>
       </section>
@@ -227,7 +291,7 @@
       <section class="lp-secao" aria-labelledby="qs-equipe">
         <div class="lp-faixa">
           <h2 class="lp-titulo" id="qs-equipe">Quem faz o S.I.V.E.</h2>
-          <p class="lp-texto"><b>Equipe:</b> Marcelo, Kelly, Viviane, Sophia e José Ferreira Junior. <b>Orientação:</b> professores Phillipe e Ana Beatriz.</p>
+          <p class="lp-texto"><b>Equipe:</b> Marcelo, Kelly, Viviane, Sophia e José. <b>Orientação:</b> professores Phillipe e Ana Beatriz.</p>
         </div>
       </section>
 
@@ -241,13 +305,22 @@
     </main>
 
     <footer class="lp-rodape">
-      <div class="lp-faixa lp-rodape-grade">
-        <div><img src="assets/logo-sive-branco.png" alt="S.I.V.E." class="lp-rodape-logo"><p>Vigilância escolar inteligente: segurança, presença e comunicação em um só lugar.</p></div>
-        <nav aria-labelledby="rodape-navegue"><h2 id="rodape-navegue">Navegue</h2><a href="#quem-somos">Quem Somos</a><a href="#o-que-faz">O que faz</a><a href="#para-quem">Para quem</a><a href="#seguranca">Segurança</a><a href="#perguntas">Perguntas frequentes</a></nav>
-        <nav aria-labelledby="rodape-escolas"><h2 id="rodape-escolas">Para escolas</h2><a href="#contratar" data-cadastro-escola>Cadastrar minha escola</a><a href="#perguntas">Como funciona a contratação</a></nav>
-        <nav aria-labelledby="rodape-acesso"><h2 id="rodape-acesso">Acesso</h2><a href="#entrar">Entrar no sistema</a><a href="#verificar">Verificar assinatura</a><a href="#seguranca">Privacidade e LGPD</a></nav>
+      <!-- Rodapé: só o logo e as redes sociais. TROQUE o "#" de cada rede pelo endereço do perfil (ex.: https://instagram.com/seu_perfil).
+           O WhatsApp usa o mesmo número do botão flutuante (data-numero, mais abaixo). -->
+      <div class="lp-faixa lp-rodape-linha">
+        <a href="#inicio" class="lp-rodape-marca"><img src="assets/logo-sive-branco.png" alt="S.I.V.E. — voltar ao início" class="lp-rodape-logo"></a>
+        <ul class="lp-redes" aria-label="Redes sociais do S.I.V.E.">
+          <li><a href="#" target="_blank" rel="noopener" aria-label="Instagram do S.I.V.E. (abre em nova aba)" title="Instagram"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".6" fill="currentColor"/></svg></a></li>
+          <li><a href="#" target="_blank" rel="noopener" aria-label="Facebook do S.I.V.E. (abre em nova aba)" title="Facebook"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8h3V4h-3a4 4 0 0 0-4 4v3H7v4h3v7h4v-7h3l1-4h-4V8a0 0 0 0 1 0 0z"/></svg></a></li>
+          <li><a href="#" target="_blank" rel="noopener" aria-label="LinkedIn do S.I.V.E. (abre em nova aba)" title="LinkedIn"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 10v7M8 7v.01M12 17v-4a2 2 0 0 1 4 0v4M12 10v7"/></svg></a></li>
+          <li><a href="#" target="_blank" rel="noopener" aria-label="YouTube do S.I.V.E. (abre em nova aba)" title="YouTube"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="m10 9.5 5 2.5-5 2.5z" fill="currentColor"/></svg></a></li>
+          <li><a href="https://wa.me/5513991024620" target="_blank" rel="noopener" aria-label="WhatsApp do S.I.V.E. (abre em nova aba)" title="WhatsApp"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 20.5l1.3-4.2A8.5 8.5 0 1 1 8 19.3z"/><path d="M9 8.5c.3 2.6 2.4 5 5 5.6l1.2-1.2 1.8.9c-.2 1-1 1.7-2 1.7-3.9-.3-7-3.4-7.3-7.3 0-1 .7-1.8 1.7-2l.9 1.8z"/></svg></a></li>
+        </ul>
       </div>
       <p class="lp-copy">© <span id="lp-ano"></span> S.I.V.E. — Sistema Inteligente de Vigilância Escolar</p>
+      <!-- WhatsApp flutuante: coloque em data-numero o DDD + número (só dígitos, ex.: 11987654321). Vazio, o botão fica escondido -->
+      <nav class="lp-barra-movel" aria-label="Atalhos"><a href="#entrar" class="lp-btn lp-btn-linha">Entrar</a><button type="button" class="lp-btn lp-btn-cheio" data-cadastro-escola>Quero o S.I.V.E.</button></nav>
+      <a class="lp-whatsapp" id="lp-whatsapp" data-numero="13991024620" target="_blank" rel="noopener" aria-label="Falar com a equipe do S.I.V.E. pelo WhatsApp (abre em nova aba)" title="Falar pelo WhatsApp" hidden><svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true"><path d="M16 3.2C8.9 3.2 3.2 8.9 3.2 15.9c0 2.4.7 4.7 1.9 6.7L3.4 28.8l6.4-1.7c1.9 1 4 1.6 6.2 1.6 7.1 0 12.8-5.7 12.8-12.8S23.1 3.2 16 3.2z" fill="#fff"/><path d="M11.7 9.3c.4-.1.8.1 1 .5l1.4 3.1c.2.4.1.8-.2 1.1l-1.1 1.2c.8 1.7 2.1 3 3.8 3.8l1.2-1.1c.3-.3.7-.4 1.1-.2l3.1 1.4c.4.2.6.6.5 1-.4 1.7-2 2.9-3.7 2.6-5-.7-9-4.7-9.7-9.7-.3-1.7.9-3.3 2.6-3.7z" fill="#128C4A"/></svg></a>
       <a href="#inicio" class="lp-topo-btn" id="lp-topo-btn" aria-label="Voltar ao topo"><span data-ico="setaCima"></span></a>
     </footer>
     </div>

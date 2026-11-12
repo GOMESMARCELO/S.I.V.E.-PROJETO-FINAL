@@ -4,7 +4,7 @@
 //   "backup": { "pasta": "D:\\backups-sive", "manter": 14 }
 // O servidor faz um backup por dia sozinho. Comandos:
 //   npm run backup                                     → faz um backup na hora
-//   node backup.js --decifrar <pasta>/sive.sql.enc     → gera o sive.sql para restaurar (mysql -u root -p sive < sive.sql)
+//   node backup.js --decifrar <pasta>/sive.sql.enc     → gera o sive.sql para restaurar (mysql -u root -p db_sive < sive.sql)
 // IMPORTANTE: o backup só abre com a chave "chave_arquivos" do config.json. Guarde uma cópia do config.json em OUTRO lugar seguro
 // (pendrive guardado na escola, cofre de senhas), separada dos backups: quem tiver os dois juntos lê tudo.
 const fs = require("fs");
@@ -82,7 +82,7 @@ if (require.main === module) {
     try {
       const saida = arquivo.replace(/\.enc$/, "");
       fs.writeFileSync(saida, decifrar(fs.readFileSync(arquivo), chave));
-      console.log("Pronto:", saida, "\nRestaure com: mysql -u root -p sive <", saida, "\nDepois APAGUE esse arquivo: ele tem os dados em texto aberto.");
+      console.log("Pronto:", saida, "\nRestaure com: mysql -u root -p db_sive <", saida, "\nDepois APAGUE esse arquivo: ele tem os dados em texto aberto.");
     } catch (e) { console.error("Não foi possível abrir o backup:", e.message, "(arquivo alterado ou chave diferente)"); process.exit(1); }
     return;
   }

@@ -24,12 +24,12 @@ async function main() {
     if (i >= 0) {
       const [protocolo, situacao] = [args[i + 1], args[i + 2]];
       if (!SITUACOES[situacao]) throw new Error(`situação inválida. Use: ${Object.keys(SITUACOES).join(", ")}`);
-      const [r] = await db.query("UPDATE escolas_interessadas SET esi_status = ? WHERE esi_protocolo = ?", [situacao, protocolo]);
+      const [r] = await db.query("UPDATE tb_escolas_interessadas SET esi_status = ? WHERE esi_protocolo = ?", [situacao, protocolo]);
       console.log(r.affectedRows ? `✅ ${protocolo} agora está como "${SITUACOES[situacao]}".` : `Protocolo ${protocolo} não encontrado.`);
       return;
     }
-    const [linhas] = await db.query(`SELECT *, DATE_FORMAT(esi_criado_em, '%d/%m/%Y %H:%i') AS em FROM escolas_interessadas
-      ${args.includes("--todos") || args.includes("--csv") ? "" : "WHERE esi_status IN ('novo','em_contato')"} ORDER BY esi_id DESC`);
+    const [linhas] = await db.query(`SELECT *, DATE_FORMAT(esi_criado_em, '%d/%m/%Y %H:%i') AS em FROM tb_escolas_interessadas
+      ${args.includes("--todos") || args.includes("--csv") ? "" : "WHERE esi_status IN ('novo','em_contato')"} ORDER BY id_escola_interessada DESC`);
     if (args.includes("--csv")) {
       const campo = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
       const cab = ["Protocolo", "Recebido em", "Situação", "Escola", "CNPJ", "Rede", "Etapas", "Alunos", "Endereço", "Bairro", "Cidade", "UF", "CEP",
