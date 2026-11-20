@@ -1,11 +1,12 @@
 // Backup do S.I.V.E.: grava o banco inteiro em um arquivo CRIPTOGRAFADO (sive.sql.enc, AES-256-GCM) e copia a pasta uploads/
 // (documentos e banners, que já ficam criptografados). Cada backup fica em <pasta>/AAAA-MM-DD_HHhMM/ e só os últimos `manter` ficam.
-// A pasta padrão é backups/ dentro do projeto. Para guardar em outro lugar (recomendado: fora do OneDrive), use no config.json:
-//   "backup": { "pasta": "D:\\backups-sive", "manter": 14 }
+// A pasta padrão é backups/ dentro do projeto. Para guardar em outro lugar (recomendado: fora do OneDrive), use no .env:
+//   BACKUP_PASTA=D:\backups-sive
+//   BACKUP_MANTER=14
 // O servidor faz um backup por dia sozinho. Comandos:
 //   npm run backup                                     → faz um backup na hora
 //   node backup.js --decifrar <pasta>/sive.sql.enc     → gera o sive.sql para restaurar (mysql -u root -p db_sive < sive.sql)
-// IMPORTANTE: o backup só abre com a chave "chave_arquivos" do config.json. Guarde uma cópia do config.json em OUTRO lugar seguro
+// IMPORTANTE: o backup só abre com a chave CHAVE_ARQUIVOS do .env. Guarde uma cópia do .env em OUTRO lugar seguro
 // (pendrive guardado na escola, cofre de senhas), separada dos backups: quem tiver os dois juntos lê tudo.
 const fs = require("fs");
 const path = require("path");
@@ -71,9 +72,9 @@ function temBackupDeHoje(pasta) {
 module.exports = { gerarBackup, temBackupDeHoje, pastaDosBackups };
 
 if (require.main === module) {
-  const config = require("./config.json");
+  const { config } = require("./config");
   const chave = config.seguranca && /^[0-9a-f]{64}$/.test(config.seguranca.chave_arquivos || "") ? Buffer.from(config.seguranca.chave_arquivos, "hex") : null;
-  if (!chave) { console.error("config.json sem a chave_arquivos: ligue o servidor uma vez (npm start) para ela ser criada."); process.exit(1); }
+  if (!chave) { console.error(".env sem a CHAVE_ARQUIVOS: ligue o servidor uma vez (npm start) para ela ser criada."); process.exit(1); }
   const i = process.argv.indexOf("--decifrar");
   if (i > 0) {
     // node backup.js --decifrar backups/<pasta>/sive.sql.enc  → cria o sive.sql ao lado, para restaurar no MySQL

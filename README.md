@@ -10,10 +10,35 @@ Veja o passo a passo completo em `LEIA-ME.txt`.
 
 Resumo:
 1. Rode `database/sive.sql` no MySQL
-2. Copie `config.example.json` para `config.json` e ajuste usuário/senha
+2. Copie `.env.example` para `.env` e ajuste usuário/senha do banco
 3. `npm install`
 4. `npm start`
 5. Abra `http://localhost:3000`
+
+## Estrutura de pastas (padrão MVC)
+
+```
+PROJETO/
+├── public/              ← front-end (o que o navegador recebe)
+│   ├── index.html
+│   ├── css/style.css
+│   ├── js/app.js, js/preferencias.js
+│   └── sw.js
+├── src/                 ← back-end (Node.js + Express)
+│   ├── model/           ← acesso ao banco e regras dos dados (db.js é a conexão)
+│   ├── view/            ← textos e formatos mostrados (política, termo, rótulos)
+│   ├── controller/      ← o que cada rota faz, um arquivo por assunto
+│   ├── routes/          ← endereços /api/... e permissões (index.js junta todos)
+│   └── middlewares/     ← login, permissões, limites, cabeçalhos de segurança, erros
+├── img/                 ← imagens, fontes e vídeos (servidos em /img)
+├── database/            ← sive.sql e scripts do banco
+├── .env                 ← senhas e chaves (fora do Git) — modelo em .env.example
+├── server.js            ← liga as peças e sobe o servidor
+├── config.js            ← lê o .env
+└── email.js, backup.js, escolas.js, importar-alunos.js
+```
+
+Caminho de um pedido: `routes` (qual endereço e quem pode) → `middlewares` (login e permissão) → `controller` (o que fazer) → `model` (consulta ao banco) → resposta em JSON para `public/js/app.js`.
 
 ## Padrão de nomes do banco (mnemônicos)
 
@@ -55,8 +80,8 @@ O que o sistema faz hoje:
 
 **Antes de usar de verdade:**
 
-1. Preencha a seção `escola` do `config.json` (nome da escola, encarregado de dados, e-mail e prazo de guarda). Enquanto estiver entre colchetes, a política mostra os colchetes.
-2. As chaves de segurança são criadas sozinhas no `config.json` na primeira vez. **Faça backup do `config.json` e da pasta `uploads/`**: sem a chave, os documentos não abrem. O servidor já faz um backup por dia em `backups/` (banco + `uploads/`; `npm run backup` faz um na hora), mas **copie a pasta `backups/` e o `config.json` para outro lugar**: backup no mesmo computador não protege contra defeito no disco.
+1. Preencha `ESCOLA_NOME`, `ESCOLA_ENCARREGADO_NOME`, `ESCOLA_ENCARREGADO_EMAIL` e `ESCOLA_PRAZO_RETENCAO` no `.env` (nome da escola, encarregado de dados, e-mail e prazo de guarda). Enquanto estiver entre colchetes, a política mostra os colchetes.
+2. As chaves de segurança são criadas sozinhas no `.env` na primeira vez. **Faça backup do `.env` e da pasta `uploads/`**: sem a chave, os documentos não abrem. O servidor já faz um backup por dia em `backups/` (banco + `uploads/`; `npm run backup` faz um na hora), mas **copie a pasta `backups/` e o `.env` para outro lugar**: backup no mesmo computador não protege contra defeito no disco.
 3. Use HTTPS (por exemplo, atrás de um proxy como Nginx). O sistema em si roda em HTTP.
 
 **O que ainda não está coberto** (fica como melhoria): o consentimento já bloqueia sozinho o reconhecimento facial (Fase 5), mas o uso de fotos fora do sistema continua sendo decisão da escola; excluir todos os dados de um aluno, apagar documentos automaticamente após o prazo de guarda, procedimento de incidente, HTTPS embutido, e guardar a chave dos arquivos separada dos arquivos (aqui ficam na mesma máquina). Este projeto aplica medidas técnicas; a validação jurídica (base legal, prazos, encarregado) é da escola.
@@ -105,13 +130,13 @@ O que o sistema faz para apoiar a escola nos deveres do Estatuto da Criança e d
 - O professor que passa **60 dias** sem entrar no sistema tem o acesso **suspenso automaticamente**. A conferência roda ao ligar o servidor, de hora em hora e a cada tentativa de login.
 - Se ele tentar entrar com a senha certa, vê o aviso e o **pedido de reativação chega à gestão** (alerta na Central do Dia e na tela Usuários).
 - A gestão reativa com um clique. O sistema gera uma **senha provisória nova**, com troca obrigatória, e o prazo volta a contar.
-- A partir de 50 dias sem acesso, o professor aparece em "perto do limite". Para mudar os números, edite `INATIVIDADE` no `server.js`.
+- A partir de 50 dias sem acesso, o professor aparece em "perto do limite". Para mudar os números, edite `INATIVIDADE` em `src/model/usuarios.js`.
 
 ## Fase 5 — câmeras, reconhecimento facial (simulados) e status ao vivo
 
 > **Simulação:** nenhuma câmera de verdade está ligada ao sistema. A tela Monitoramento mostra "câmeras" animadas e botões que simulam a passagem de um aluno, para demonstrar as regras e os registros.
 >
-> **Vídeos das câmeras (04/11/2026):** cada câmera ligada mostra um vídeo de 10 s em loop (`assets/cameras/`): portão de entrada, portão de saída, pátio e refeitório. As cenas são **desenhadas por um script** (`ferramentas/gerar-videos-cameras.py`), não são filmagens: as pessoas aparecem de longe e sem rosto, com aparência de câmera de segurança. Uma câmera nova usa a cena do seu tipo (Entrada, Saída ou Área comum). Quem configurou o computador para "reduzir movimento" vê só a imagem parada.
+> **Vídeos das câmeras (04/11/2026):** cada câmera ligada mostra um vídeo de 10 s em loop (`img/cameras/`): portão de entrada, portão de saída, pátio e refeitório. As cenas são **desenhadas por um script** (`ferramentas/gerar-videos-cameras.py`), não são filmagens: as pessoas aparecem de longe e sem rosto, com aparência de câmera de segurança. Uma câmera nova usa a cena do seu tipo (Entrada, Saída ou Área comum). Quem configurou o computador para "reduzir movimento" vê só a imagem parada.
 
 **Monitoramento** (gestão)
 - Painel com: alunos na escola agora, câmeras online, reconhecidos hoje e imagens descartadas.
@@ -123,7 +148,7 @@ O que o sistema faz para apoiar a escola nos deveres do Estatuto da Criança e d
 **Regras do reconhecimento facial** (dado biométrico é dado sensível: LGPD, art. 11)
 1. Só funciona se a gestão **ligar** o recurso.
 2. Só nos **portões** de entrada e saída. Câmeras de área comum só gravam.
-3. Só para turmas **a partir do Pré**. Berçário, maternal e creche ficam de fora (regra `TURMAS_ANTES_DO_PRE` no `server.js`).
+3. Só para turmas **a partir do Pré**. Berçário, maternal e creche ficam de fora (regra `TURMAS_ANTES_DO_PRE` em `src/model/monitoramento.js`).
 4. Só para alunos cujo responsável marcou **"câmeras e reconhecimento facial"** no Termo de Consentimento. Se ele revogar, o reconhecimento para **na hora**.
 5. Quem não cumpre as regras **não tem cadastro facial**. A câmera não identifica a pessoa, a imagem é descartada e o registro fica sem nome de aluno.
 6. O sistema **não guarda fotos nem biometria**, só o horário, a câmera e a confiança. As passagens são **apagadas depois de 90 dias** (`RETENCAO_RECONHECIMENTOS_DIAS`).
@@ -167,7 +192,7 @@ Avaliação de UX feita tela por tela, nos três perfis, e aplicada no sistema. 
 - **Busca rápida de aluno** no topo (gestão: todos os alunos; professor: a turma aberta). Atalho: tecla `/`.
 - **Avisos na própria tela** no lugar das caixas do navegador (`alert`/`confirm`/`prompt`), e janela de confirmação com a identidade visual.
 - **Indicador de conexão real** ("Conectado" / "Sem conexão") no lugar do selo "Sistema operacional", que ficava sempre verde.
-- **Fontes DM Sans e Manrope** guardadas no próprio projeto (`assets/fonts/`, licença SIL OFL 1.1). Antes, o sistema aparecia em Arial.
+- **Fontes DM Sans e Manrope** guardadas no próprio projeto (`img/fonts/`, licença SIL OFL 1.1). Antes, o sistema aparecia em Arial.
 - **Letras maiores**: os textos de apoio passaram de 12 px para 13 px. Também há foco visível para quem usa o teclado.
 
 **Banco de dados:** duas colunas novas, sem apagar nada. `autorizacoes.aut_valida_ate` guarda o último dia para assinar, e `usuarios.usu_avisos_vistos_em` guarda quando a pessoa abriu o sino pela última vez. Quem já tem o banco atualizado até 31/10/2026 roda só `database/migracao-2026-11-02.sql`. A coluna calculada `aut_assinada` deixou de usar `STORED NOT NULL` (ficou só `STORED`), e com isso o `sive.sql` passou a rodar também no MariaDB do XAMPP.
@@ -211,8 +236,8 @@ Na primeira vez que a pessoa entra, depois da troca de senha e dos termos, um to
 
 **VLibras** (tradutor de Libras do governo federal, [vlibras.gov.br](https://vlibras.gov.br))
 - O botão aparece em todas as páginas, menos na tela Proteção. O avatar traduz o texto em que a pessoa clica.
-- Basta o script `vlibras-plugin.js`, carregado no fim do `index.html`. Ele só desenha o botão: o avatar é baixado quando a pessoa clica. Se o serviço do governo cair, o sistema continua funcionando, só sem o botão.
-- A CSP do `server.js` libera apenas os endereços usados: `vlibras.gov.br`, a pasta oficial do projeto no jsDelivr e `traducao2.vlibras.gov.br`.
+- Basta o script `vlibras-plugin.js`, carregado no fim do `public/index.html`. Ele só desenha o botão: o avatar é baixado quando a pessoa clica. Se o serviço do governo cair, o sistema continua funcionando, só sem o botão.
+- A CSP (`src/middlewares/cabecalhos.js`) libera apenas os endereços usados: `vlibras.gov.br`, a pasta oficial do projeto no jsDelivr e `traducao2.vlibras.gov.br`.
 - **Privacidade:** o texto clicado é enviado ao servidor de tradução do governo. Nada é enviado antes de a pessoa ativar o avatar e clicar. Na tela **Proteção**, que é sigilosa, o botão some, o avatar fecha e o pedido de tradução é barrado (`ajustarVLibras`, no `js/app.js`).
 
 **HTML5 semântico**
@@ -230,7 +255,7 @@ Na primeira vez que a pessoa entra, depois da troca de senha e dos termos, um to
 - **De onde vem o e-mail:** o campo E-mail da conta, em **Usuários** (cadastro ou menu "⋯"). Para responsáveis, vale também o e-mail do perfil.
 - A resposta da tela é sempre a mesma, exista ou não o usuário. Limite de 5 pedidos por minuto por computador e um link a cada 2 minutos por conta. O banco guarda só o hash do código.
 - A verificação em duas etapas continua valendo depois da senha nova.
-- **Envio de verdade:** sem configuração, o envio é **simulado** e o link aparece só no terminal do servidor. Para ligar, rode `npm install`, preencha `email` no `config.json` (modelo em `config.example.json`): `modo: "smtp"`, `url_base` (endereço público do sistema, com https), `remetente` e os dados de `smtp` do serviço escolhido. Reinicie o servidor.
+- **Envio de verdade:** sem configuração, o envio é **simulado** e o link aparece só no terminal do servidor. Para ligar, rode `npm install`, preencha no `.env` (modelo em `.env.example`): `EMAIL_MODO=smtp`, `EMAIL_URL_BASE` (endereço público do sistema, com https), `EMAIL_REMETENTE` e os campos `SMTP_` do serviço escolhido. Reinicie o servidor.
 - **Olhinho:** os campos de senha do login e da troca de senha têm um botão para mostrar o que foi digitado; a senha volta a ficar escondida ao enviar.
 - **Validando senha:** ao entrar, o botão mostra uma animação (parada para quem desliga o movimento) e o leitor de tela anuncia "Validando senha".
 
@@ -254,11 +279,11 @@ O que foi digitado nos campos nunca é lido. A voz continua sendo só a instalad
 
 ## Depoimentos da home (05/11/2026)
 
-A seção **Depoimentos** traz exemplos ilustrativos, com pessoas e retratos fictícios (`assets/depoimentos/`), e um aviso visível dizendo isso. Para usar depoimentos reais: peça autorização de cada pessoa, troque nome, texto e foto no `index.html` e retire o aviso `.lp-depoimentos-aviso`. Não retire o aviso enquanto os textos forem fictícios.
+A seção **Depoimentos** traz exemplos ilustrativos, com pessoas e retratos fictícios (`img/depoimentos/`), e um aviso visível dizendo isso. Para usar depoimentos reais: peça autorização de cada pessoa, troque nome, texto e foto no `index.html` e retire o aviso `.lp-depoimentos-aviso`. Não retire o aviso enquanto os textos forem fictícios.
 
 ## Identidade visual
 
-Todas as cores ficam como variáveis no início de `css/style.css` (`:root`). Para trocar uma cor, mude só ali.
+Todas as cores ficam como variáveis no início de `public/css/style.css` (`:root`). Para trocar uma cor, mude só ali.
 
 | Cor | Código | Uso |
 |---|---|---|

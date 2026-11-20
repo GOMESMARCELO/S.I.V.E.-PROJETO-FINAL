@@ -4,8 +4,9 @@ PASSO A PASSO
 1. Abra o MySQL Workbench conectado ao seu servidor local e execute, nessa ordem:
      a) database/criar-usuario.sql   (cria um usuário chamado "sive", senha "sive123", só para este projeto)
      b) database/sive.sql            (cria o banco "db_sive" com as tabelas tb_... e os dados)
-2. O config.json já vem pronto com usuário "sive" e senha "sive123" — não precisa mexer,
-   a menos que você prefira usar outro usuário do seu MySQL (ex.: root).
+2. Copie o arquivo .env.example para .env (mesma pasta). Ele já vem com usuário "sive" e senha "sive123" —
+   não precisa mexer, a menos que você prefira usar outro usuário do seu MySQL (ex.: root).
+   (Quem ainda tem o config.json antigo não precisa fazer nada: o .env é criado sozinho a partir dele.)
 3. No terminal, dentro desta pasta:
      npm install
      npm start
@@ -13,17 +14,18 @@ PASSO A PASSO
 
 BACKUP (FAÇA!)
 O servidor faz sozinho um backup por dia, CRIPTOGRAFADO (banco inteiro + pasta uploads/), na pasta backups/.
-Ficam os 14 mais recentes. Para mudar a pasta ou a quantidade, no config.json:
-    "backup": { "pasta": "D:\backups-sive", "manter": 30 }
+Ficam os 14 mais recentes. Para mudar a pasta ou a quantidade, no .env:
+    BACKUP_PASTA=D:\backups-sive
+    BACKUP_MANTER=30
 Para fazer um na hora:  npm run backup
 Para restaurar:
     node backup.js --decifrar backups/<pasta>/sive.sql.enc      (gera o sive.sql)
     mysql -u root -p db_sive < backups/<pasta>/sive.sql           (e copie a pasta uploads/ de volta)
     depois APAGUE o sive.sql gerado (ele tem os dados em texto aberto).
-IMPORTANTE: guarde uma cópia do config.json em OUTRO lugar seguro, separada dos backups.
+IMPORTANTE: guarde uma cópia do .env em OUTRO lugar seguro, separada dos backups.
 Sem ele, os backups, os documentos e as assinaturas não abrem; com ele junto dos backups, quem pegar os dois lê tudo.
 O projeto está dentro do OneDrive: o ideal é movê-lo para uma pasta fora da nuvem (ex.: C:SIVE).
-Os logs de atividade com mais de 2 anos são apagados sozinhos (config.json: "retencao": { "logs_anos": 2 }).
+Os logs de atividade com mais de 2 anos são apagados sozinhos (.env: RETENCAO_LOGS_ANOS=2).
 
 SEGURANÇA DO LOGIN
 - Senhas: pelo menos 8 caracteres, com letras e números. Quem entrar com senha fraca (ex.: 123456)
@@ -32,11 +34,12 @@ SEGURANÇA DO LOGIN
   Google Authenticator, Microsoft Authenticator...). Perdeu o celular? Outra pessoa da gestão usa
   "Zerar 2 etapas" em Usuários.
 - "Sair" encerra o login em todos os aparelhos. Trocar a senha encerra os outros aparelhos.
-- Só para DEMONSTRAÇÃO (nunca com dados reais), dá para desligar as duas regras no config.json:
-    "seguranca": { ..., "exigir_senha_forte": false, "exigir_2fa_gestao": false }
+- Só para DEMONSTRAÇÃO (nunca com dados reais), dá para desligar as duas regras no .env:
+    EXIGIR_SENHA_FORTE=false
+    EXIGIR_2FA_GESTAO=false
 - Publicação na internet: use HTTPS. Ou o sistema sobe direto em HTTPS com
-    "https": { "certificado": "caminho/cert.pem", "chave": "caminho/chave.pem" }
-  ou, atrás de um Nginx com HTTPS, use "seguranca": { ..., "atras_de_proxy": true }.
+    HTTPS_CERTIFICADO=caminho/cert.pem   e   HTTPS_CHAVE=caminho/chave.pem   (no .env)
+  ou, atrás de um Nginx com HTTPS, use ATRAS_DE_PROXY=true.
 
 VLIBRAS (TRADUÇÃO PARA LIBRAS)
 O botão do VLibras precisa de internet. Depois de atualizar o sistema, reinicie o servidor (npm start): sem isso o navegador bloqueia o avatar.
@@ -68,15 +71,31 @@ Toda ação importante (login, cadastro de aluno, cadastro de usuário, troca
 de senha, aprovações etc.) fica registrada no menu "Logs", visível só para
 a administração.
 
-ESTRUTURA
-index.html          estrutura da página
-css/style.css       estilos
-js/app.js           telas e interações (conversa com o servidor)
-server.js           servidor Node.js (rotas /api/... que consultam o MySQL)
-config.json         porta, conexão do banco, dados da escola (política de privacidade) e chaves de segurança
-database/sive.sql   criação das tabelas e dados de exemplo
-API.md               lista de rotas da API, para consultar ou testar com curl/Postman
-assets/             fotos dos responsáveis (troque pelas originais)
+ESTRUTURA (padrão MVC — atualizado em 20/11/2026)
+PROJETO
+  public/                 o que o navegador recebe (front-end)
+    index.html            estrutura da página
+    css/style.css         estilos
+    js/app.js             telas e interações (conversa com o servidor)
+    js/preferencias.js    preferências de acessibilidade aplicadas antes da página aparecer
+    sw.js                 limpa o service worker de versões antigas
+  src/                    o servidor (back-end)
+    model/                acesso ao banco e regras dos dados (db.js = conexão; log, segurança, frequência, proteção...)
+    view/                 textos e formatos que o sistema mostra (política de privacidade, termo de consentimento, rótulos)
+    controller/           o que cada endereço da API faz, um arquivo por assunto (alunos, comunicação, proteção...)
+    routes/               os endereços /api/... e quem pode acessar cada um (index.js junta todos)
+    middlewares/          o que roda antes das rotas (login, permissões, limites, cabeçalhos de segurança, erros)
+  img/                    imagens, fontes e vídeos das câmeras (endereço /img/...)
+  .env                    porta, conexão do banco, dados da escola e chaves de segurança (NÃO vai para o Git)
+  .env.example            modelo do .env, com explicação de cada campo
+  server.js               liga as peças: cria o servidor, entrega public/ e img/ e usa as rotas de src/routes
+  config.js               lê o .env e monta as configurações usadas pelo resto do sistema
+  email.js, backup.js, escolas.js, importar-alunos.js   ferramentas usadas pelo servidor e pelos comandos npm
+  database/sive.sql       criação das tabelas e dados de exemplo
+  API.md                  lista de rotas da API, para consultar ou testar com curl/Postman
+
+Onde mexer: uma regra de dados (ex.: quantas faltas abrem a Busca Ativa) fica em src/model; o que uma tela
+recebe da API fica em src/controller; quem pode acessar um endereço fica em src/routes.
 
 
 GIT (CONTROLE DE VERSÃO)
@@ -89,9 +108,8 @@ Para colocar em um repositório:
   git remote add origin <link_do_seu_repositorio_no_github>
   git push -u origin main
 
-O .gitignore já impede que a pasta node_modules e o config.json com senha
-sejam enviados ao repositório. Se quiser subir um config.json de exemplo,
-copie-o para config.example.json antes de editar suas senhas reais.
+O .gitignore já impede que a pasta node_modules e o .env (com a senha do banco e as chaves)
+sejam enviados ao repositório. O .env.example, sem senhas reais, vai para o Git como modelo.
 
 
 FREQUÊNCIA E BUSCA ATIVA (Fase 2)
@@ -102,7 +120,7 @@ FREQUÊNCIA E BUSCA ATIVA (Fase 2)
   Se hoje for fim de semana, o quadro mostra o último dia com chamada registrada.
 - Busca Ativa: o sistema conta as faltas sozinho e abre o caso quando o aluno chega a
   5 faltas nos últimos 30 dias. A gestão anota o acompanhamento e encerra o caso.
-  Para mudar a regra, edite BUSCA_ATIVA no começo do server.js (faltas e dias).
+  Para mudar a regra, edite BUSCA_ATIVA em src/model/frequencia.js (faltas e dias).
 - Relatório Mensal: escolha o mês; dá para imprimir / salvar em PDF e baixar em CSV (Excel).
 - Responsável: vê a frequência dos últimos 30 dias e se o filho está presente ou ausente hoje.
 
@@ -128,16 +146,16 @@ GESTÃO, FICHA DO ALUNO E AUTORIZAÇÕES DIGITAIS (Fase 3)
 IMPORTANTE AO ATUALIZAR DA FASE 2 PARA A FASE 3: rode o database/sive.sql de novo (apaga os dados
 antigos do banco "sive"). Não precisa rodar npm install de novo: nenhuma biblioteca nova foi adicionada.
 
-SEGURANÇA: o servidor agora só entrega as pastas css/, js/ e assets/ e o index.html. Antes, o
-config.json (com a senha do banco) e o server.js podiam ser baixados pelo navegador. A pasta
+SEGURANÇA: o servidor só entrega as pastas public/ e img/. O .env (com a senha do banco), o server.js
+e a pasta src/ não podem ser baixados pelo navegador. A pasta
 uploads/ também não é pública e não vai para o Git.
 
 SEGURANÇA E LGPD (versão atual)
-- Na primeira vez que o servidor liga, ele cria sozinho duas chaves no config.json (criptografia dos documentos e
-  assinatura do login). FAÇA BACKUP do config.json e da pasta uploads/: sem a chave, os documentos não abrem mais.
-  Se você trocar o config.json por outro (por exemplo, ao copiar uma versão nova do projeto), os documentos antigos
-  deixam de abrir. Copie a seção "seguranca" junto.
-- Preencha a seção "escola" do config.json: nome da escola, encarregado de dados, e-mail e prazo de guarda dos dados.
+- Na primeira vez que o servidor liga, ele cria sozinho as chaves no .env (criptografia dos documentos e
+  assinatura do login). FAÇA BACKUP do .env e da pasta uploads/: sem a chave, os documentos não abrem mais.
+  Se você trocar o .env por outro (por exemplo, ao copiar uma versão nova do projeto), os documentos antigos
+  deixam de abrir. Copie CHAVE_ARQUIVOS, SEGREDO_TOKEN, ASSINATURA_PRIVADA e ASSINATURA_PUBLICA junto.
+- Preencha ESCOLA_NOME, ESCOLA_ENCARREGADO_NOME, ESCOLA_ENCARREGADO_EMAIL e ESCOLA_PRAZO_RETENCAO no .env: nome da escola, encarregado de dados, e-mail e prazo de guarda dos dados.
 - Rode o database/sive.sql de novo (apaga o banco "sive" e recria): a tabela de usuários ganhou colunas novas
   (aceite da política) e as senhas agora ficam em hash. Os usuários de demonstração continuam com a senha 123456.
 - No primeiro acesso, cada pessoa lê e aceita a política de privacidade.
@@ -176,7 +194,7 @@ FASE 5 — CÂMERAS E RECONHECIMENTO FACIAL (SIMULADOS) E STATUS AO VIVO
   Sem isso, a imagem é descartada e ninguém é identificado. O sistema não guarda fotos nem biometria.
 - Portal dos Pais: "Status agora" mostra se o filho entrou ou saiu, a que horas e por qual portão.
 - Roteiro de apresentação: veja o README.md, seção "Fase 5".
-- Vídeos das câmeras (04/11/2026): cada câmera ligada mostra uma cena da escola em loop (assets/cameras/).
+- Vídeos das câmeras (04/11/2026): cada câmera ligada mostra uma cena da escola em loop (img/cameras/).
   São desenhos animados por script (ferramentas/gerar-videos-cameras.py), sem rostos e sem filmagem real.
 
 MELHORIAS DE EXPERIÊNCIA DO USUÁRIO (02/11/2026)

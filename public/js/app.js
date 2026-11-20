@@ -197,6 +197,8 @@ const ICONES = {
   ajuda: { anim: "balanca", svg: '<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>' },
   acessibilidade: { anim: "pulsa", svg: '<circle cx="12" cy="4.5" r="2"/><path d="M4 8.5c5 1.5 11 1.5 16 0"/><path d="M12 10v5"/><path d="m8 21 4-6 4 6"/>' },
   sino: { anim: "balanca", svg: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>' },
+  adicionar: { anim: "pulsa", svg: '<path d="M12 5v14M5 12h14"/>' },
+  fechar: { anim: "pulsa", svg: '<path d="M6 6l12 12M18 6 6 18"/>' },
   mais: { anim: "pulsa", svg: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>' },
   mensagem: { anim: "pula", svg: '<path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.6A8.4 8.4 0 1 1 21 11.5z"/>' },
 };
@@ -422,23 +424,29 @@ function homeVisivel() { return document.getElementById("lp-home").offsetParent 
     marcar();
   });
 })();
-// Barra fixa do celular ("Entrar" e "Quero o S.I.V.E."): aparece depois que os botões do topo saem da tela e some perto da chamada final,
-// que já tem os mesmos botões. Enquanto ela aparece, os botões flutuantes (WhatsApp, voltar ao topo) sobem para não ficarem por baixo.
-(() => {
-  const barra = document.querySelector(".lp-barra-movel"), acoesTopo = document.querySelector(".lp-hero .lp-acoes"), chamada = document.querySelector(".lp-chamada");
-  if (!barra) return;
-  let agendado = false;
-  const atualizar = () => {
-    agendado = false;
-    const mostrar = homeVisivel() && innerWidth < 760 && acoesTopo.getBoundingClientRect().bottom < 0 && chamada.getBoundingClientRect().top > innerHeight * 0.6;
-    document.documentElement.classList.toggle("lp-com-barra", mostrar);
+// Rodapé: logos oficiais das redes sociais. Basta colocar o arquivo da marca em img/redes/ (instagram, facebook, youtube,
+// whatsapp — .svg ou .png; vale com ou sem a primeira letra maiúscula). Sem o arquivo, fica o ícone simples.
+// Logo colorido ganha botão branco; logo todo branco (versão monocromática) continua no botão escuro, para não sumir.
+document.querySelectorAll(".lp-redes [data-rede]").forEach((link) => {
+  const r = link.dataset.rede, nomes = [r, r.charAt(0).toUpperCase() + r.slice(1)];
+  const opcoes = nomes.flatMap((n) => ["svg", "png"].map((ext) => `img/redes/${n}.${ext}`));
+  const ehClaro = (img) => { // amostra os pixels: quase tudo branco e sem cor = logo claro
+    try {
+      const c = document.createElement("canvas"); c.width = c.height = 24; const g = c.getContext("2d"); g.drawImage(img, 0, 0, 24, 24);
+      const d = g.getImageData(0, 0, 24, 24).data; let tinta = 0, claros = 0;
+      for (let k = 0; k < d.length; k += 4) if (d[k + 3] > 60) { tinta++; if (Math.min(d[k], d[k + 1], d[k + 2]) > 215) claros++; }
+      return tinta > 0 && claros / tinta > 0.85;
+    } catch { return false; }
   };
-  const agendar = () => { if (!agendado) { agendado = true; requestAnimationFrame(atualizar); } };
-  addEventListener("scroll", agendar, { passive: true });
-  addEventListener("resize", agendar);
-  addEventListener("hashchange", agendar);
-  atualizar();
-})();
+  const tentar = (lista) => {
+    if (!lista.length) return;
+    const img = new Image();
+    img.onload = () => { img.alt = ""; img.width = 24; img.height = 24; link.querySelector("svg")?.replaceWith(img); link.classList.add(ehClaro(img) ? "logo-claro" : "com-logo"); };
+    img.onerror = () => tentar(lista.slice(1));
+    img.src = lista[0];
+  };
+  tentar(opcoes);
+});
 // Transição do "Entrar": o botão clicado se transforma na caixa de login (View Transitions do navegador).
 // Navegadores sem esse recurso, ou com "menos movimento", só trocam de tela como antes.
 document.addEventListener("click", (e) => {
@@ -488,7 +496,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.getRegistrations().the
   const limitar = (v) => Math.min(1, Math.max(0, v));
   // Quanto o elemento já andou entre "o topo dele está em `de` da altura da tela" (0) e "está em `ate`" (1)
   const entre = (el, de, ate) => limitar((de * innerHeight - el.getBoundingClientRect().top) / ((de - ate) * innerHeight));
-  let agendado = false;
+  let agendado = false, diaMouse = null; // diaMouse: posição do sol escolhida pelo mouse (0 a 1), ou null para seguir a rolagem
   const desenhar = () => {
     agendado = false;
     if (!homeVisivel()) return;
@@ -502,14 +510,37 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.getRegistrations().the
     // "No dia a dia": o sol anda pelo trilho (7h30 → 17h40) e os cartões acendem na hora deles. Só em telas largas.
     const dia = document.querySelector(".lp-dia-trilho");
     if (dia) {
-      const largo = innerWidth >= 760 && !parado, d = largo ? entre(dia, 0.85, 0.3) : 1;
+      const largo = innerWidth >= 760 && !parado, d = largo ? (diaMouse != null ? diaMouse : entre(dia, 0.85, 0.3)) : 1;
       dia.style.setProperty("--d", d.toFixed(3));
       const cartoes = [...dia.nextElementSibling.children];
       dia.parentElement.classList.toggle("lp-dia-vivo", largo);
-      cartoes.forEach((c, i) => c.classList.toggle("aceso", d >= i / (cartoes.length - 1) - 0.02));
+      const folga = diaMouse != null ? 0.25 : 0.02; // com o mouse, o cartão acende quando o sol chega perto dele
+      cartoes.forEach((c, i) => c.classList.toggle("aceso", d >= i / (cartoes.length - 1) - folga));
+      // hora que o sol marca (7h30 → 10h15 → 17h40), mostrada enquanto o mouse conduz o sol
+      const min = d <= 0.5 ? 450 + (d / 0.5) * 165 : 615 + ((d - 0.5) / 0.5) * 445, m5 = Math.round(min / 5) * 5;
+      dia.querySelector(".lp-dia-hora").textContent = `${Math.floor(m5 / 60)}h${String(m5 % 60).padStart(2, "0")}`;
     }
   };
   const agendar = () => { if (!agendado) { agendado = true; requestAnimationFrame(desenhar); } };
+  // "No dia a dia" interativo: com o mouse sobre a seção, o sol segue o ponteiro pelo trilho e os cartões acendem conforme a hora.
+  // Passar o mouse num cartão leva o sol até a hora dele. Ao sair, volta a seguir a rolagem. (Toque no celular continua só com a rolagem.)
+  const trilhoDia = document.querySelector(".lp-dia-trilho");
+  if (trilhoDia) {
+    const area = trilhoDia.parentElement, cartoesDia = [...trilhoDia.nextElementSibling.children];
+    const porX = (x) => { const r = trilhoDia.getBoundingClientRect(); return Math.min(1, Math.max(0, (x - r.left - 16) / (r.width - 32))); }; // mesma régua do CSS: 16px de cada lado
+    area.addEventListener("pointermove", (e) => {
+      if (e.pointerType === "touch" || !area.classList.contains("lp-dia-vivo")) return;
+      const noTrilho = e.target.closest(".lp-dia-trilho"), naGrade = trilhoDia.nextElementSibling.contains(e.target);
+      if (!noTrilho && !naGrade) return;
+      if (noTrilho) diaMouse = porX(e.clientX);
+      else diaMouse = porX(e.clientX); // sobre os cartões: o sol fica na mesma posição do ponteiro
+      area.classList.add("lp-dia-mouse"); agendar();
+    });
+    let volta = 0; // ao sair, o sol desliza de volta para a posição da rolagem e só depois a transição é desligada
+    area.addEventListener("pointerleave", () => { diaMouse = null; area.classList.add("lp-dia-voltando"); area.classList.remove("lp-dia-mouse"); agendar(); clearTimeout(volta); volta = setTimeout(() => area.classList.remove("lp-dia-voltando"), 450); });
+    trilhoDia.addEventListener("pointerdown", (e) => { if (e.pointerType !== "touch") { trilhoDia.setPointerCapture(e.pointerId); diaMouse = porX(e.clientX); agendar(); } });
+    trilhoDia.addEventListener("pointermove", (e) => { if (trilhoDia.hasPointerCapture(e.pointerId)) { diaMouse = porX(e.clientX); agendar(); } });
+  }
   addEventListener("scroll", agendar, { passive: true });
   addEventListener("resize", agendar);
   addEventListener("hashchange", agendar);
@@ -887,7 +918,7 @@ function telaCarregando() {
 function sair() {
   usuarioLogado = null;
   document.title = TITULO_SITE;
-  ajustarVLibras(false);
+  ajustarVLibras();
   pararVoz(); aplicarPreferencias(lerPreferenciasLocais() || {}); // no computador compartilhado, o ajuste de uma conta não fica para a próxima pessoa
   fecharTutorial();
   clearInterval(timerTela); clearInterval(timerBanner); clearInterval(timerAvisos);
@@ -962,7 +993,7 @@ async function atualizarContadorAvisos() {
     // Aviso do navegador (se a pessoa permitiu): só quando chegou algo novo e a aba não está à vista
     if (avisosConhecidos >= 0 && r.novos > avisosConhecidos && document.hidden && "Notification" in window && Notification.permission === "granted") {
       const n = r.itens.find((i) => i.novo);
-      if (n) new Notification("S.I.V.E.", { body: n.titulo, icon: "assets/favicon.png" });
+      if (n) new Notification("S.I.V.E.", { body: n.titulo, icon: "img/favicon.png" });
     }
     avisosConhecidos = r.novos;
   } catch { /* tenta de novo no próximo minuto */ }
@@ -1251,25 +1282,39 @@ function telaProtecao() {
     <small>• <b>Sigilo:</b> estes registros não aparecem para os responsáveis nem para outros docentes. Cada consulta e cada registro ficam registrados.</small></section>
   ${ehAdmin && p.pendentes ? `<p class="pill danger" style="white-space:normal;margin-bottom:14px">${ico("aviso")} ${pl(p.pendentes, "registro aguardando", "registros aguardando")} a comunicação ao Conselho Tutelar.</p>` : ""}
   ${msg ? `<p class="pill success" style="white-space:normal;margin-bottom:14px">${esc(msg)}</p>` : ""}
+  ${ehAdmin && dados.limiteFaltas && dados.limiteFaltas.alunos.some((x) => !x.comunicado) ? `<button type="button" class="aviso-faltas" id="ir-faltas">${ico("aviso")} <span><b>${pl(dados.limiteFaltas.alunos.filter((x) => !x.comunicado).length, "aluno", "alunos")} acima do limite de faltas</b> ainda sem comunicação ao Conselho Tutelar</span><span class="aviso-faltas-ir">Ver e agir ${ico("setaBaixo")}</span></button>` : ""}
   <form id="form-protecao" class="card" style="margin-bottom:16px">
     <b>Registrar um caso</b>
     <div class="grade dois" style="margin-top:10px"><label class="campo-bloco"><small>Turma e aluno</small><select id="pro-aluno" data-filtro-turma required><option value="">Escolha o aluno...</option>${alunos}</select></label>
       <label class="campo-bloco"><small>Motivo</small><select id="pro-motivo">${motivos}</select></label></div>
     <label class="campo-bloco" style="margin-top:10px"><small>Fatos observados (o que viu ou ouviu, quando e onde; sem julgamentos)</small><textarea id="pro-descricao" rows="4" maxlength="1500" required></textarea></label>
-    <label class="campo-bloco" style="margin-top:10px"><small>Medidas já adotadas pela escola (opcional)</small><textarea id="pro-medidas" rows="2" maxlength="1500"></textarea></label>
+    <label class="campo-bloco" style="margin-top:10px"><small>Medidas já adotadas pela escola</small><textarea id="pro-medidas" rows="2" maxlength="1500" required></textarea></label>
     <label class="termo-aceite oculto" id="pro-esgotados-box"><input type="checkbox" id="pro-esgotados"> <span>Os recursos da escola foram esgotados (contatos e visitas com a família estão descritos acima).</span></label>
     <p id="pro-erro" class="pill danger oculto" style="margin-top:10px;white-space:normal"></p>
+    <small style="margin-top:8px">Todos os campos são obrigatórios.</small>
     <button class="btn" type="submit" style="margin-top:12px;max-width:240px">Registrar</button>
   </form>
-  <div id="protecao-lista"></div><div id="protecao-limite"></div>`;
+  <div class="abas abas-protecao" role="tablist" aria-label="Visualização dos registros">
+    <button type="button" class="aba${dados.protecaoAba !== "criancas" ? " ativa" : ""}" data-pro-aba="casos" role="tab">Casos</button>
+    <button type="button" class="aba${dados.protecaoAba === "criancas" ? " ativa" : ""}" data-pro-aba="criancas" role="tab">Por criança</button></div>
+  <div id="protecao-lista"></div><div id="protecao-limite"></div>
+  <dialog id="dlg-protecao" class="dlg-camera" aria-labelledby="dlg-pro-titulo"><form id="form-dlg-protecao" novalidate>
+    <div class="linha" style="align-items:flex-start;gap:12px"><h2 id="dlg-pro-titulo"></h2><button type="button" class="btn-fechar" id="dlg-pro-fechar" aria-label="Fechar">${ico("fechar")}</button></div>
+    <div id="dlg-pro-corpo"></div><p id="dlg-pro-erro" class="pill danger oculto" style="margin-top:12px;white-space:normal"></p>
+    <div class="acoes" style="margin-top:14px;justify-content:flex-end"><button class="btn outline" type="button" id="dlg-pro-cancelar">Cancelar</button><button class="btn" type="submit" id="dlg-pro-salvar">Salvar</button></div></form></dialog>`;
 }
 function ligarProtecao() {
   const $ = (id) => document.getElementById(id);
   const sincronizar = () => $("pro-esgotados-box").classList.toggle("oculto", $("pro-motivo").value !== "Faltas");
   $("pro-motivo").onchange = sincronizar; sincronizar();
+  if ($("ir-faltas")) $("ir-faltas").onclick = () => { dados.protecaoAba = "casos"; dados.protecaoCrianca = null; document.querySelectorAll("[data-pro-aba]").forEach((x) => x.classList.toggle("ativa", x.dataset.proAba === "casos")); desenharProtecao(); document.getElementById("protecao-faltas")?.scrollIntoView({ behavior: menosMovimento() ? "auto" : "smooth", block: "start" }); };
   $("form-protecao").onsubmit = async (e) => {
     e.preventDefault(); $("pro-erro").classList.add("oculto");
     try {
+      if (!$("pro-aluno").value) throw new Error("Escolha a turma e o aluno.");
+      if ($("pro-descricao").value.trim().length < 10) throw new Error("Descreva os fatos observados (pelo menos 10 caracteres).");
+      if ($("pro-medidas").value.trim().length < 10) throw new Error("Descreva as medidas já adotadas pela escola (pelo menos 10 caracteres).");
+      if ($("pro-motivo").value === "Faltas" && !$("pro-esgotados").checked) throw new Error("Confirme que os recursos da escola foram esgotados.");
       await api("/api/protecao", { method: "POST", body: JSON.stringify({ aluno_id: Number($("pro-aluno").value), motivo: $("pro-motivo").value,
         descricao: $("pro-descricao").value, medidas: $("pro-medidas").value, recursos_esgotados: $("pro-esgotados").checked }) });
       dados.protecaoMsg = "Registro salvo. Ele é sigiloso e fica pendente até a gestão comunicar ao Conselho Tutelar.";
@@ -1278,38 +1323,208 @@ function ligarProtecao() {
   };
   desenharProtecao();
 }
-function desenharProtecao() {
-  const ehAdmin = usuarioLogado.papel === "admin", itens = dados.protecao.itens;
-  const cartao = (i) => `<article class="card" style="margin-bottom:12px;${i.pendente ? "border-left:4px solid var(--danger)" : ""}">
+function cartaoProtecao(i) {
+  const ehAdmin = usuarioLogado.papel === "admin";
+  const anexos = i.anexos || [];
+  return `<article class="card caso-protecao" style="margin-bottom:12px;${i.pendente ? "border-left:4px solid var(--danger)" : ""}">
     <div class="linha" style="flex-wrap:wrap;gap:8px">
-      <div class="aluno"><span class="avatar">${iniciais(i.aluno_nome)}</span><div><b>${esc(i.aluno_nome)}</b><small>${esc(i.aluno_sala)} • registrado em ${i.registrada_em} por ${esc(i.registrada_por)}</small></div></div>
+      <div class="aluno"><span class="avatar">${iniciais(i.aluno_nome || "")}</span><div><b>${esc(i.aluno_nome || "")}</b><small>${esc(i.aluno_sala || "")} • registrado em ${i.registrada_em} por ${esc(i.registrada_por)}</small></div></div>
       <div>${pill(motivosProtecao[i.motivo], i.motivo === "Maus-tratos" ? "danger" : "warning")} ${i.pendente ? pill(`Pendente de comunicação${i.dias_registro ? " há " + pl(i.dias_registro, "dia", "dias") : ""}`, "danger") : pill("Comunicado ao Conselho Tutelar", "success")}</div>
     </div>
+    <div class="contagens-crianca">${ico("pasta")} Esta criança tem <b>${pl(i.total_casos || 0, "caso registrado", "casos registrados")}</b> • <b>${pl(i.total_ocorrencias || 0, "ocorrência escolar", "ocorrências escolares")}</b> • <b>${pl(i.total_advertencias || 0, "advertência", "advertências")}</b>
+      <button type="button" class="link-texto" data-pro-crianca="${i.aluno_id}">Abrir tudo da criança</button></div>
     <div class="nota"><small><b>Fatos</b></small>${esc(i.descricao)}</div>
     ${i.medidas ? `<div class="nota"><small><b>Medidas adotadas pela escola</b></small><span style="white-space:pre-line">${esc(i.medidas)}</span></div>` : ""}
+    <div class="anexos-caso"><small><b>Documentos assinados pelos responsáveis (provas de notificação)</b></small>
+      ${anexos.length ? anexos.map((a) => `<div class="anexo-linha">${ico("documento")}<div class="anexo-info"><b>${esc(a.titulo)}</b><small>${esc(a.nome_original)} • ${tamanhoLegivel(a.tamanho)} • enviado por ${esc(a.enviado_por)} em ${a.enviado_em}</small></div>
+        <div class="anexo-acoes"><button type="button" class="evento-icone" data-anexo-baixar="${i.id}:${a.id}" data-nome="${esc(a.nome_original)}" title="Baixar" aria-label="Baixar ${esc(a.titulo)}">${ico("baixar")}</button>
+        <button type="button" class="evento-icone" data-anexo-editar="${i.id}:${a.id}" data-titulo="${esc(a.titulo)}" title="Editar documento" aria-label="Editar ${esc(a.titulo)}">${ico("caneta")}</button>
+        <button type="button" class="evento-icone perigo" data-anexo-excluir="${i.id}:${a.id}" data-titulo="${esc(a.titulo)}" title="Excluir documento" aria-label="Excluir ${esc(a.titulo)}">${ico("lixeira")}</button></div></div>`).join("")
+        : `<small class="anexo-vazio">Nenhum documento anexado ainda.</small>`}
+    </div>
+    <div class="acoes" style="margin-top:10px;flex-wrap:wrap">
+      <button type="button" class="btn outline pequeno" data-pro-anexar="${i.id}">${ico("adicionar")} Anexar documento assinado</button>
+      ${i.pode_editar ? `<button type="button" class="btn outline pequeno" data-pro-editar="${i.id}">${ico("caneta")} Editar texto</button>` : ""}</div>
     ${i.pendente
-      ? (ehAdmin ? `<div class="grade dois" style="margin-top:10px"><label class="campo-bloco"><small>Data em que comunicou ao Conselho Tutelar</small><input type="date" data-ct-data="${i.id}" value="${hojeLocalISO()}" max="${hojeLocalISO()}"></label>
-          <label class="campo-bloco"><small>Protocolo ou nº do ofício (se houver)</small><input data-ct-protocolo="${i.id}" maxlength="60"></label></div>
+      ? (ehAdmin ? `<div class="grade dois" style="margin-top:10px"><label class="campo-bloco"><small>Data em que comunicou ao Conselho Tutelar</small><input type="date" data-ct-data="${i.id}" value="${hojeLocalISO()}" max="${hojeLocalISO()}" required></label>
+          <label class="campo-bloco"><small>Protocolo ou nº do ofício</small><input data-ct-protocolo="${i.id}" maxlength="60" required></label></div>
           <div class="acoes"><button class="btn pequeno" data-ct-comunicar="${i.id}">Registrar que comunicou ao Conselho Tutelar</button></div>`
         : "<small>Aguardando a gestão comunicar ao Conselho Tutelar.</small>")
       : `<small style="margin-top:8px">Comunicado em ${i.comunicado_em} por ${esc(i.comunicado_por)}${i.protocolo ? " • protocolo " + esc(i.protocolo) : ""}</small>`}
   </article>`;
-  document.getElementById("protecao-lista").innerHTML = `<div class="topo"><h2>${ehAdmin ? "Registros" : "Meus registros"} (${itens.length})</h2></div>` +
-    (itens.length ? itens.map(cartao).join("") : `<div class="vazio"><b>Nenhum registro</b><small>Quando um caso for registrado, ele aparece aqui.</small></div>`);
-  document.querySelectorAll("[data-ct-comunicar]").forEach((b) => b.onclick = seguro(async () => {
-    const id = b.dataset.ctComunicar;
-    await api(`/api/protecao/${id}/comunicado`, { method: "PUT", body: JSON.stringify({ data: document.querySelector(`[data-ct-data="${id}"]`).value, protocolo: document.querySelector(`[data-ct-protocolo="${id}"]`).value.trim() }) });
-    dados.protecaoMsg = "Comunicação ao Conselho Tutelar registrada.";
-    await mostrar("protecao");
+}
+// janela (pop-up) da Proteção: editar texto, anexar e editar anexo usam a mesma
+function abrirDialogoProtecao({ titulo, corpo, salvar, aoAbrir }) {
+  const $ = (id) => document.getElementById(id), dlg = $("dlg-protecao");
+  $("dlg-pro-titulo").textContent = titulo; $("dlg-pro-corpo").innerHTML = corpo; $("dlg-pro-erro").classList.add("oculto");
+  const fechar = () => dlg.close();
+  $("dlg-pro-fechar").onclick = fechar; $("dlg-pro-cancelar").onclick = fechar;
+  dlg.onclick = (e) => { if (e.target === dlg) fechar(); };
+  $("form-dlg-protecao").onsubmit = async (e) => {
+    e.preventDefault(); const botao = $("dlg-pro-salvar"); botao.disabled = true; $("dlg-pro-erro").classList.add("oculto");
+    try { await salvar(); fechar(); }
+    catch (erro) { if (erro.message !== "Sessão expirada") { $("dlg-pro-erro").textContent = erro.message; $("dlg-pro-erro").classList.remove("oculto"); } }
+    finally { botao.disabled = false; }
+  };
+  dlg.showModal(); if (aoAbrir) aoAbrir();
+}
+const campoArquivoProtecao = (obrigatorio) => `<label class="campo-bloco" style="margin-top:10px"><small>Arquivo (PDF, PNG, JPG, DOC ou DOCX, até 5 MB)${obrigatorio ? "" : " — deixe vazio para manter o atual"}</small><input type="file" id="dlg-pro-arquivo" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"${obrigatorio ? " required" : ""}></label>`;
+// Nome e arquivo da janela de anexo da Proteção (o arquivo só é obrigatório ao anexar; ao editar, é opcional)
+function lerDialogoAnexo(arquivoObrigatorio) {
+  const titulo = document.getElementById("dlg-pro-nome").value.trim(), arq = document.getElementById("dlg-pro-arquivo").files[0];
+  if (titulo.length < 3) throw new Error("Dê um nome ao documento (pelo menos 3 caracteres).");
+  if (arquivoObrigatorio && !arq) throw new Error("Escolha o arquivo do documento assinado.");
+  if (arq && arq.size > 5 * 1024 * 1024) throw new Error("O arquivo passa de 5 MB.");
+  return { titulo, arq };
+}
+function ligarCartoesProtecao(itens, recarregar) {
+  const acha = (id) => itens.find((x) => x.id === Number(id));
+  document.querySelectorAll("[data-pro-crianca]").forEach((b) => b.onclick = seguro(() => abrirCriancaProtecao(Number(b.dataset.proCrianca))));
+  document.querySelectorAll("[data-pro-editar]").forEach((b) => b.onclick = () => {
+    const c = acha(b.dataset.proEditar), ehAdmin = usuarioLogado.papel === "admin";
+    const motivos = (ehAdmin || c.motivo === "Faltas" ? ["Maus-tratos", "Faltas", "Outro"] : ["Maus-tratos", "Outro"]).map((m) => `<option value="${m}"${m === c.motivo ? " selected" : ""}>${motivosProtecao[m]}</option>`).join("");
+    abrirDialogoProtecao({ titulo: `Editar caso — ${c.aluno_nome}`,
+      corpo: `<label class="campo-bloco"><small>Motivo</small><select id="dlg-pro-motivo">${motivos}</select></label>
+        <label class="campo-bloco" style="margin-top:10px"><small>Fatos observados</small><textarea id="dlg-pro-descricao" rows="5" maxlength="1500" required>${esc(c.descricao)}</textarea></label>
+        <label class="campo-bloco" style="margin-top:10px"><small>Medidas já adotadas pela escola</small><textarea id="dlg-pro-medidas" rows="3" maxlength="1500" required>${esc(c.medidas || "")}</textarea></label>
+        <small style="margin-top:8px">Todos os campos são obrigatórios. A alteração fica registrada no histórico (sem o texto, que é sigiloso).</small>`,
+      aoAbrir: () => document.getElementById("dlg-pro-descricao").focus(),
+      salvar: async () => {
+        const v = (id) => document.getElementById(id).value.trim();
+        if (v("dlg-pro-descricao").length < 10) throw new Error("Descreva os fatos (pelo menos 10 caracteres).");
+        if (v("dlg-pro-medidas").length < 10) throw new Error("Descreva as medidas adotadas (pelo menos 10 caracteres).");
+        await api(`/api/protecao/${c.id}`, { method: "PUT", body: JSON.stringify({ motivo: document.getElementById("dlg-pro-motivo").value, descricao: v("dlg-pro-descricao"), medidas: v("dlg-pro-medidas") }) });
+        avisar("Caso atualizado."); await recarregar();
+      } });
+  });
+  document.querySelectorAll("[data-pro-anexar]").forEach((b) => b.onclick = () => {
+    const c = acha(b.dataset.proAnexar);
+    abrirDialogoProtecao({ titulo: `Anexar documento assinado — ${c.aluno_nome}`,
+      corpo: `<small>Envie o documento assinado pelos responsáveis que comprova que foram notificados (ex.: termo de ciência, notificação assinada). Ele é sigiloso: não aparece no portal da família.</small>
+        <label class="campo-bloco" style="margin-top:10px"><small>Nome do documento</small><input id="dlg-pro-nome" maxlength="120" required placeholder="Ex.: Notificação assinada pela mãe — 18/11"></label>${campoArquivoProtecao(true)}
+        <small style="margin-top:8px">Todos os campos são obrigatórios.</small>`,
+      aoAbrir: () => document.getElementById("dlg-pro-nome").focus(),
+      salvar: async () => {
+        const { titulo, arq } = lerDialogoAnexo(true);
+        await api(`/api/protecao/${c.id}/anexos`, { method: "POST", body: JSON.stringify({ titulo, nome_arquivo: arq.name, conteudo: await lerBase64(arq) }) });
+        avisar("Documento anexado ao caso."); await recarregar();
+      } });
+  });
+  document.querySelectorAll("[data-anexo-editar]").forEach((b) => b.onclick = () => {
+    const [caso, doc] = b.dataset.anexoEditar.split(":");
+    abrirDialogoProtecao({ titulo: "Editar documento",
+      corpo: `<label class="campo-bloco"><small>Nome do documento</small><input id="dlg-pro-nome" maxlength="120" required value="${esc(b.dataset.titulo)}"></label>${campoArquivoProtecao(false)}`,
+      aoAbrir: () => document.getElementById("dlg-pro-nome").focus(),
+      salvar: async () => {
+        const { titulo, arq } = lerDialogoAnexo(false);
+        await api(`/api/protecao/${caso}/anexos/${doc}`, { method: "PUT", body: JSON.stringify(arq ? { titulo, nome_arquivo: arq.name, conteudo: await lerBase64(arq) } : { titulo }) });
+        avisar("Documento atualizado."); await recarregar();
+      } });
+  });
+  document.querySelectorAll("[data-anexo-excluir]").forEach((b) => b.onclick = seguro(async () => {
+    const [caso, doc] = b.dataset.anexoExcluir.split(":");
+    if (!(await confirmar({ titulo: `Excluir "${b.dataset.titulo}"?`, texto: "O arquivo é apagado do caso e não dá para desfazer.", botao: "Excluir documento", perigo: true }))) return;
+    await api(`/api/protecao/${caso}/anexos/${doc}`, { method: "DELETE" }); avisar("Documento excluído."); await recarregar();
   }));
-  const l = dados.limiteFaltas;
-  if (ehAdmin && l) {
-    const virgula = (n) => String(n).replace(".", ",");
-    document.getElementById("protecao-limite").innerHTML = `<section class="card" style="margin-top:24px"><h2>Alunos acima do limite de faltas</h2>
-      <small>LDB, art. 12, VIII: a escola notifica ao Conselho Tutelar os alunos com faltas acima de 30% do percentual permitido em lei. Como a frequência mínima é 75% (faltas permitidas: 25%), o limite aqui é ${virgula(l.percentual)}% das aulas com chamada registrada no sistema. Confira a regra da sua rede de ensino.</small>
-      ${l.alunos.length ? `<div class="tabela"><table><caption class="so-leitor">Alunos acima do limite de faltas</caption><thead><tr><th scope="col">Aluno</th><th scope="col">Turma</th><th scope="col">Dias com chamada</th><th scope="col">Faltas</th><th scope="col">%</th><th scope="col">Conselho Tutelar</th></tr></thead><tbody>${l.alunos.map((a) => `<tr><td><b>${esc(a.nome)}</b></td><td>${esc(a.sala)}</td><td>${a.dias}</td><td>${a.faltas}</td><td>${pill(virgula(a.percentual) + "%", "danger")}</td><td>${a.comunicado ? pill("Comunicado", "success") : pill("Ainda não comunicado", "warning")}</td></tr>`).join("")}</tbody></table></div>`
-        : '<div class="vazio"><b>Nenhum aluno acima do limite</b></div>'}</section>`;
+  document.querySelectorAll("[data-anexo-baixar]").forEach((b) => b.onclick = seguro(async () => {
+    const [caso, doc] = b.dataset.anexoBaixar.split(":");
+    const r = await fetch(`/api/protecao/${caso}/anexos/${doc}/arquivo`, { headers: { Authorization: "Bearer " + usuarioLogado.token } });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).erro || "Não foi possível baixar");
+    const url = URL.createObjectURL(await r.blob()), link = document.createElement("a");
+    link.href = url; link.download = b.dataset.nome; link.click(); URL.revokeObjectURL(url);
+  }));
+  document.querySelectorAll("[data-ct-comunicar]").forEach((b) => b.onclick = seguro(async () => {
+    const id = b.dataset.ctComunicar, data = document.querySelector(`[data-ct-data="${id}"]`).value, protocolo = document.querySelector(`[data-ct-protocolo="${id}"]`).value.trim();
+    if (!data) throw new Error("Informe a data em que a comunicação foi feita.");
+    if (data > hojeLocalISO()) throw new Error("A data da comunicação não pode ser no futuro.");
+    if (!protocolo) throw new Error("Informe o protocolo ou o número do ofício.");
+    await api(`/api/protecao/${id}/comunicado`, { method: "PUT", body: JSON.stringify({ data, protocolo }) });
+    dados.protecaoMsg = "Comunicação ao Conselho Tutelar registrada.";
+    await recarregar();
+  }));
+}
+async function recarregarProtecao() {
+  dados.protecao = await api("/api/protecao");
+  if (dados.protecaoCrianca) dados.protecaoCrianca = await api(`/api/protecao/aluno/${dados.protecaoCrianca.aluno.id}`);
+  desenharProtecao();
+}
+async function abrirCriancaProtecao(alunoId) {
+  dados.protecaoCrianca = await api(`/api/protecao/aluno/${alunoId}`);
+  dados.protecaoAba = "criancas";
+  document.querySelectorAll("[data-pro-aba]").forEach((x) => x.classList.toggle("ativa", x.dataset.proAba === "criancas"));
+  desenharProtecao();
+  document.getElementById("protecao-lista").scrollIntoView({ behavior: menosMovimento() ? "auto" : "smooth", block: "start" });
+}
+function desenharProtecao() {
+  const ehAdmin = usuarioLogado.papel === "admin", itens = dados.protecao.itens, box = document.getElementById("protecao-lista");
+  document.querySelectorAll("[data-pro-aba]").forEach((b) => b.onclick = () => {
+    dados.protecaoAba = b.dataset.proAba; dados.protecaoCrianca = null;
+    document.querySelectorAll("[data-pro-aba]").forEach((x) => x.classList.toggle("ativa", x === b)); desenharProtecao();
+  });
+  if (dados.protecaoAba === "criancas" && dados.protecaoCrianca) {
+    // "tudo da criança": casos com anexos, ocorrências escolares e advertências
+    const d = dados.protecaoCrianca, casos = d.casos.map((c) => ({ ...c, aluno_nome: d.aluno.nome, aluno_sala: d.aluno.sala }));
+    const anexos = casos.reduce((n, c) => n + (c.anexos || []).length, 0), pend = casos.filter((c) => c.pendente).length;
+    box.innerHTML = `<button type="button" class="btn outline pequeno" id="pro-voltar-lista" style="margin-bottom:12px">${ico("setaEsq")} Voltar para a lista de crianças</button>
+      <section class="card crianca-topo"><div class="aluno"><span class="avatar">${iniciais(d.aluno.nome)}</span><div><h2 style="margin:0">${esc(d.aluno.nome)}</h2><small>${esc(d.aluno.sala)} • Matrícula ${esc(d.aluno.matricula || "—")}</small></div></div>
+        <div class="contadores-crianca">
+          <div><b>${casos.length}</b><small>${casos.length === 1 ? "caso de proteção" : "casos de proteção"}</small></div>
+          <div><b>${pend}</b><small>pendente${pend === 1 ? "" : "s"} de comunicação</small></div>
+          <div><b>${anexos}</b><small>documento${anexos === 1 ? "" : "s"} assinado${anexos === 1 ? "" : "s"}</small></div>
+          <div><b>${d.ocorrencias.length}</b><small>ocorrência${d.ocorrencias.length === 1 ? "" : "s"} escolar${d.ocorrencias.length === 1 ? "" : "es"}</small></div>
+          <div><b>${d.advertencias.length}</b><small>advertência${d.advertencias.length === 1 ? "" : "s"} / ações</small></div></div></section>
+      <h3 class="titulo-secao">Casos de proteção</h3>${casos.length ? casos.map(cartaoProtecao).join("") : vazio("Nenhum caso registrado.")}
+      <h3 class="titulo-secao">Ocorrências escolares</h3>${d.ocorrencias.length ? `<div class="card">${d.ocorrencias.map((o) => `<div class="item-simples"><b>${o.data} às ${o.horario}</b><small>Registrada por ${esc(o.professor)}</small><p>${esc(o.descricao)}</p></div>`).join("")}</div>` : vazio("Nenhuma ocorrência escolar.")}
+      <h3 class="titulo-secao">Advertências e ações</h3>${d.advertencias.length ? `<div class="card">${d.advertencias.map((a) => `<div class="item-simples"><b>${a.data} • ${a.tipo === "Acao" ? "Ação" : "Advertência"}</b><small>Registrada por ${esc(a.registrada_por)}</small><p>${esc(a.descricao)}</p></div>`).join("")}</div>` : vazio("Nenhuma advertência ou ação registrada.")}`;
+    document.getElementById("pro-voltar-lista").onclick = () => { dados.protecaoCrianca = null; desenharProtecao(); };
+    ligarCartoesProtecao(casos, recarregarProtecao);
+  } else if (dados.protecaoAba === "criancas") {
+    // uma linha por criança, com as contagens; "Abrir tudo" mostra o histórico completo dela
+    const porAluno = new Map();
+    for (const i of itens) { const a = porAluno.get(i.aluno_id) || { id: i.aluno_id, nome: i.aluno_nome, sala: i.aluno_sala, casos: 0, pendentes: 0, anexos: 0, ocorrencias: i.total_ocorrencias || 0, advertencias: i.total_advertencias || 0 }; a.casos++; a.pendentes += i.pendente ? 1 : 0; a.anexos += (i.anexos || []).length; porAluno.set(i.aluno_id, a); }
+    const lista = [...porAluno.values()].sort(ordemNome);
+    box.innerHTML = `<div class="topo"><h2>Crianças com registros (${lista.length})</h2><small>Escolha uma criança para abrir tudo dela: casos, documentos assinados, ocorrências escolares e advertências.</small></div>` +
+      (lista.length ? `<div class="lista-criancas">${lista.map((a) => `<article class="card crianca-linha"><div class="aluno"><span class="avatar">${iniciais(a.nome)}</span><div><b>${esc(a.nome)}</b><small>${esc(a.sala)}</small></div></div>
+        <div class="crianca-numeros">${pill(pl(a.casos, "caso", "casos"), a.pendentes ? "danger" : "info")} ${a.pendentes ? pill(pl(a.pendentes, "pendente", "pendentes"), "danger") : ""} ${pill(pl(a.ocorrencias, "ocorrência", "ocorrências"), "neutral")} ${pill(pl(a.advertencias, "advertência", "advertências"), "neutral")} ${pill(pl(a.anexos, "documento", "documentos"), "neutral")}</div>
+        <button type="button" class="btn pequeno" data-pro-crianca="${a.id}">Abrir tudo da criança</button></article>`).join("")}</div>`
+        : `<div class="vazio"><b>Nenhum registro</b><small>Quando um caso for registrado, a criança aparece aqui.</small></div>`);
+    document.querySelectorAll("[data-pro-crianca]").forEach((b) => b.onclick = seguro(() => abrirCriancaProtecao(Number(b.dataset.proCrianca))));
+  } else {
+    box.innerHTML = `<div class="topo"><h2>${ehAdmin ? "Registros" : "Meus registros"} (${itens.length})</h2></div>` +
+      (itens.length ? itens.map(cartaoProtecao).join("") : `<div class="vazio"><b>Nenhum registro</b><small>Quando um caso for registrado, ele aparece aqui.</small></div>`);
+    ligarCartoesProtecao(itens, recarregarProtecao);
   }
+  const l = dados.limiteFaltas, limite = document.getElementById("protecao-limite");
+  if (ehAdmin && l && dados.protecaoAba !== "criancas") {
+    const virgula = (n) => String(n).replace(".", ",");
+    // mais críticos primeiro: quem ainda não foi comunicado ao Conselho Tutelar, depois a maior porcentagem de faltas
+    const ordem = [...l.alunos].sort((a, b) => (a.comunicado - b.comunicado) || (b.percentual - a.percentual) || ordemNome(a, b));
+    const nivel = (pct) => pct >= 25 ? ["Crítico", "danger"] : pct >= 15 ? ["Alto", "warning"] : ["Atenção", "neutral"];
+    limite.innerHTML = `<section class="card" id="protecao-faltas" style="margin-top:24px"><h2>Alunos acima do limite de faltas</h2>
+      <small>LDB, art. 12, VIII: a escola notifica ao Conselho Tutelar os alunos com faltas acima de 30% do percentual permitido em lei. Como a frequência mínima é 75% (faltas permitidas: 25%), o limite aqui é ${virgula(l.percentual)}% das aulas com chamada registrada no sistema. Confira a regra da sua rede de ensino.</small>
+      ${ordem.length ? `<small style="margin-top:6px">Os mais críticos aparecem primeiro: ainda não comunicados e com mais faltas.</small>
+      <div class="tabela"><table><caption class="so-leitor">Alunos acima do limite de faltas</caption><thead><tr><th scope="col">Prioridade</th><th scope="col">Aluno</th><th scope="col">Turma</th><th scope="col">Faltas</th><th scope="col">%</th><th scope="col">Conselho Tutelar</th><th scope="col">Ações rápidas</th></tr></thead><tbody>${ordem.map((a) => {
+        const [rotulo, cor] = a.comunicado ? ["Comunicado", "success"] : nivel(a.percentual);
+        return `<tr><td>${pill(rotulo, cor)}</td><td><b>${esc(a.nome)}</b></td><td>${esc(a.sala)}</td><td>${a.faltas} de ${a.dias}</td><td>${pill(virgula(a.percentual) + "%", "danger")}</td><td>${a.comunicado ? pill("Comunicado", "success") : pill("Ainda não comunicado", "warning")}</td>
+          <td><div class="acoes-rapidas">${a.comunicado ? "" : `<button type="button" class="btn pequeno" data-faltas-registrar="${a.id}" title="Registrar caso de faltas para o Conselho Tutelar">${ico("adicionar")} Registrar caso</button>`}
+            <button type="button" class="evento-icone" data-pro-crianca="${a.id}" title="Abrir tudo da criança" aria-label="Abrir tudo de ${esc(a.nome)}">${ico("pasta")}</button>
+            <button type="button" class="evento-icone" data-faltas-ficha="${a.id}" title="Abrir a ficha do aluno" aria-label="Ficha de ${esc(a.nome)}">${ico("documento")}</button></div></td></tr>`;
+      }).join("")}</tbody></table></div>`
+        : '<div class="vazio"><b>Nenhum aluno acima do limite</b></div>'}</section>`;
+    // ações rápidas
+    limite.querySelectorAll("[data-pro-crianca]").forEach((b) => b.onclick = seguro(() => abrirCriancaProtecao(Number(b.dataset.proCrianca))));
+    limite.querySelectorAll("[data-faltas-ficha]").forEach((b) => b.onclick = seguro(() => abrirFicha(Number(b.dataset.faltasFicha))));
+    limite.querySelectorAll("[data-faltas-registrar]").forEach((b) => b.onclick = () => {
+      // preenche o "Registrar um caso" com o aluno e o motivo Faltas; a escola completa as medidas e confirma
+      const a = l.alunos.find((x) => x.id === Number(b.dataset.faltasRegistrar)), $ = (id) => document.getElementById(id);
+      $("pro-aluno").value = String(a.id); $("pro-aluno").dispatchEvent(new Event("change", { bubbles: true }));
+      $("pro-motivo").value = "Faltas"; $("pro-motivo").dispatchEvent(new Event("change"));
+      if (!$("pro-descricao").value.trim()) $("pro-descricao").value = `Faltas acima do limite (LDB, art. 12, VIII): ${a.faltas} faltas em ${a.dias} dias com chamada (${virgula(a.percentual)}%).`;
+      $("form-protecao").scrollIntoView({ behavior: menosMovimento() ? "auto" : "smooth", block: "start" });
+      setTimeout(() => $("pro-medidas").focus({ preventScroll: true }), 350);
+      avisar(`Formulário preenchido para ${a.nome}. Descreva as medidas já adotadas e confirme os recursos esgotados.`);
+    });
+  } else if (limite) limite.innerHTML = "";
 }
 document.addEventListener("click", (e) => { if (e.target.closest("[data-ir-protecao]")) seguro(() => mostrar("protecao"))(); });
 
@@ -1488,6 +1703,12 @@ function notaOcorrenciasGestao(n, semResp) {
 const pillAssinaturaGestao = (o) => o.ges_assinada_em
   ? (o.resp_assinada_em ? pill("Concluída", "success") : pill("Aguardando o responsável", "info"))
   : pill(o.resp_assinada_em ? "Assinatura pendente" : "Assinaturas pendentes", "warning");
+// Selos da ocorrência: assinatura do docente e ciência do responsável (ou "aguardando")
+function selosDocenteEResponsavel(o) {
+  return seloAssinatura("Registrado e assinado pelo docente", o.professor_nome, o.assinada_em, o.codigo) +
+  (o.resp_assinada_em ? seloAssinatura("Ciência do responsável", o.resp_nome, o.resp_assinada_em, o.resp_codigo)
+    : `<div style="margin-top:10px">${pill("Aguardando a assinatura do responsável", "warning")}</div>`);
+}
 async function abrirPastaOcorrencias() {
   const $ = (id) => document.getElementById(id);
   const modal = $("modal-oc"), conteudo = $("oc-conteudo");
@@ -1523,10 +1744,7 @@ async function abrirPastaOcorrencias() {
         ${pillAssinaturaGestao(o)}</div>
       <p style="margin-top:12px;white-space:pre-line">${esc(o.descricao)}</p>
       <small style="margin-top:6px">Responsável notificado em ${o.notificado_em} • Buscado por ${esc(o.buscado_por)}</small>
-      ${seloAssinatura("Registrado e assinado pelo docente", o.professor_nome, o.assinada_em, o.codigo)}
-      ${o.resp_assinada_em
-        ? seloAssinatura("Ciência do responsável", o.resp_nome, o.resp_assinada_em, o.resp_codigo)
-        : `<div style="margin-top:10px">${pill("Aguardando a assinatura do responsável", "warning")}</div>`}
+      ${selosDocenteEResponsavel(o)}
       ${o.ges_assinada_em ? seloAssinatura("Assinatura da gestão", o.ges_nome, o.ges_assinada_em, o.ges_codigo) : caixaAssinar("Assinatura digital da gestão", 'id="oc-ges-caixa"')}`;
     $("oc-voltar").onclick = desenharLista;
     if (o.ges_assinada_em) return;
@@ -1853,7 +2071,7 @@ function imprimirRelatorio() {
     @media print{body{padding:0;max-width:none}.acoes{display:none}}
   </style></head><body>
   <div class="acoes"><button id="fechar" class="sec">Fechar</button><button id="imprimir">Imprimir / salvar em PDF</button></div>
-  <header><img src="${location.origin}/assets/logo-sive.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar">
+  <header><img src="${location.origin}/img/logo-sive.png" alt="S.I.V.E. — Sistema Inteligente de Vigilância Escolar">
     <div class="titulo"><h1>Relatório mensal de frequência</h1><div class="escola">${esc(r.escola || "")}${r.escola ? " • " : ""}${esc(mesTitulo)}</div></div></header>
   <div class="info"><span>Emitido em ${esc(agora)} por ${esc(usuarioLogado.nome)}</span><span>Critério da Busca Ativa: ${c.faltas} faltas em ${c.dias} dias</span></div>
   <h2>Resumo do mês</h2>
@@ -1897,9 +2115,7 @@ function ligarRelatorio() {
   desenharRelatorio();
 }
 
-// =====================================================================
-// FASE 4 — banners, calendário de eventos e perfil do responsável
-// =====================================================================
+// ===== Banners, calendário de eventos e perfil do responsável =====
 const tipoClasse = (t) => String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(); // "Reunião" -> "reuniao"
 const tomTipo = { Evento: "info", Reunião: "warning", Passeio: "success", Feriado: "danger", Prazo: "warning" };
 function quandoEvento(e) {
@@ -2155,9 +2371,7 @@ function ligarPerfil() {
   };
 }
 
-// =====================================================================
-// FASE 5 — Monitoramento: câmeras e reconhecimento facial (SIMULADOS) e situação ao vivo
-// =====================================================================
+// ===== Monitoramento: câmeras e reconhecimento facial (SIMULADOS) e situação ao vivo =====
 const situacaoAgora = { na_escola: ["Na escola", "success"], saiu: ["Saiu", "info"], nao_chegou: ["Não chegou", "neutral"], ausente: ["Ausente", "danger"] };
 const pillAgora = (a) => pill(a.texto, situacaoAgora[a.situacao][1]);
 function telaSeguranca() {
@@ -2165,7 +2379,7 @@ function telaSeguranca() {
   <div class="grade g4" id="mon-metricas"></div>
   <section class="card" id="mon-facial" style="margin-bottom:20px"></section>
   <div id="mon-resultado" aria-live="polite"></div>
-  <div class="linha" style="flex-wrap:wrap;gap:8px;margin-bottom:12px"><h2>Câmeras</h2><button class="btn pequeno" id="mon-chegada">${ico("play")} Simular chegada de quem falta</button></div>
+  <div class="linha" style="flex-wrap:wrap;gap:8px;margin-bottom:12px"><div class="linha" style="gap:10px"><h2>Câmeras</h2><button type="button" class="btn-mais" id="mon-nova-cam" aria-label="Adicionar câmera" title="Adicionar câmera" aria-haspopup="dialog">${ico("adicionar")}</button></div><button class="btn pequeno" id="mon-chegada">${ico("play")} Simular chegada de quem falta</button></div>
   <div class="cams" id="mon-cams"></div>
   <div class="grade dois" style="margin-top:20px;align-items:start">
     <section class="card"><div class="linha"><div><h2>Passagens de hoje</h2><small>Reconhecimento facial nos portões</small></div><span class="pill success">● AO VIVO</span></div><div id="mon-eventos"></div></section>
@@ -2176,14 +2390,15 @@ function telaSeguranca() {
   <section class="card" style="margin-top:20px"><div class="linha" style="flex-wrap:wrap;gap:8px"><div><h2>Situação dos alunos agora</h2><small>Atualiza sozinha a cada 5 segundos.</small></div>
     <div class="linha" style="gap:8px;flex-wrap:wrap"><select id="mon-turma" class="filtro-turma-tabela" aria-label="Filtrar por turma" style="width:auto"><option value="">Todas as turmas</option>${turmasDe(dados.mon.alunos).map((s) => `<option${s === dados.turmaMon ? " selected" : ""}>${esc(s)}</option>`).join("")}</select><input id="mon-busca" class="campo-busca" placeholder="Buscar aluno..." aria-label="Buscar aluno" style="max-width:240px"></div></div>
     <div class="tabela"><table><caption class="so-leitor">Situação dos alunos agora</caption><thead><tr><th scope="col">Aluno</th><th scope="col">Agora</th><th scope="col">Cadastro facial</th><th scope="col">Portaria</th></tr></thead><tbody id="mon-alunos"></tbody></table></div></section>
-  <form id="form-camera" class="card" style="margin-top:20px"><h2>Nova câmera</h2>
+  <dialog id="dlg-camera" class="dlg-camera" aria-labelledby="dlg-camera-titulo"><form id="form-camera">
+    <div class="linha" style="align-items:flex-start;gap:12px"><h2 id="dlg-camera-titulo">Nova câmera</h2><button type="button" class="btn-fechar" id="cam-fechar" aria-label="Fechar">${ico("fechar")}</button></div>
     <small>Câmeras só em áreas comuns: o sistema recusa banheiros, vestiários e trocadores (ECA, art. 17). Reconhecimento facial só nos portões.</small>
     <div class="grade g3" style="margin-top:12px"><div><small>Nome</small><input id="cam-nome" required maxlength="60" placeholder="Ex.: Portão da quadra"></div>
       <div><small>Onde fica</small><input id="cam-local" required maxlength="60" placeholder="Ex.: Entrada da quadra"></div>
       <div><small>Tipo</small><select id="cam-tipo"><option>Entrada</option><option>Saída</option><option>Área comum</option></select></div></div>
     <label class="termo-aceite" id="cam-rec-box"><input type="checkbox" id="cam-rec"> <span>Fazer reconhecimento facial nesta câmera (só alunos com cadastro facial)</span></label>
     <p id="cam-erro" class="pill danger oculto" style="margin-top:12px;white-space:normal"></p>
-    <button class="btn" type="submit" style="margin-top:14px;max-width:220px">Cadastrar câmera</button></form>`;
+    <div class="acoes" style="margin-top:14px;justify-content:flex-end"><button class="btn outline" type="button" id="cam-cancelar">Cancelar</button><button class="btn" type="submit">Cadastrar câmera</button></div></form></dialog>`;
 }
 function desenharMonMetricas() {
   const m = dados.mon, r = m.resumo, ativas = m.cameras.filter((c) => c.ativa).length;
@@ -2209,11 +2424,11 @@ function desenharMonFacial() {
     await recarregarMonitoramento(true);
   });
 }
-// Vídeo SIMULADO de cada câmera (assets/cameras): desenhado, 10 s em loop, pessoas de longe e sem rosto. Câmera nova usa a cena do seu tipo.
+// Vídeo SIMULADO de cada câmera (img/cameras): desenhado, 10 s em loop, pessoas de longe e sem rosto. Câmera nova usa a cena do seu tipo.
 function videoDaCamera(c) {
   const cena = /refeit/i.test(c.nome) ? "refeitorio" : c.tipo === "Entrada" ? "portao-entrada" : c.tipo === "Saída" ? "portao-saida" : "patio";
   const parado = menosMovimento(); // quem pediu menos movimento vê só a imagem parada
-  return `<video src="assets/cameras/${cena}.mp4" poster="assets/cameras/${cena}.jpg" muted loop playsinline ${parado ? "" : "autoplay"} preload="auto" aria-hidden="true" tabindex="-1"></video>`;
+  return `<video src="img/cameras/${cena}.mp4" poster="img/cameras/${cena}.jpg" muted loop playsinline ${parado ? "" : "autoplay"} preload="auto" aria-hidden="true" tabindex="-1"></video>`;
 }
 function desenharMonCameras() {
   const alunos = opcoesAlunos(dados.mon.alunos);
@@ -2226,11 +2441,17 @@ function desenharMonCameras() {
       ${c.reconhecimento ? `<small>${c.passagens_hoje} passagem(ns) hoje</small>` : "<small>Só gravação (área comum)</small>"}
       ${c.reconhecimento && c.ativa ? `<div style="margin-top:8px"><small>Simular passagem de</small><select data-cam-aluno="${c.id}" data-filtro-turma><option value="">Aluno escolhido pelo sistema</option><option value="desconhecido">Visitante (rosto desconhecido)</option>${alunos}</select></div>
         <button class="btn pequeno" data-simular="${c.id}" style="margin-top:8px">${ico("foto")} Simular passagem</button>` : ""}
-      <button class="btn outline pequeno" data-cam-ativa="${c.id}" data-ligar="${c.ativa ? 0 : 1}" style="margin-top:8px">${c.ativa ? "Desligar câmera" : "Ligar câmera"}</button></div></article>`).join("");
+      <div class="cam-acoes"><button class="btn outline pequeno" data-cam-ativa="${c.id}" data-ligar="${c.ativa ? 0 : 1}">${c.ativa ? "Desligar câmera" : "Ligar câmera"}</button>
+      <button type="button" class="btn-remover-cam" data-cam-remover="${c.id}" data-nome="${esc(c.nome)}" title="Remover câmera" aria-label="Remover a câmera ${esc(c.nome)}">${ico("lixeira")}</button></div></div></article>`).join("");
   document.querySelectorAll("[data-simular]").forEach((b) => b.onclick = seguro(async () => {
     const escolha = document.querySelector(`[data-cam-aluno="${b.dataset.simular}"]`).value;
     b.disabled = true;
     try { await simularPassagem(Number(b.dataset.simular), escolha); } finally { b.disabled = false; }
+  }));
+  document.querySelectorAll("[data-cam-remover]").forEach((b) => b.onclick = seguro(async () => {
+    if (!(await confirmar({ titulo: `Remover a câmera "${b.dataset.nome}"?`, texto: "Ela sai da lista de câmeras. Só dá para remover câmeras que ainda não registraram passagens; as outras podem ser desligadas.", botao: "Remover câmera", perigo: true }))) return;
+    await api(`/api/cameras/${b.dataset.camRemover}`, { method: "DELETE" });
+    await recarregarMonitoramento(true); avisar(`Câmera "${b.dataset.nome}" removida.`);
   }));
   document.querySelectorAll("[data-cam-ativa]").forEach((b) => b.onclick = seguro(async () => {
     await api(`/api/cameras/${b.dataset.camAtiva}/ativa`, { method: "PUT", body: JSON.stringify({ ativa: b.dataset.ligar === "1" }) });
@@ -2320,11 +2541,18 @@ function ligarMonitoramento() {
   const formCam = document.getElementById("form-camera"), $ = (id) => document.getElementById(id);
   const sincronizar = () => { const comum = $("cam-tipo").value === "Área comum"; $("cam-rec").disabled = comum; if (comum) $("cam-rec").checked = false; };
   $("cam-tipo").onchange = sincronizar; sincronizar();
+  // botão "+" abre a janela de nova câmera; Cancelar, o X, a tecla Esc ou clicar fora fecham
+  const dlgCam = $("dlg-camera");
+  const fecharCam = () => { dlgCam.close(); formCam.reset(); sincronizar(); $("cam-erro").classList.add("oculto"); };
+  $("mon-nova-cam").onclick = () => { dlgCam.showModal(); setTimeout(() => $("cam-nome").focus(), 50); };
+  $("cam-fechar").onclick = fecharCam; $("cam-cancelar").onclick = fecharCam;
+  dlgCam.addEventListener("click", (e) => { if (e.target === dlgCam) fecharCam(); });
+  dlgCam.addEventListener("close", () => $("mon-nova-cam").focus());
   formCam.onsubmit = async (e) => {
     e.preventDefault(); $("cam-erro").classList.add("oculto");
     try {
       await api("/api/cameras", { method: "POST", body: JSON.stringify({ nome: $("cam-nome").value, local: $("cam-local").value, tipo: $("cam-tipo").value, reconhecimento: $("cam-rec").checked }) });
-      formCam.reset(); sincronizar(); await recarregarMonitoramento(true);
+      const nome = $("cam-nome").value.trim(); fecharCam(); await recarregarMonitoramento(true); avisar(`Câmera "${nome}" cadastrada.`);
     } catch (erro) { if (erro.message !== "Sessão expirada") mostrarErro("cam-erro", erro.message); }
   };
   timerTela = setInterval(() => recarregarMonitoramento(false).catch(() => {}), 5000);
@@ -2355,7 +2583,7 @@ const nomesTurmas = () => (dados.turmas || []).filter((t) => t.ativa).map((t) =>
 function telaCadastroAluno() {
   const msg = dados.cadastroMsg || ""; dados.cadastroMsg = "";
   const todos = dados.alunos || [], alunos = todos.filter((a) => a.situacao === "Ativo"), foraDaEscola = todos.filter((a) => a.situacao !== "Ativo");
-  // Ações pouco usadas e sensíveis (mudar a situação do aluno) ficam num menu "⋯", com confirmação. Antes era um seletor solto em cada linha.
+  // Ações pouco usadas e sensíveis (mudar a situação do aluno) ficam num menu "⋯", com confirmação.
   const menuAluno = (a) => `<details class="menu-acoes"><summary class="btn outline pequeno" aria-label="Mais ações para ${esc(a.nome)}" title="Mais ações">${ico("mais")}</summary>
     <div class="menu-acoes-lista"><button type="button" data-ca-situacao="${a.id}" data-nome="${esc(a.nome)}" data-atual="${esc(a.situacao)}">Mudar situação…</button></div></details>`;
   const tomSituacao = { Ativo: "success", Transferido: "info", Concluiu: "neutral", Desistente: "warning" };
@@ -2898,7 +3126,7 @@ function desenharChamada() {
 }
 
 // ---------- Portal da Família ----------
-// Cartão "Status agora" (Fase 5): entrada e saída de hoje, atualizado sozinho a cada 30 segundos
+// Cartão "Status agora": entrada e saída de hoje, atualizado sozinho a cada 30 segundos
 const seloAgora = { na_escola: "● Seguro", saiu: "● Saiu da escola", nao_chegou: "● Aguardando chegada", ausente: "● Ausente" };
 function cartaoStatusAgora() {
   const a = dados.agora, hoje = dados.historico.hoje;
@@ -3219,10 +3447,7 @@ function pastasOcorrencias(lista) {
       <div class="linha" style="flex-wrap:wrap;gap:8px"><div><b>${esc(o.aluno_nome)}</b><small>${esc(o.turma)} • ${dataBR(o.data)} às ${o.horario}</small></div>${pill("Código " + esc(o.codigo), "neutral")}</div>
       <p style="margin-top:8px;white-space:pre-line">${esc(o.descricao)}</p>
       <small>Responsável notificado em ${o.notificado_em} • Buscado por ${esc(o.buscado_por)}</small>
-      ${seloAssinatura("Registrado e assinado pelo docente", o.professor_nome, o.assinada_em, o.codigo)}
-      ${o.resp_assinada_em
-        ? seloAssinatura("Ciência do responsável", o.resp_nome, o.resp_assinada_em, o.resp_codigo)
-        : `<div style="margin-top:10px">${pill("Aguardando a assinatura do responsável", "warning")}</div>`}
+      ${selosDocenteEResponsavel(o)}
       ${o.ges_assinada_em
         ? seloAssinatura("Assinatura da gestão", o.ges_nome, o.ges_assinada_em, o.ges_codigo)
         : `<div style="margin-top:6px">${pill("Aguardando a assinatura da gestão", "warning")}</div>`}
@@ -3387,7 +3612,7 @@ async function mostrar(id) {
   clearInterval(timerTela); clearInterval(timerBanner);
   document.getElementById("titulo").textContent = titulos[id];
   document.title = `${titulos[id]} — S.I.V.E.`;
-  ajustarVLibras(id === "protecao");
+  ajustarVLibras();
   pararVoz();
   desenharMenu();
   atualizarNovasOcorrencias();
@@ -3423,6 +3648,7 @@ async function mostrar(id) {
     if (id === "consentimentos") dados.consents = await api("/api/consentimentos");
     if (id === "protecao") {
       dados.protecao = await api("/api/protecao");
+      if (trocouDeAba) { dados.protecaoCrianca = null; dados.protecaoAba = "casos"; } // entrar na tela sempre começa pela lista de casos
       dados.alunosProtecao = usuarioLogado.papel === "admin" ? await api("/api/alunos") : (await api("/api/minha-turma")).alunos;
       if (usuarioLogado.papel === "admin") dados.limiteFaltas = await api("/api/protecao/faltas-limite");
     }
@@ -3494,15 +3720,40 @@ function desenharMenu() {
   document.getElementById("btn-menu").classList.toggle("tem-aviso", novas > 0); // no celular o menu fica fechado: um ponto no ☰ avisa
   document.querySelectorAll("#nav button").forEach((b) => b.onclick = async () => { await mostrar(b.dataset.id); document.getElementById("tela").focus({ preventScroll: true }); }); // o menu é redesenhado: sem isso, quem usa o teclado perde o lugar
 }
-// VLibras: o texto clicado é enviado ao servidor de tradução do governo. A tela Proteção é sigilosa (ECA, art. 100), então nela o tradutor fica desligado.
-// Esconder o botão não basta: com o avatar já aberto, o clique no texto ainda traduziria. Por isso o pedido de tradução também é barrado aqui.
-const fetchOriginal = window.fetch.bind(window);
-window.fetch = (url, ...resto) => (tela === "protecao" && String(url.url || url).includes("traducao2.vlibras.gov.br") ? Promise.reject(new Error("Tradução desligada nesta tela")) : fetchOriginal(url, ...resto));
-function ajustarVLibras(sigiloso) {
-  const botao = document.getElementById("vlibras-access-wrapper"), avatar = document.getElementById("vlibras-app-root");
-  if (botao) botao.classList.toggle("oculto", sigiloso);
-  if (avatar && sigiloso) avatar.dataset.active = "false";
+// Libras disponível em todas as telas, inclusive Proteção da criança (decisão da escola: acessibilidade em primeiro lugar).
+// Atenção: ao traduzir, o VLibras envia o texto ao servidor do governo (vlibras.gov.br).
+function ajustarVLibras() {
+  const botao = document.getElementById("vlibras-access-wrapper");
+  if (botao) botao.classList.remove("oculto");
+  requestAnimationFrame(alinharAcessibilidade);
 }
+// Botão de acessibilidade com o mesmo tamanho e alinhamento do botão de Libras (que é desenhado pelo VLibras, do governo):
+// mede o botão de Libras e copia a altura, a largura e a margem direita, logo abaixo dele. Sem o VLibras,
+// o botão fica na posição padrão do CSS.
+function alinharAcessibilidade() {
+  const a11y = document.getElementById("btn-acessibilidade");
+  // o VLibras monta o botão dentro de #vlibras-access-wrapper (a estrutura interna muda de versão para versão):
+  // pega o maior elemento visível ali dentro com tamanho de botão
+  const wrap = document.getElementById("vlibras-access-wrapper");
+  const candidatos = wrap ? [wrap, ...wrap.querySelectorAll("*"), ...(wrap.shadowRoot ? wrap.shadowRoot.querySelectorAll("*") : [])] : [...document.querySelectorAll("[vw-access-button]")];
+  let libras = null, r = null;
+  for (const el of candidatos) {
+    const q = el.getBoundingClientRect();
+    if (q.width >= 24 && q.height >= 24 && q.height <= 90 && q.width <= 120 && (!r || q.width * q.height > r.width * r.height)) { libras = el; r = q; }
+  }
+  if (!r || !r.height || document.getElementById("vlibras-access-wrapper")?.classList.contains("oculto")) { a11y.style.cssText = ""; a11y.querySelector("img")?.removeAttribute("style"); return; }
+  const lado = Math.round(r.height);
+  // cantos: o arredondamento fica no botão interno do VLibras, não na caixa de fora
+  const canto = candidatos.map((el) => getComputedStyle(el).borderRadius).find((v) => v && v !== "0px") || "8px";
+  // margem direita medida pela largura útil (sem a barra de rolagem), para os dois botões ficarem na mesma linha vertical
+  const direita = Math.round(document.documentElement.clientWidth - r.right);
+  Object.assign(a11y.style, { width: lado + "px", height: lado + "px", right: direita + "px", top: Math.round(r.bottom + 10) + "px", borderRadius: canto });
+  a11y.querySelector("img")?.style.setProperty("width", Math.round(lado * 0.78) + "px");
+  a11y.querySelector("img")?.style.setProperty("height", Math.round(lado * 0.78) + "px");
+}
+addEventListener("resize", alinharAcessibilidade);
+new MutationObserver(() => requestAnimationFrame(alinharAcessibilidade)).observe(document.body, { childList: true });
+[300, 1000, 2500, 5000, 8000, 12000].forEach((ms) => setTimeout(alinharAcessibilidade, ms)); // o VLibras chega um pouco depois da página
 function fecharMenu() { menu.classList.remove("aberto"); overlay.classList.remove("aberto"); document.getElementById("btn-menu").setAttribute("aria-expanded", "false"); }
 document.getElementById("btn-menu").onclick = (e) => { menu.classList.add("aberto"); overlay.classList.add("aberto"); e.currentTarget.setAttribute("aria-expanded", "true"); };
 document.getElementById("overlay").onclick = fecharMenu;
@@ -3692,10 +3943,8 @@ const vozDoAparelho = () => {
 };
 const vozBloqueada = () => !!usuarioLogado && tela === "protecao";
 const vozLigada = () => !!preferenciasAtuais().voz;
-// Por que a voz demorava: cada fala nova mandada antes da anterior começar entrava na fila do motor de voz do Windows,
-// e passando o mouse por vários itens a fala certa chegava a demorar 3–5 s. Agora só uma fala espera para começar por vez:
-// um pedido novo substitui o anterior em vez de entrar na fila. O item que vai ser lido ganha um contorno na hora,
-// para a pessoa ver que foi acionado. (O motor de voz do aparelho ainda leva por volta de 1 s para começar a falar: isso é dele.)
+// Só uma fala espera por vez: um pedido novo substitui o anterior (em fila, a voz do Windows chegava a atrasar 3–5 s).
+// O item que vai ser lido ganha um contorno na hora, para a pessoa ver que foi acionado.
 let ocupado = false, pendente = null, geracao = 0, vozAquecida = false, lendoAgora = null;
 function marcarLendo(el) {
   if (lendoAgora) lendoAgora.classList.remove("lendo-voz");

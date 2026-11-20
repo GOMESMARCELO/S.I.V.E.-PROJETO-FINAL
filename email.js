@@ -1,6 +1,6 @@
-// Envio de e-mail do S.I.V.E. Sem serviço configurado no config.json, o envio é SIMULADO: a mensagem aparece só no terminal do servidor.
-// Para enviar de verdade, preencha "email" no config.json (modelo em config.example.json) e reinicie o servidor.
-const config = require("./config.json");
+// Envio de e-mail do S.I.V.E. Sem serviço configurado no .env, o envio é SIMULADO: a mensagem aparece só no terminal do servidor.
+// Para enviar de verdade, preencha EMAIL_MODO=smtp e os campos SMTP_ no .env (modelo em .env.example) e reinicie o servidor.
+const { config } = require("./config");
 
 const cfg = config.email || {};
 const simulado = !(cfg.modo === "smtp" && cfg.smtp && cfg.smtp.host);

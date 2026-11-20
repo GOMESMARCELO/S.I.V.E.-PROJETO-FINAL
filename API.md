@@ -211,7 +211,7 @@ O login de um professor inativado por inatividade, com a senha certa, responde `
 ## Assinatura digital (pública: verificar sem login)
 
 Toda assinatura (ocorrência: professor, responsável e gestão; autorização; termo de consentimento) é confirmada com a senha de quem assina
-e gera uma linha na tabela `assinaturas`: hash SHA-256 do conteúdo assinado + selo Ed25519 do servidor (chaves `assinatura_privada` / `assinatura_publica` no `config.json`).
+e gera uma linha na tabela `assinaturas`: hash SHA-256 do conteúdo assinado + selo Ed25519 do servidor (chaves `ASSINATURA_PRIVADA` / `ASSINATURA_PUBLICA` no `.env`).
 
 | Método | Rota | O que faz |
 |--------|------|-----------|
@@ -234,7 +234,7 @@ Outras mudanças de 02/11/2026: `/api/login` devolve também `id` e `usuario`; `
 
 ## Sobre o token e a segurança
 
-- O token é assinado com HMAC-SHA256 (chave `segredo_token` do `config.json`) e expira em 8 horas
+- O token é assinado com HMAC-SHA256 (chave `SEGREDO_TOKEN` do `.env`) e expira em 8 horas
   (`seguranca.token_horas`). Se o conteúdo for alterado, ou a assinatura for falsa, a resposta é `401`.
 - A cada requisição o servidor confere no banco se o usuário continua ativo e qual é o seu perfil.
 - Senhas ficam no banco como hash `scrypt$sal$hash`. Senhas antigas em texto puro são convertidas no próximo login.

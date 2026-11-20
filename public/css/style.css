@@ -1,7 +1,7 @@
 /* ===== Fontes da identidade visual (guardadas no próprio projeto: funcionam sem internet e sem depender de site externo) =====
-   DM Sans e Manrope, licença SIL Open Font License 1.1 (os textos das licenças estão em assets/fonts/). */
-@font-face{font-family:"DM Sans";src:url("../assets/fonts/dm-sans.woff2") format("woff2");font-weight:100 1000;font-style:normal;font-display:swap}
-@font-face{font-family:"Manrope";src:url("../assets/fonts/manrope.woff2") format("woff2");font-weight:200 800;font-style:normal;font-display:swap}
+   DM Sans e Manrope, licença SIL Open Font License 1.1 (os textos das licenças estão em img/fonts/). */
+@font-face{font-family:"DM Sans";src:url("../img/fonts/dm-sans.woff2") format("woff2");font-weight:100 1000;font-style:normal;font-display:swap}
+@font-face{font-family:"Manrope";src:url("../img/fonts/manrope.woff2") format("woff2");font-weight:200 800;font-style:normal;font-display:swap}
 /* ===== Identidade visual (paleta oficial) =====================================================
    Cores aprovadas:  creme #FFF2EB · índigo #140040 · tijolo #68150A · azul #0B78B3
    Derivadas (estados e bordas): azul-escuro #085C8A · azul-suave #DCEEF8 · tijolo-suave #F4DAD3 · borda #EAD6CA
@@ -9,7 +9,7 @@
    Uso: creme = fundos · índigo = menu e textos · azul = a ação (botões, item ativo) · tijolo (grená) só para perigo, alertas e Proteção; na página inicial ele também é cor de marca (bloco no fim do arquivo).
    Contrastes (WCAG): índigo/creme 17:1 · branco/azul 4,8:1 · azul puro como texto pequeno sobre creme só 4,4:1, então
    texto azul usa --primary-ink (6,6:1). Tijolo e índigo são parecidos em luminosidade (1,5:1): nunca um sobre o outro. */
-:root{--bg:#FFF2EB;--fg:#140040;--card:#FFFAF7;--primary:#0B78B3;--primary-ink:#085C8A;--primary-soft:#DCEEF8;--muted:#F9E6DB;--muted-fg:#5B5278;--border:#EAD6CA;--success:#17624A;--success-soft:#D9F0E6;--warning:#7C4A03;--warning-soft:#FBE7C4;--danger:#68150A;--danger-soft:#F4DAD3;--creme:#FFF2EB;--superficie:#fff;--grena-texto:#68150A;--grena:#68150A;--grena-vivo:#8A2A1C;--grena-suave:#F4DAD3;--sombra:0 1px 2px rgba(20,0,64,.06),0 6px 16px rgba(20,0,64,.05);--menu:#140040;--menu-fg:#E9E1F2;--menu-fg-2:#BFB4D8;--menu-linha:rgba(255,242,235,.16);--menu-hover:rgba(255,242,235,.08)}
+:root{--bg:#FFF2EB;--fg:#140040;--card:#FFFAF7;--primary:#0B78B3;--primary-ink:#085C8A;--primary-soft:#DCEEF8;--muted:#F9E6DB;--muted-fg:#5B5278;--border:#EAD6CA;--success:#17624A;--success-soft:#D9F0E6;--warning:#7C4A03;--warning-soft:#FBE7C4;--danger:#68150A;--danger-soft:#F4DAD3;--creme:#FFF2EB;--superficie:#fff;--grena-texto:#68150A;--grena:#68150A;--grena-vivo:#8A2A1C;--grena-suave:#F4DAD3;--sombra:0 1px 2px rgba(20,0,64,.06),0 6px 16px rgba(20,0,64,.05);--menu:#140040;--menu-fg:#E9E1F2;--menu-fg-2:#BFB4D8;--menu-linha:rgba(255,242,235,.16);--menu-hover:rgba(255,242,235,.08);--brilho:rgba(255,255,255,.65);--tinta:rgba(255,190,150,.16);--textura:rgba(20,0,64,.06);--textura-clara:rgba(255,255,255,.06)}
 *{box-sizing:border-box;margin:0}
 :where(main)[hidden]{display:block} /* em <main> o "hidden" é só semântica (js/app.js): quem esconde a tela é o .oculto, e o foco funciona assim que ela aparece */
 body{font-family:"DM Sans",Arial,sans-serif;background:var(--bg);color:var(--fg)}
@@ -17,7 +17,7 @@ h1,h2,h3,b{font-family:"Manrope",Arial,sans-serif}
 small{display:block;font-size:0.8125rem;line-height:1.4;color:var(--muted-fg)} /* era 12px: difícil de ler no celular */
 button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
 input{font:inherit;padding:10px 12px;border:1px solid var(--border);border-radius:8px;width:100%}
-#menu{position:fixed;inset:0 auto 0 0;width:320px;max-width:85vw;background:var(--menu);padding:20px 16px;display:flex;flex-direction:column;transform:translateX(-100%);transition:.25s;z-index:50}
+#menu{position:fixed;inset:0 auto 0 0;width:320px;max-width:85vw;background:var(--menu);padding:20px 16px;display:flex;flex-direction:column;transform:translateX(-100%);transition:.25s;z-index:50;overflow-y:auto}
 #menu.aberto{transform:none}
 #overlay{display:none;position:fixed;inset:0;background:rgba(20,0,64,.55);z-index:40}
 #overlay.aberto{display:block}
@@ -76,7 +76,7 @@ button:hover .ico,.alerta:hover .ico,.metrica:hover .ico,summary:hover .ico,.lin
 @keyframes selo-entra{0%{transform:scale(.8)}60%{transform:scale(1.08)}100%{transform:none}}
 @media (prefers-reduced-motion:reduce){.nav-icone,.ico{animation:none !important}}
 #nav .contador{margin-left:auto;min-width:22px;height:22px;padding:0 7px;border-radius:99px;background:var(--warning-soft);color:var(--warning);font-size:0.75rem;font-weight:700;display:grid;place-items:center}
-#btn-menu{position:relative}
+#btn-menu{position:relative;font-size:1.375rem;padding:4px 8px}
 #btn-menu.tem-aviso::after{content:"";position:absolute;top:2px;right:2px;width:10px;height:10px;border-radius:50%;background:var(--warning);border:2px solid var(--bg)}
 .user{margin-top:auto;border-top:1px solid var(--menu-linha);padding-top:14px;display:flex;gap:8px;align-items:center}
 .user>div{flex:1;min-width:0}
@@ -85,10 +85,9 @@ button:hover .ico,.alerta:hover .ico,.metrica:hover .ico,summary:hover .ico,.lin
 .avatar{width:36px;height:36px;border-radius:50%;background:var(--muted);display:grid;place-items:center;font-size:0.75rem;font-weight:700;flex-shrink:0}
 #menu .avatar{background:rgba(255,242,235,.14);color:var(--creme)}
 .conteudo{min-height:100vh}
-header{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(255,242,235,.92);border-bottom:1px solid var(--border)}
+header{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(255,242,235,.92);border-bottom:1px solid var(--border);box-shadow:inset 0 -3px 0 var(--primary)}
 header div{flex:1}
 header h1{font-size:1.125rem}
-#btn-menu{font-size:1.375rem;padding:4px 8px}
 #tela{padding:16px;max-width:1400px;margin:auto}
 .grade{display:grid;gap:16px;margin-bottom:24px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;box-shadow:var(--sombra)}
@@ -115,7 +114,7 @@ header h1{font-size:1.125rem}
 .item-botao:hover{border-color:var(--primary)}
 .tabela{overflow-x:auto}
 table{width:100%;min-width:700px;border-collapse:collapse;font-size:0.875rem}
-th{background:var(--muted);text-align:left;font-size:0.75rem;text-transform:uppercase;letter-spacing:.03em;color:var(--muted-fg);padding:12px}
+th{text-align:left;font-size:0.75rem;text-transform:uppercase;letter-spacing:.03em;padding:12px}
 td{padding:12px;border-top:1px solid var(--border)}
 .aluno{display:flex;gap:10px;align-items:center}
 .log{display:flex;gap:12px;align-items:center;padding:14px 0;border-top:1px solid var(--border)}
@@ -137,8 +136,7 @@ td{padding:12px;border-top:1px solid var(--border)}
 .resp img{width:48px;height:48px;border-radius:50%;object-fit:cover}
 .btn{display:block;width:100%;padding:12px;border-radius:8px;font-weight:600;background:var(--primary);color:#fff;margin-top:14px}
 .btn:hover{background:var(--primary-ink)}
-.btn.outline{background:none;color:var(--fg);border:1px solid var(--border)}
-.btn.outline:hover{background:var(--muted)}
+.btn.outline{background:none;border:1px solid var(--border)}
 .btn:disabled{opacity:.7;cursor:default}
 .status{background:linear-gradient(135deg,#140040 0%,#0B5E8E 100%);color:#fff;border-radius:10px;padding:22px}
 .status h3{font-size:1.5rem}
@@ -150,12 +148,11 @@ td{padding:12px;border-top:1px solid var(--border)}
 #tela-senha,#tela-2fa{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
 .login-caixa{width:100%;max-width:360px;display:flex;flex-direction:column}
 .login-caixa .logo{gap:12px}
-#login-erro{text-align:center}
+#login-erro{text-align:center;white-space:normal;line-height:1.4}
 @media(min-width:640px){.g3{grid-template-columns:repeat(3,1fr)}#tela{padding:28px}}
 @media(min-width:1024px){#menu{transform:none}#btn-menu{display:none}.conteudo{padding-left:320px}#tela{padding:40px}.dois{grid-template-columns:1fr 1fr}.pais{grid-template-columns:1.1fr .9fr}.resp-2{grid-template-columns:1fr 1fr}}
 
-/* ---- Fase 2: frequência, chamada, Busca Ativa e relatório ---- */
-#menu{overflow-y:auto}
+/* ---- Frequência, chamada, Busca Ativa e relatório ---- */
 .g4{grid-template-columns:repeat(2,1fr)}
 @media(min-width:900px){.g4{grid-template-columns:repeat(4,1fr)}}
 .seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
@@ -176,7 +173,7 @@ select,textarea{font:inherit;padding:10px 12px;border:1px solid var(--border);bo
   .card{box-shadow:none}
 }
 
-/* ---- Fase 3: tabela de gestão, ficha com abas, comunicados e autorizações ---- */
+/* ---- Tabela de gestão, ficha com abas, comunicados e autorizações ---- */
 th.ord{cursor:pointer;user-select:none}
 th.ord:hover{color:var(--primary-ink)}
 .seta{font-size:0.625rem}
@@ -214,24 +211,23 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--primary);outline
 @keyframes carregando-entra{from{opacity:0}}
 @media(prefers-reduced-motion:reduce){.carregando-logo{animation:none}}
 
-/* ===== Fase 4: banners, calendário e perfil ===== */
-#login-erro{white-space:normal;line-height:1.4}
+/* ===== Banners, calendário e perfil ===== */
 .banners{position:relative;border-radius:12px;overflow:hidden;margin-bottom:24px;box-shadow:var(--sombra)}
-.banner{display:none;position:relative;min-height:190px;padding:22px 22px 30px;color:#fff;align-items:flex-end;overflow:hidden}
+.banner{display:none;position:relative;color:#fff;align-items:flex-end;overflow:hidden}
 .banner.ativo{display:flex;animation:banner-entra .5s ease}
 .banner img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .4s}
 .banner img.pronta{opacity:1}
 .banner img+.banner-texto::before{content:"";position:absolute;inset:-200px -40px -40px;background:linear-gradient(0deg,rgba(20,0,64,.92) 30%,rgba(20,0,64,0));z-index:-1}
 .banner-texto{position:relative;z-index:1;max-width:640px}
-.banner-texto h3{font-size:1.625rem;margin:8px 0 4px;line-height:1.15}
+.banner-texto h3{margin:8px 0 4px;line-height:1.15}
 .banner-texto small{color:#F3ECFA;font-size:0.875rem}
 .banner-tipo{background:rgba(255,255,255,.18);color:#fff}
 .banner-btn{background:var(--superficie);color:var(--fg);margin-top:12px}
 .banner-btn:hover{background:var(--bg)}
-.banner-icone{position:absolute;right:22px;top:14px;font-size:4.75rem;opacity:.28}
-.banner-pontos{position:absolute;right:16px;bottom:12px;display:flex;gap:6px;z-index:2}
-.banner-pontos button{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.45)}
-.banner-pontos button.ativo{background:#fff;width:22px;border-radius:99px}
+.banner-icone{position:absolute;right:22px;top:14px;opacity:.28}
+.banner-pontos{position:absolute;display:flex;z-index:2}
+.banner-pontos button{border-radius:50%}
+.banner-pontos button.ativo{border-radius:99px}
 @keyframes banner-entra{from{opacity:0}}
 /* cores por tipo de evento (todas com texto branco legível) */
 .ban-evento{background:linear-gradient(120deg,#140040,#0B78B3)}
@@ -263,7 +259,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--primary);outline
 .ao-vivo{display:inline;color:#9BE3C3;font-weight:700;animation:pisca 2s ease-in-out infinite}
 @keyframes pisca{50%{opacity:.4}}
 
-/* ===== Fase 5: monitoramento (câmeras simuladas) ===== */
+/* ===== Monitoramento (câmeras simuladas) ===== */
 .cams{display:grid;gap:16px;grid-template-columns:1fr}
 @media(min-width:640px){.cams{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:1280px){.cams{grid-template-columns:repeat(4,1fr)}}
@@ -277,7 +273,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--primary);outline
 .cam-nome{position:absolute;right:10px;top:8px;font-size:0.75rem;font-weight:700;z-index:1}
 .cam-hora{position:absolute;left:10px;bottom:8px;font-size:0.6875rem;font-family:ui-monospace,Consolas,monospace;opacity:.85;z-index:1}
 .cam-sem-sinal{position:absolute;inset:0;display:grid;place-items:center;font-size:0.875rem;color:#BFB4D8}
-.cam-alerta{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:8px 14px;border-radius:8px;font-weight:700;font-size:0.875rem;z-index:2;white-space:nowrap;animation:entra .3s ease-out}
+.cam-alerta{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:8px 14px;border-radius:8px;font-weight:700;font-size:0.875rem;white-space:nowrap;animation:entra .3s ease-out}
 .cam-alerta.ok{background:rgba(23,98,74,.92);border:2px solid #9BE3C3}
 .cam-alerta.nao{background:rgba(104,21,10,.9);border:2px solid #F4DAD3}
 .cam-info{padding:12px 14px 14px;display:flex;flex-direction:column}
@@ -300,7 +296,7 @@ html{scroll-behavior:smooth}
 .lp-faixa{max-width:1160px;margin:0 auto;padding:0 16px;position:relative}
 .lp-estreita{max-width:820px}
 /* Barra de progresso da leitura, no topo */
-.lp-progresso{position:fixed;top:0;left:0;height:4px;width:100%;transform-origin:left;transform:scaleX(0);background:linear-gradient(90deg,#7CC4EA,var(--primary),#7EE2B8);z-index:40}
+.lp-progresso{position:fixed;top:0;left:0;height:4px;width:100%;transform-origin:left;transform:scaleX(0);z-index:40}
 /* Cabeçalho: fica fixo e ganha sombra ao rolar */
 .lp-topo{position:sticky;top:0;z-index:30;padding-block:0;background:rgba(255,242,235,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);transition:box-shadow .3s,background .3s}
 .lp-topo.rolou{box-shadow:0 8px 24px rgba(20,0,64,.12);background:rgba(255,242,235,.98)}
@@ -311,9 +307,8 @@ html{scroll-behavior:smooth}
 .lp-nav{display:none;gap:22px;margin-left:auto}
 @media(max-width:1100px){.lp-nav{gap:14px}.lp-topo .lp-faixa{gap:12px}.lp-topo .lp-btn{padding-inline:16px}} /* cinco links, logo e dois botões na mesma linha */
 .lp-nav a{color:var(--fg);text-decoration:none;font-weight:600;font-size:0.875rem;position:relative;white-space:nowrap}
-.lp-nav a::after{content:"";position:absolute;left:0;right:100%;bottom:-6px;height:2px;background:var(--primary);transition:right .25s}
+.lp-nav a::after{content:"";position:absolute;left:0;right:100%;bottom:-6px;height:2px;transition:right .25s;background:var(--primary)}
 .lp-nav a:hover::after,.lp-nav a.ativo::after{right:0}
-.lp-nav a.ativo{color:var(--primary-ink)}
 .lp-topo .lp-btn{margin-left:auto}
 @media(min-width:960px){.lp-nav{display:flex}.lp-topo .lp-btn{margin-left:8px}}
 /* Botões, com um brilho que atravessa ao passar o mouse */
@@ -330,13 +325,13 @@ html{scroll-behavior:smooth}
 .lp-hero{position:relative;overflow:hidden;padding:36px 0 28px;color:#fff;background:linear-gradient(135deg,#140040 0%,#0B5E8E 55%,#0B78B3 100%);background-size:200% 200%;animation:lp-gradiente 14s ease-in-out infinite}
 .lp-bolha{position:absolute;border-radius:50%;filter:blur(2px);opacity:.35;pointer-events:none}
 .lp-bolha.b1{width:380px;height:380px;right:-90px;top:-120px;background:radial-gradient(circle,#7CC4EA,transparent 70%);animation:lp-flutuar 9s ease-in-out infinite}
-.lp-bolha.b2{width:260px;height:260px;left:-80px;bottom:-90px;background:radial-gradient(circle,#7EE2B8,transparent 70%);animation:lp-flutuar 11s ease-in-out infinite reverse}
+.lp-bolha.b2{width:260px;height:260px;left:-80px;bottom:-90px;animation:lp-flutuar 11s ease-in-out infinite reverse}
 .lp-bolha.b3{width:160px;height:160px;left:45%;top:12%;background:radial-gradient(circle,#FFF2EB,transparent 70%);opacity:.18;animation:lp-flutuar 7s ease-in-out infinite}
-.lp-hero-grade{display:grid;gap:32px;align-items:center}
+.lp-hero-grade{display:grid;gap:32px;align-items:center;perspective:1400px}
 @media(min-width:960px){.lp-hero-grade{grid-template-columns:1.1fr .9fr}.lp-hero{padding:36px 0 28px}}
 .lp-selo{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);color:#fff;padding:6px 14px;border-radius:999px;font-weight:700;font-size:0.8125rem}
 .lp-selo .ico{animation:lp-pulso 2.4s ease-in-out infinite}
-.lp-hero h1{font-size:clamp(1.875rem,4.4vw,3.125rem);line-height:1.08;margin:14px 0 12px;letter-spacing:-.02em}
+.lp-hero h1{line-height:1.08;margin:14px 0 12px;letter-spacing:-.02em}
 .lp-troca{color:#7CC4EA;display:inline-block;transition:opacity .35s,transform .35s}
 .lp-troca.saindo{opacity:0;transform:translateY(12px)}
 .lp-sub{font-size:1.125rem;line-height:1.6;color:#E3F1FA;max-width:580px}
@@ -402,71 +397,66 @@ html{scroll-behavior:smooth}
 .lp-entrar-logo{height:56px;width:auto;align-self:center;margin-bottom:18px}
 .lp-login-titulo{font-size:1.375rem}
 /* Faixa que corre com os recursos do sistema */
-.lp-ticker{background:var(--primary);color:#fff;overflow:hidden;padding:12px 0;border-block:1px solid rgba(255,255,255,.2)}
+.lp-ticker{color:#fff;overflow:hidden;border-block:1px solid rgba(255,255,255,.2)}
 .lp-ticker-trilho{display:flex;width:max-content;animation:lp-correr 64s linear infinite}
-.lp-ticker li{display:inline-flex;align-items:center;gap:10px;margin-right:44px;font-weight:700;white-space:nowrap} /* margem em cada item, não gap no trilho: assim metade do trilho é exatamente uma volta e o loop não dá tranco */
-.lp-ticker i{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.18)}
+.lp-ticker li{display:inline-flex;align-items:center;white-space:nowrap} /* margem em cada item, não gap no trilho: assim metade do trilho é exatamente uma volta e o loop não dá tranco */
+.lp-ticker i{display:inline-grid;place-items:center;border-radius:50%;background:rgba(255,255,255,.18)}
 /* Seções */
-.lp-secao{padding:48px 0;position:relative}
+.lp-secao{position:relative}
 .lp-suave{background:var(--muted)}
-.lp-sobretitulo{color:var(--primary-ink);font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:0.8125rem;margin-bottom:8px}
-.lp-titulo{font-size:clamp(1.5rem,3vw,2.125rem);line-height:1.15;margin-bottom:20px;letter-spacing:-.01em}
-.lp-texto{font-size:1rem;line-height:1.65;margin-bottom:12px}
-.lp-grade{display:grid;gap:14px}
+.lp-sobretitulo{font-weight:700;text-transform:uppercase;margin-bottom:8px}
+.lp-texto{line-height:1.65;margin-bottom:12px}
+.lp-grade{display:grid}
 @media(min-width:640px){.lp-g3{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:1000px){.lp-g3{grid-template-columns:repeat(3,1fr)}}
-.lp-card{position:relative;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:var(--sombra);transition:transform .3s,box-shadow .3s,border-color .3s,background .3s;overflow:hidden}
-.lp-card::after{content:"";position:absolute;left:0;bottom:0;height:4px;width:100%;background:linear-gradient(90deg,var(--primary),#7EE2B8);transform:scaleX(0);transform-origin:left;transition:transform .35s}
-.lp-card:hover{transform:translateY(-6px);box-shadow:0 20px 40px rgba(20,0,64,.14);border-color:var(--primary)}
+.lp-card{position:relative;background:var(--card);border:1px solid var(--border);transition:transform .3s,box-shadow .3s,border-color .3s,background .3s;overflow:hidden}
+.lp-card::after{content:"";position:absolute;left:0;bottom:0;height:4px;width:100%;transform:scaleX(0);transform-origin:left;transition:transform .35s}
 .lp-card:hover::after{transform:scaleX(1)}
 .lp-card b,.lp-card h3{display:block;font-size:1.0625rem;margin:12px 0 6px}
-.lp-card p{color:var(--muted-fg);line-height:1.6}
-.lp-card ul{margin:10px 0 0;padding-left:18px;display:grid;gap:6px;font-size:0.875rem}
+.lp-card p{color:var(--muted-fg)}
+.lp-card ul{margin:10px 0 0;padding-left:18px;display:grid;font-size:0.875rem}
 .lp-card:hover .ico{animation:.7s ease-in-out var(--anim)}
 .lp-ico{width:52px;height:52px;border-radius:14px;display:grid;place-items:center;background:var(--primary-soft);color:var(--primary-ink);transition:transform .4s,background .3s,color .3s}
 .lp-card:hover .lp-ico{transform:rotate(-6deg) scale(1.08);background:var(--primary);color:#fff}
 .lp-ico .ico{width:26px;height:26px}
-.lp-nota-centro{text-align:center;margin-top:18px;font-weight:700;color:var(--primary-ink)}
+.lp-nota-centro{text-align:center;margin-top:18px;font-weight:700}
 /* Seções azuis com letras claras */
 .lp-azul{background:linear-gradient(160deg,#0B78B3 0%,#085C8A 60%,#140040 140%);color:#fff;overflow:hidden}
 .lp-azul::before{content:"";position:absolute;width:420px;height:420px;border-radius:50%;right:-140px;top:-160px;background:radial-gradient(circle,rgba(255,255,255,.16),transparent 70%);animation:lp-flutuar 10s ease-in-out infinite;pointer-events:none}
 .lp-azul .lp-sobretitulo{color:#BFE3F6}
 .lp-azul .lp-card{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22);box-shadow:none;color:#fff;backdrop-filter:blur(4px)}
-.lp-azul .lp-card:hover{background:rgba(255,255,255,.18);border-color:#fff;box-shadow:0 20px 40px rgba(0,0,0,.2)}
+.lp-azul .lp-card:hover{background:rgba(255,255,255,.18);box-shadow:0 20px 40px rgba(0,0,0,.2)}
 .lp-azul .lp-card p{color:#E3F1FA}
 .lp-azul .lp-ico{background:rgba(255,255,255,.18);color:#fff}
 .lp-azul .lp-card:hover .lp-ico{background:#fff;color:#085C8A}
 .lp-selos{margin-top:16px}
-.lp-selos>li{display:flex;gap:10px;align-items:center;padding:16px;border-radius:12px;background:var(--success-soft);color:var(--success);font-weight:700;transition:transform .3s}
+.lp-selos>li{display:flex;gap:10px;align-items:center;background:var(--success-soft);color:var(--success);font-weight:700;transition:transform .3s}
 .lp-selos>li:hover{transform:translateY(-4px) scale(1.02)}
 .lp-selos>li:hover .ico{animation:.7s ease-in-out var(--anim)}
-.lp-faq{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-bottom:8px;transition:background .3s,border-color .3s}
+.lp-faq{background:var(--card);border:1px solid var(--border);transition:background .3s,border-color .3s}
 .lp-faq-grade{display:grid;gap:0 14px;align-items:start}
 @media(min-width:900px){.lp-faq-grade{grid-template-columns:1fr 1fr}}
-.lp-faq summary{cursor:pointer;font-weight:700;font-size:1rem;list-style:none;display:flex;justify-content:space-between;gap:12px}
+.lp-faq summary{cursor:pointer;font-weight:700;list-style:none;display:flex;justify-content:space-between;gap:12px}
 .lp-faq summary::-webkit-details-marker{display:none}
-.lp-faq summary::after{content:"+";font-size:1.375rem;line-height:1;color:var(--primary);transition:transform .3s}
+.lp-faq summary::after{content:"+";line-height:1;transition:transform .3s;color:var(--primary)}
 .lp-faq[open] summary::after{transform:rotate(45deg)}
 .lp-faq[open] p{animation:lp-sobe .4s ease-out}
-.lp-faq p{margin-top:12px;line-height:1.65;color:var(--muted-fg)}
+.lp-faq p{color:var(--muted-fg)}
 .lp-azul .lp-faq{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22)}
-.lp-azul .lp-faq:hover,.lp-azul .lp-faq[open]{background:rgba(255,255,255,.16);border-color:#fff}
+.lp-azul .lp-faq:hover,.lp-azul .lp-faq[open]{background:rgba(255,255,255,.16)}
 .lp-azul .lp-faq summary::after{color:#BFE3F6}
 .lp-azul .lp-faq p{color:#E3F1FA}
-.lp-chamada{position:relative;overflow:hidden;background:linear-gradient(135deg,#140040 0%,#0B5E8E 50%,#0B78B3 100%);background-size:200% 200%;animation:lp-gradiente 12s ease-in-out infinite;color:#fff;text-align:center;padding:48px 0}
-.lp-chamada h2{font-size:clamp(1.5rem,3vw,2.125rem);margin-bottom:8px}
-.lp-chamada p{color:var(--primary-soft);margin-bottom:20px;font-size:1.0625rem}
+.lp-chamada{position:relative;overflow:hidden;animation:lp-gradiente 12s ease-in-out infinite;color:#fff}
+.lp-chamada p{margin-bottom:20px;font-size:1.0625rem}
 .lp-chamada .lp-btn{animation:lp-pulso 2.6s ease-in-out infinite}
-.lp-rodape{background:var(--menu);color:var(--menu-fg-2);padding:36px 0 18px}
-.lp-rodape-grade{display:grid;gap:20px}
-@media(min-width:760px){.lp-rodape-grade{grid-template-columns:2fr 1fr 1fr}}
-.lp-rodape-logo{height:48px;margin-bottom:12px}
-.lp-rodape b,.lp-rodape h2{display:block;font-size:1rem;color:var(--creme);margin-bottom:10px}
+.lp-rodape{background:var(--menu);color:var(--menu-fg-2)}
+@media(min-width:760px){}
+.lp-rodape b,.lp-rodape h2{display:block;color:var(--creme)}
 .lp-rodape a{display:block;color:var(--menu-fg-2);text-decoration:none;margin-bottom:8px;transition:color .2s,transform .2s}
 .lp-rodape a:hover{color:#fff;transform:translateX(4px)}
-.lp-copy{text-align:center;font-size:0.8125rem;margin-top:24px;padding-top:14px;border-top:1px solid var(--menu-linha)}
+.lp-copy{text-align:center;border-top:1px solid var(--menu-linha)}
 /* Botão "voltar ao topo" */
-.lp-topo-btn{position:fixed;right:20px;bottom:20px;z-index:35;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:var(--primary);color:#fff;box-shadow:0 10px 24px rgba(11,120,179,.4);opacity:0;transform:translateY(20px) scale(.8);pointer-events:none;transition:opacity .3s,transform .3s}
+.lp-topo-btn{position:fixed;right:20px;bottom:20px;z-index:35;border-radius:50%;display:grid;place-items:center;opacity:0;transform:translateY(20px) scale(.8);pointer-events:none;transition:opacity .3s,transform .3s}
 .lp-topo-btn.visivel{opacity:1;transform:none;pointer-events:auto}
 .lp-topo-btn:hover .ico{animation:.7s ease-in-out var(--anim)}
 /* Aparecer ao rolar: de baixo (padrão), da esquerda, da direita ou crescendo */
@@ -495,9 +485,8 @@ html{scroll-behavior:smooth}
 .paginacao .btn{display:inline-flex;align-items:center;gap:6px}
 .paginacao .btn:disabled{opacity:.45}
 
-/* ---- Mais azul dentro do sistema ----
-   Quadros de números (.metrica) alternam: azul cheio com letra clara (branco sobre #0B78B3 = 4,8:1) e azul-claro.
-   Os demais cards, tabelas, listas e botões ganham detalhes em azul. Só vale dentro do sistema (main). */
+/* ---- Mais azul dentro do sistema (main): cards, tabelas, listas e botões com detalhes em azul.
+   Quadros de números (.metrica): azul cheio / azul-claro alternados nos modos de contraste; no tema padrão, brancos (fim do arquivo). */
 main .card{border-top:3px solid var(--primary)}
 main .metrica:nth-child(odd){background:linear-gradient(135deg,#0B78B3 0%,#085C8A 100%);border-color:transparent;color:#fff;box-shadow:0 10px 24px rgba(11,120,179,.25)}
 main .metrica:nth-child(odd) small{color:#DCEEF8}
@@ -514,7 +503,6 @@ main .item:hover{border-left-color:var(--primary)}
 .vazio{border-color:#B9DCEF}
 .btn.outline{border-color:#B9DCEF;color:var(--primary-ink)}
 .btn.outline:hover{background:var(--primary-soft);border-color:var(--primary)}
-header{box-shadow:inset 0 -3px 0 var(--primary)}
 
 /* Seletor de filho (responsável) ou de turma (professor), no topo da tela */
 .seletor-contexto{width:auto;max-width:240px;padding:8px 10px;border:1px solid #B9DCEF;border-radius:8px;background:var(--primary-soft);color:var(--primary-ink);font-weight:700}
@@ -526,9 +514,7 @@ header{box-shadow:inset 0 -3px 0 var(--primary)}
 .selo-link{display:inline-block;margin-top:4px;font-size:0.75rem;font-weight:700;color:var(--primary-ink)}
 
 
-/* =====================================================================
-   Melhorias de experiência do usuário (02/11/2026)
-   ===================================================================== */
+/* ===== Melhorias de experiência do usuário ===== */
 /* ---- Menu da gestão em grupos ---- */
 .nav-grupo{font-size:0.6875rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--menu-fg-2);padding:14px 12px 4px;opacity:.85}
 .nav-grupo:first-child{padding-top:0}
@@ -656,38 +642,35 @@ tr.sem-marcacao td:first-child{box-shadow:inset 4px 0 0 var(--warning)}
 button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--primary);outline-offset:2px}
 #ficha-filho,#chamada-cards .sem-marcacao,#chamada-linhas .sem-marcacao{scroll-margin-top:84px} /* rolar até um item sem ele ficar escondido atrás do cabeçalho fixo */
 
-/* ===== Ficha "Quero o S.I.V.E. na minha escola" (página inicial) — 03/11/2026 ===== */
+/* ===== Ficha "Quero o S.I.V.E. na minha escola" (página inicial) ===== */
 button.lp-btn{border:0;cursor:pointer;font-family:inherit;line-height:inherit}
-.lp-topo .lp-btn-escola{background:transparent;color:var(--fg);border:2px solid var(--fg);padding:10px 18px}
-.lp-topo .lp-btn-escola:hover{background:var(--menu);color:#fff}
+.lp-topo .lp-btn-escola{background:transparent;border:2px solid var(--fg);padding:10px 18px}
 .lp-topo .lp-btn-escola+.lp-btn{margin-left:8px}
 .lp-topo .lp-btn,.ce-acoes .btn{white-space:nowrap}
 @media(max-width:560px){.lp-topo .lp-faixa{gap:8px}.lp-topo .lp-btn-escola,.lp-topo .lp-btn-escola+.lp-btn{padding:8px 13px;font-size:0.8438rem}.lp-topo .lp-btn-escola+.lp-btn{margin-left:0}.lp-topo .lp-btn-escola .ico{display:none}}
 @media(max-width:400px){.lp-topo .lp-marca img{height:56px}.lp-topo .lp-faixa{height:72px}.lp-topo.rolou .lp-faixa{height:62px}.lp-topo .lp-btn-escola,.lp-topo .lp-btn-escola+.lp-btn{padding:7px 11px;font-size:0.8125rem}}
-.lp-chamada-acoes{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.lp-chamada-acoes{display:flex;gap:12px;flex-wrap:wrap}
 .lp-chamada-acoes .lp-btn-linha{animation:none}
-@media(min-width:760px){.lp-rodape-grade{grid-template-columns:2fr 1fr 1fr 1fr}}
+@media(min-width:760px){}
 body.sem-rolagem{overflow:hidden}
-.ce-caixa{position:relative;max-width:780px;margin:4vh auto;border-top:6px solid var(--primary);padding:24px}
+.ce-caixa{position:relative;border-top:6px solid var(--primary)}
 .ce-fechar{position:absolute;top:10px;right:12px;width:38px;height:38px;border:0;border-radius:50%;background:transparent;font-size:1.75rem;line-height:1;color:var(--muted-fg);cursor:pointer}
 .ce-fechar:hover{background:var(--muted);color:var(--fg)}
-.ce-cabeca{display:flex;gap:14px;align-items:flex-start;padding-right:36px;margin-bottom:6px}
-.ce-cabeca h2{font-size:1.375rem;margin-bottom:4px}
-.ce-cabeca small{font-size:0.9063rem;line-height:1.45}
+.ce-cabeca{display:flex;gap:14px;align-items:flex-start;padding-right:36px}
 #form-escola fieldset{border:0;border-top:1px solid var(--border);margin:18px 0 0;padding:14px 0 0}
-#form-escola legend{font-weight:800;font-size:0.9688rem;color:var(--primary-ink);padding-right:10px}
+#form-escola legend{font-weight:800;color:var(--primary-ink);padding-right:10px}
 .ce-grade{display:grid;gap:12px 14px}
 @media(min-width:640px){.ce-grade{grid-template-columns:1fr 1fr}.ce-largo{grid-column:1/-1}}
-#form-escola label:not(.termo-aceite){display:flex;flex-direction:column;gap:5px;font-size:0.875rem;font-weight:600;color:var(--fg)}
+#form-escola label:not(.termo-aceite){display:flex;flex-direction:column;font-weight:600;color:var(--fg);gap:3px;font-size:0.8125rem}
 #form-escola input,#form-escola select,#form-escola textarea{font-weight:400}
 #form-escola textarea{resize:vertical}
 #form-escola [aria-invalid="true"]{border-color:var(--danger);background:var(--danger-soft)}
 .ce-site{position:absolute!important;left:-9999px;width:1px;height:1px;overflow:hidden}
-.ce-aceite{margin-top:20px;padding:12px 14px;border-radius:10px;background:var(--muted)}
+.ce-aceite{border-radius:10px;background:var(--muted)}
 #ce-erro{margin-top:14px;white-space:normal}
-.ce-acoes{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
-.ce-acoes .btn{width:auto;margin-top:0;padding:12px 22px}
-@media(max-width:560px){.ce-caixa{margin:0 auto;padding:18px 16px}.ce-acoes{position:sticky;bottom:-18px;background:var(--card);padding:12px 0;margin-bottom:-6px;border-top:1px solid var(--border)}.ce-acoes .btn{flex:1}}
+.ce-acoes{display:flex;gap:10px;justify-content:flex-end}
+.ce-acoes .btn{width:auto;margin-top:0}
+@media(max-width:560px){.ce-acoes{position:sticky;bottom:-18px;background:var(--card);padding:12px 0;margin-bottom:-6px;border-top:1px solid var(--border)}.ce-acoes .btn{flex:1}}
 .ce-pronto{text-align:center;padding:18px 6px 6px;display:flex;flex-direction:column;align-items:center;gap:10px}
 .ce-pronto-ico{display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:var(--success-soft);color:var(--success)}
 .ce-pronto-ico .ico{width:34px;height:34px}
@@ -698,7 +681,7 @@ body.sem-rolagem{overflow:hidden}
 .ce-pronto .btn{width:auto;padding:12px 26px;margin-top:6px}
 @media(max-width:480px){.lp-topo .lp-btn-escola{display:none}.lp-topo .lp-btn-escola+.lp-btn{margin-left:auto}} /* telas muito estreitas: o botão continua no destaque logo abaixo */
 
-/* Vídeo simulado das câmeras (Monitoramento) — 04/11/2026. As legendas (REC, nome, hora) ficam por cima do vídeo. */
+/* Vídeo simulado das câmeras (Monitoramento). As legendas (REC, nome, hora) ficam por cima do vídeo. */
 .cam-video video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .cam-video::before,.cam-video::after{z-index:1;pointer-events:none}
 .cam-video:has(video)::after{opacity:.5}
@@ -721,7 +704,6 @@ body.sem-rolagem{overflow:hidden}
 /* ===== Grená na página inicial: é a cor do logo, usada como marca. O azul continua sendo a cor da ação (botões).
    Contrastes (WCAG): branco/grená 12,3:1 · grená/creme 11,3:1 · creme/grená-vivo 7,9:1. Grená nunca como texto sobre índigo. ===== */
 .lp-progresso{background:linear-gradient(90deg,var(--primary),#7CC4EA)}
-.lp-nav a::after{background:var(--primary)}
 .lp-nav a.ativo{color:var(--primary-ink)}
 .lp-topo .lp-btn-escola{color:var(--primary-ink);border-color:var(--primary-ink)}
 .lp-topo .lp-btn-escola:hover{background:var(--primary);border-color:var(--primary);color:#fff}
@@ -729,12 +711,11 @@ body.sem-rolagem{overflow:hidden}
 .lp-mock,.lp-entrar .login-caixa{border-top-color:var(--primary)}
 .lp-ticker{background:linear-gradient(90deg,#0A4A72,#085C8A,#0A4A72)}
 .lp-sobretitulo,.lp-nota-centro{color:var(--primary-ink)}
-.lp-titulo::after{content:"";display:block;width:56px;height:4px;margin-top:12px;border-radius:4px;background:var(--grena-texto)}
+.lp-titulo::after{content:"";width:56px;height:4px;margin-top:12px;border-radius:4px;background:var(--grena-texto)}
 .lp-azul .lp-titulo::after{background:var(--creme)}
 .lp-card::after{background:linear-gradient(90deg,var(--primary),#7CC4EA)}
 .lp-card:hover{border-color:var(--primary)}
 .lp-azul .lp-card:hover{border-color:#fff}
-.lp-faq summary::after{color:var(--primary)}
 .lp-faq:hover,.lp-faq[open]{border-color:var(--primary)}
 .lp-azul .lp-faq:hover,.lp-azul .lp-faq[open]{border-color:#fff}
 .lp-chamada{background:linear-gradient(135deg,#140040 0%,#0B5E8E 50%,#0B78B3 100%);background-size:200% 200%}
@@ -757,7 +738,7 @@ body.sem-rolagem{overflow:hidden}
 .lp-ticker{position:relative}
 .lp-ticker-trilho{list-style:none;margin:0;padding:0}
 .lp-selos{list-style:none;padding:0}
-.lp-pausar{position:absolute;right:8px;top:50%;transform:translateY(-50%);z-index:1;padding:6px 12px;border-radius:999px;background:var(--menu);color:#fff;border:1px solid rgba(255,255,255,.5);font-size:0.8125rem;font-weight:700}
+.lp-pausar{position:absolute;right:8px;z-index:1;padding:6px 12px;border-radius:999px;background:var(--menu);color:#fff;border:1px solid rgba(255,255,255,.5);font-size:0.8125rem;font-weight:700}
 .lp-pausar:hover{background:#2A1560}
 .lp-pausado *{animation-play-state:paused !important}
 .so-leitor{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0} /* some da tela, mas o leitor de tela lê */
@@ -773,10 +754,9 @@ body.sem-rolagem{overflow:hidden}
 /* ===== Painel de Acessibilidade =====
    As escolhas viram atributos na tag <html> (js/preferencias.js). Tamanhos de letra em rem: mudar a letra da raiz muda o sistema inteiro,
    e o sistema também respeita o tamanho de letra configurado no navegador. */
-@font-face{font-family:"Atkinson Hyperlegible";src:url("../assets/fonts/atkinson-400.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
-@font-face{font-family:"Atkinson Hyperlegible";src:url("../assets/fonts/atkinson-700.woff2") format("woff2");font-weight:700;font-style:normal;font-display:swap}
-.btn-acessibilidade{position:fixed;right:10px;top:calc(50vh + 28px);z-index:65;width:40px;height:40px;border-radius:8px;display:grid;place-items:center;background:var(--primary);color:#fff;box-shadow:0 4px 12px rgba(20,0,64,.3)}
-.btn-acessibilidade:hover{background:var(--primary-ink)}
+@font-face{font-family:"Atkinson Hyperlegible";src:url("../img/fonts/atkinson-400.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Atkinson Hyperlegible";src:url("../img/fonts/atkinson-700.woff2") format("woff2");font-weight:700;font-style:normal;font-display:swap}
+.btn-acessibilidade{position:fixed;right:10px;top:calc(50vh + 28px);z-index:65;display:grid;place-items:center;color:#fff;box-shadow:0 4px 12px rgba(20,0,64,.3)}
 .btn-acessibilidade .ico{width:24px;height:24px}
 .painel-a11y{margin:0 0 0 auto;width:min(400px,100vw);max-width:100vw;height:100dvh;max-height:100dvh;border:0;border-left:4px solid var(--primary);padding:20px;background:var(--card);color:var(--fg);overflow-y:auto}
 .painel-a11y::backdrop{background:rgba(20,0,64,.4)}
@@ -818,19 +798,18 @@ html[data-daltonismo] .pill.info::before{content:"ⓘ ";content:"ⓘ " / ""}
 html[data-daltonismo] .hist.ausente .ponto{border-radius:0}
 
 /* Modo escuro: para quem se incomoda com a tela clara */
-html[data-contraste="escuro"]{--superficie:#1E1B2E;--grena-texto:#FFA899;--bg:#12101C;--fg:#F3EEF9;--card:#1E1B2E;--primary:#0B78B3;--primary-ink:#8CCBF0;--primary-soft:#12384F;--muted:#2A2640;--muted-fg:#C9C2DC;--border:#4A4466;--success:#7EE2B8;--success-soft:#12382C;--warning:#F7C76B;--warning-soft:#3B2A0A;--danger:#FFA899;--danger-soft:#4A1A12;--grena-suave:#4A1A12;--menu:#0D0B16;--sombra:0 1px 2px rgba(0,0,0,.4)}
+html[data-contraste="escuro"]{--superficie:#1E1B2E;--grena-texto:#FFA899;--bg:#12101C;--fg:#F3EEF9;--card:#1E1B2E;--primary:#0B78B3;--primary-ink:#8CCBF0;--primary-soft:#12384F;--muted:#2A2640;--muted-fg:#C9C2DC;--border:#4A4466;--success:#7EE2B8;--success-soft:#12382C;--warning:#F7C76B;--warning-soft:#3B2A0A;--danger:#FFA899;--danger-soft:#4A1A12;--grena-suave:#4A1A12;--menu:#0D0B16;--sombra:0 1px 2px rgba(0,0,0,.4);--brilho:rgba(255,255,255,.05);--tinta:rgba(11,120,179,.1);--textura:rgba(255,255,255,.04);--textura-clara:rgba(255,255,255,.05);color-scheme:dark} /* color-scheme: listas, barras de rolagem e calendário nativo também escurecem */
 html[data-contraste="escuro"][data-daltonismo]{--success:#8CCBF0;--success-soft:#12384F;--danger:#FFA050;--danger-soft:#5A2A08;--warning:#FFEB99;--warning-soft:#2E2A08}
 
 /* Alto contraste: preto no branco, bordas fortes e nada de degradê */
-html[data-contraste="alto"]{--grena-texto:#7A1305;--bg:#fff;--fg:#000;--card:#fff;--primary:#00457A;--primary-ink:#00355E;--primary-soft:#E6F1F9;--muted:#F0F0F0;--muted-fg:#1A1A1A;--border:#000;--success:#0A4A35;--success-soft:#E2F5EC;--warning:#5C3500;--warning-soft:#FFF0D0;--danger:#7A1305;--danger-soft:#FBE4DF;--menu:#000;--menu-fg:#fff;--menu-fg-2:#fff;--grena:#7A1305;--grena-vivo:#7A1305;--sombra:none}
+html[data-contraste="alto"]{--grena-texto:#7A1305;--bg:#fff;--fg:#000;--card:#fff;--primary:#00457A;--primary-ink:#00355E;--primary-soft:#E6F1F9;--muted:#F0F0F0;--muted-fg:#1A1A1A;--border:#000;--success:#0A4A35;--success-soft:#E2F5EC;--warning:#5C3500;--warning-soft:#FFF0D0;--danger:#7A1305;--danger-soft:#FBE4DF;--menu:#000;--menu-fg:#fff;--menu-fg-2:#fff;--grena:#7A1305;--grena-vivo:#7A1305;--sombra:none;--brilho:transparent;--tinta:transparent;--textura:transparent;--textura-clara:transparent}
 html[data-contraste="alto"][data-daltonismo]{--success:#00457A;--success-soft:#E6F1F9;--danger:#5E2000;--danger-soft:#FBDCC4;--warning:#6B5800;--warning-soft:#FFF6CC}
 html[data-contraste="alto"] .card,html[data-contraste="alto"] .lp-card,html[data-contraste="alto"] input,html[data-contraste="alto"] select,html[data-contraste="alto"] textarea{border-width:2px}
 html[data-contraste="alto"] :is(.lp-hero,.lp-entrar,.lp-chamada,.lp-azul,.lp-ticker,.banner){background:#000 !important;animation:none}
 html[data-contraste="alto"] .lp-bolha{display:none}
 html[data-contraste="escuro"] :is(header,.lp-topo,.lp-topo.rolou){background:rgba(18,16,28,.97)}
 html[data-contraste="escuro"] :is(input,select,textarea){background:var(--superficie);color:var(--fg)}
-html[data-contraste="escuro"]{color-scheme:dark} /* listas, barras de rolagem e calendário nativo do navegador também escurecem */
-html[data-contraste="escuro"] :is(.lp-marca img,.lp-entrar-logo){content:url("../assets/logo-sive-branco.png")}
+html[data-contraste="escuro"] :is(.lp-marca img,.lp-entrar-logo){content:url("../img/logo-sive-branco.png")}
 
 /* ---- Blocos de texto justificados (home e sistema, todos os perfis) ----
    Quem liga fonte legível ou mais espaçamento no painel de acessibilidade fica com o texto à esquerda: a justificação cria
@@ -872,13 +851,11 @@ caption.so-leitor{caption-side:top}
 .dois-opcao:has(input:checked){border-color:var(--primary);background:var(--primary-soft)}
 
 /* ---- Depoimentos da home ---- */
-.lp-depoimentos-aviso{display:flex;gap:8px;align-items:center;margin-bottom:16px;font-weight:600;font-size:0.9375rem;text-align:left}
-.lp-depoimento{margin:0;display:flex;flex-direction:column;gap:8px}
-.lp-card p.lp-estrelas{color:var(--warning);font-size:1.25rem;letter-spacing:2px;line-height:1}
+.lp-depoimentos-aviso{display:flex;gap:8px;align-items:center;font-weight:600;text-align:left}
+.lp-depoimento{margin:0;display:flex;flex-direction:column}
 .lp-depoimento blockquote{margin:0;flex:1}
-.lp-depoimento figcaption{display:flex;align-items:center;gap:12px}
-.lp-depoimento img{width:44px;height:44px;border-radius:50%;flex-shrink:0}
-.lp-depoimento figcaption b{margin:0;font-size:0.9375rem}
+.lp-depoimento figcaption{display:flex;align-items:center}
+.lp-depoimento img{border-radius:50%;flex-shrink:0}
 .lp-depoimento figcaption small{text-align:left}
 
 /* ---- Diagramação da home: mais respiro, títulos fortes e grades equilibradas. Só CSS: o conteúdo fica todo no index.html ---- */
@@ -898,11 +875,8 @@ caption.so-leitor{caption-side:top}
 .lp-selos>li{border-radius:14px;padding:14px 16px}
 
 /* O que faz: blocos largos nas pontas se equilibram na diagonal; os dois têm fundo cheio */
-#o-que-faz .lp-card:is(:first-child,:last-child){border-color:transparent;color:#fff}
 #o-que-faz .lp-card:first-child{background:#140040}
 #o-que-faz .lp-card:last-child{background:#0B78B3}
-#o-que-faz .lp-card:is(:first-child,:last-child) p{color:#F3EEF9}
-#o-que-faz .lp-card:is(:first-child,:last-child) .lp-ico{background:rgba(255,255,255,.16);color:#fff}
 #o-que-faz .lp-card:is(:first-child,:last-child):hover .lp-ico{background:#fff;color:#140040}
 @media(min-width:1000px){
   #o-que-faz .lp-grade{grid-template-columns:repeat(10,1fr)}
@@ -921,20 +895,13 @@ caption.so-leitor{caption-side:top}
 .lp-passos-progresso{display:none}
 @media(min-width:700px){
   .lp-passo{grid-template-columns:1fr 1fr;gap:32px}
-  .lp-passo:nth-of-type(odd) .lp-passo-tela{order:-1} /* alterna o lado da tela (o cabeçalho é o 1º div, então os perfis pares/ímpares ficam invertidos) */
 }
 
 /* Depoimentos: um em destaque ao lado de dois menores, com o aviso na coluna da direita do cabeçalho */
-.lp-depoimentos-aviso{margin-bottom:14px}
 @media(min-width:1000px){
   #depoimentos .lp-faixa,#seguranca .lp-faixa{display:grid;grid-template-columns:1fr 1fr;column-gap:56px}
   #depoimentos .lp-sobretitulo,#depoimentos .lp-grade{grid-column:1/-1}
-  .lp-depoimentos-aviso{align-self:end;margin-bottom:20px}
-  #depoimentos .lp-grade{grid-template-columns:7fr 5fr}
-  .lp-depoimento:first-child{grid-row:span 2;padding:24px}
-  .lp-depoimento:first-child blockquote{display:flex;align-items:center}
-  .lp-depoimento:first-child blockquote p{font-size:1.4375rem;line-height:1.35;font-weight:600;letter-spacing:-.01em;color:var(--fg)}
-  .lp-depoimento:first-child img{width:60px;height:60px}
+  .lp-depoimentos-aviso{align-self:end}
 }
 
 /* Segurança: título à esquerda, texto à direita, selos embaixo */
@@ -944,18 +911,16 @@ caption.so-leitor{caption-side:top}
 }
 
 /* Perguntas: título fixo à esquerda enquanto a lista passa à direita */
-.lp-faq{border-radius:14px;padding:11px 18px;margin-bottom:6px}
 @media(min-width:1000px){
-  #perguntas .lp-faixa{display:grid;grid-template-columns:5fr 7fr;column-gap:56px;align-items:start}
-  #perguntas .lp-titulo{position:sticky;top:112px;margin-bottom:0}
+  #perguntas .lp-titulo{position:sticky;top:120px}
   #perguntas .lp-faq-grade{grid-template-columns:1fr}
 }
 
 /* Chamada final: painel recortado com grade de fundo, texto à esquerda e botões à direita */
-.lp-chamada{margin:12px 16px;border-radius:24px;padding:clamp(24px,3vw,36px) 0;text-align:left}
+.lp-chamada{margin:12px 16px;padding:clamp(24px,3vw,36px) 0;text-align:left}
 .lp-chamada::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.07) 1px,transparent 1px);background-size:40px 40px}
 .lp-chamada .lp-faixa{max-width:1160px}
-.lp-chamada h2{font-size:clamp(1.625rem,3.2vw,2.375rem);font-weight:800;line-height:1.08;letter-spacing:-.025em;margin-bottom:8px}
+.lp-chamada h2{font-weight:800;letter-spacing:-.025em;margin-bottom:8px}
 .lp-chamada-acoes{justify-content:flex-start}
 @media(min-width:1000px){
   .lp-chamada .lp-faixa{display:grid;grid-template-columns:1fr auto;column-gap:56px;align-items:center}
@@ -966,9 +931,6 @@ caption.so-leitor{caption-side:top}
 }
 
 /* ---- Degradês e textura sutis. As variáveis acompanham o tema; no alto contraste tudo some, para nada competir com o texto ---- */
-:root{--brilho:rgba(255,255,255,.65);--tinta:rgba(255,190,150,.16);--textura:rgba(20,0,64,.06);--textura-clara:rgba(255,255,255,.06)}
-html[data-contraste="escuro"]{--brilho:rgba(255,255,255,.05);--tinta:rgba(11,120,179,.1);--textura:rgba(255,255,255,.04);--textura-clara:rgba(255,255,255,.05)}
-html[data-contraste="alto"]{--brilho:transparent;--tinta:transparent;--textura:transparent;--textura-clara:transparent}
 body{background-image:radial-gradient(var(--textura) 1px,transparent 1px),linear-gradient(180deg,var(--tinta),transparent 480px);background-size:22px 22px,auto}
 #menu{background-image:radial-gradient(var(--textura-clara) 1px,transparent 1px),linear-gradient(175deg,var(--textura-clara),transparent 55%,rgba(11,120,179,.16));background-size:18px 18px,auto}
 html[data-contraste="alto"] #menu{background-image:none}
@@ -977,12 +939,9 @@ main .metrica:nth-child(odd){background-image:radial-gradient(var(--textura-clar
 .lp-suave{background-image:radial-gradient(var(--textura) 1px,transparent 1px);background-size:22px 22px}
 .lp-azul{background-image:radial-gradient(var(--textura-clara) 1px,transparent 1px),linear-gradient(160deg,#0B78B3 0%,#085C8A 60%,#140040 140%);background-size:22px 22px,auto}
 .lp-hero::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(var(--textura-clara) 1px,transparent 1px);background-size:22px 22px}
-#o-que-faz .lp-card:is(:first-child,:last-child){background-image:radial-gradient(var(--textura-clara) 1px,transparent 1px),linear-gradient(160deg,rgba(255,255,255,.08),transparent 60%);background-size:16px 16px,auto}
 @media print{body,#menu,.card,.modal-caixa{background-image:none !important}}
 
 /* ---- Por dentro do sistema: miniaturas de telas (dados fictícios, aria-hidden) ---- */
-.lp-telas-aviso{display:flex;gap:8px;align-items:center;margin:-8px 0 16px;font-weight:600;font-size:0.875rem;color:var(--muted-fg)}
-.lp-tela-fig{margin:0;display:flex;flex-direction:column;gap:12px}
 .lp-tela{flex:1;border-radius:16px;overflow:hidden;background:var(--bg);border:1px solid var(--border);box-shadow:0 14px 30px rgba(20,0,64,.12);font-size:0.75rem;color:var(--fg)}
 .lp-tela-barra{display:flex;align-items:center;gap:6px;padding:8px 12px;background:#140040;color:#fff}
 .lp-tela-barra i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.35)}
@@ -1001,11 +960,9 @@ main .metrica:nth-child(odd){background-image:radial-gradient(var(--textura-clar
 .lp-tela-texto{display:grid;gap:5px;padding:10px;border-radius:9px;background:var(--card);border:1px solid var(--border)}
 .lp-tela-texto i{display:block;height:7px;border-radius:4px;background:var(--border)}
 .lp-tela-texto i:last-child{width:62%}
-.lp-tela-fig figcaption h3{font-size:1.125rem;margin:0 0 4px}
-.lp-tela-fig figcaption p{color:var(--muted-fg);line-height:1.5}
 
 /* ---- WhatsApp flutuante: só aparece quando há número em data-numero (index.html) ---- */
-.lp-whatsapp{position:fixed;left:20px;bottom:20px;z-index:36;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;background:#128C4A;color:#fff;box-shadow:0 10px 24px rgba(18,140,74,.4);transition:transform .2s}
+.lp-whatsapp{position:fixed;left:20px;bottom:20px;z-index:36;border-radius:50%;display:grid;place-items:center;transition:transform .2s}
 .lp-rodape .lp-whatsapp{display:grid;margin:0} /* fica dentro do rodapé: sem isso herdaria o estilo dos links de lá */
 .lp-rodape .lp-whatsapp[hidden]{display:none}
 .lp-rodape .lp-whatsapp:hover{transform:scale(1.08);color:#fff}
@@ -1035,7 +992,7 @@ main .metrica:nth-child(odd){background-image:radial-gradient(var(--textura-clar
 .lp-passos-vivo .lp-passos-cabeca{grid-column:1;grid-row:2}
 .lp-passos-vivo .lp-passo{display:contents} /* o texto e a tela de cada perfil viram itens diretos da grade do palco */
 .lp-passos-vivo .lp-passo-texto{grid-column:1;grid-row:calc(3 + var(--i));padding:12px 0 12px 20px;border-left:3px solid rgba(255,255,255,.25);cursor:pointer;transition:border-color .35s}
-.lp-passos-vivo .lp-passo-texto h3{margin-bottom:0;color:rgba(255,255,255,.72);transition:color .35s}
+.lp-passos-vivo .lp-passo-texto h3{margin-bottom:0;color:rgba(255,255,255,.72);transition:color .35s;font-size:clamp(1.25rem,2vw,1.625rem)}
 .lp-passos-vivo .lp-passo-texto p{max-height:0;opacity:0;overflow:hidden;transition:max-height .45s ease,opacity .35s,margin-top .35s}
 .lp-passos-vivo .lp-passo.ativo .lp-passo-texto{border-left-color:#fff}
 .lp-passos-vivo .lp-passo.ativo .lp-passo-texto h3{color:#fff}
@@ -1046,29 +1003,16 @@ main .metrica:nth-child(odd){background-image:radial-gradient(var(--textura-clar
 .lp-passos-vivo .lp-passos-progresso{display:block;grid-column:1;grid-row:6;height:4px;max-width:260px;margin-top:22px;border-radius:99px;background:rgba(255,255,255,.25);overflow:hidden}
 .lp-passos-vivo .lp-passos-progresso i{display:block;height:100%;background:#fff;transform-origin:left;transform:scaleX(var(--p,0))}
 
-/* ---- Faixa gigante: duas linhas grandes em sentidos opostos, a de baixo só com o contorno das letras ----
-   A rolagem empurra as linhas pelo --r (escrito no app.js, sempre menor que uma cópia da lista: --copia).
-   Linha de cima: anda para a esquerda. Linha de baixo: anda ao contrário e começa uma cópia para trás, para nunca mostrar a ponta vazia. */
-.lp-ticker{padding:clamp(14px,2vw,24px) 0;display:grid;gap:clamp(2px,.6vw,8px);--r:0px;--copia:0px}
-.lp-ticker-trilho{animation-duration:110s}
-.lp-ticker li{font-family:Manrope,Arial,sans-serif;font-weight:800;font-size:clamp(1.75rem,4.6vw,4.25rem);line-height:1.1;letter-spacing:-.02em;gap:.3em;margin-right:.5em}
-.lp-ticker li::after{content:"";width:.22em;height:.22em;border-radius:50%;background:currentColor;opacity:.45;margin-left:.2em} /* ponto entre os itens */
-.lp-ticker i{width:1.05em;height:1.05em}
-.lp-ticker i .ico{width:.6em;height:.6em}
-.lp-ticker-trilho:not(.contorno){translate:calc(var(--r)*-1) 0}
-.lp-ticker-trilho.contorno{animation-direction:reverse;translate:calc(var(--r) - var(--copia)) 0}
-.lp-ticker-trilho.contorno li{color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.85)}
-.lp-ticker-trilho.contorno li::after{background:rgba(255,255,255,.85)}
-.lp-ticker-trilho.contorno i{display:none}
-.lp-pausar{top:auto;bottom:8px;transform:none}
+/* ---- Faixa com os recursos do sistema, correndo em loop (--copia = largura de uma cópia da lista, escrita no app.js) ---- */
+.lp-ticker{display:grid;gap:clamp(2px,.6vw,8px);--r:0px;--copia:0px}
+.lp-ticker li{font-family:Manrope,Arial,sans-serif;line-height:1.1}
 html[data-sem-movimento] .lp-ticker-trilho{translate:none}
 @media (prefers-reduced-motion:reduce){.lp-ticker-trilho{translate:none !important}}
-@supports not (-webkit-text-stroke:1px #fff){.lp-ticker-trilho.contorno li{color:rgba(255,255,255,.35)}}
 
 /* ---- Hero: o painel da Central do Dia começa inclinado em 3D e endireita conforme a rolagem (--h vai de 0 a 1, escrito no app.js).
    Sem JavaScript ou com "menos movimento", --h fica 1 e o painel aparece reto. A inclinação fica na .lp-vitrine porque o .lp-mock já usa transform na animação de entrada. */
 @media(min-width:960px){
-  .lp-vitrine{--t:calc(1 - var(--h,1));transform:perspective(1400px) rotateX(calc(var(--t)*14deg)) rotateY(calc(var(--t)*-22deg)) rotate(calc(var(--t)*2.5deg)) scale(calc(.93 + .07*var(--h,1)));transform-origin:65% 55%;will-change:transform}
+  .lp-vitrine{will-change:transform}
   .lp-mock{box-shadow:calc(var(--t,0)*30px) 30px 60px rgba(0,0,0,.4)}
 }
 
@@ -1076,7 +1020,7 @@ html[data-sem-movimento] .lp-ticker-trilho{translate:none}
    Branco e azul-claro sobre o índigo passam de 12:1. Os passos só ficam apagados no modo animado (.lp-fluxo-vivo, ligado pelo app.js). */
 .lp-fluxo{background:radial-gradient(ellipse 60% 70% at 85% 10%,rgba(11,120,179,.45),transparent 70%),radial-gradient(ellipse 50% 60% at 0% 100%,rgba(124,196,234,.18),transparent 70%),#140040;color:#fff;overflow:hidden}
 .lp-fluxo .lp-sobretitulo{color:#BFE3F6}
-.lp-fluxo .lp-titulo{font-size:clamp(2rem,4.6vw,3.75rem);max-width:none}
+.lp-fluxo .lp-titulo{max-width:none;font-size:clamp(1.625rem,3.2vw,2.375rem)}
 .lp-fluxo-destaque{background:linear-gradient(90deg,#7CC4EA,#FFF2EB);-webkit-background-clip:text;background-clip:text;color:transparent}
 .lp-fluxo-sub{color:#DCEEF8;font-size:1.0625rem;line-height:1.6;max-width:60ch;text-align:left;margin-bottom:34px}
 .lp-fluxo-passos{list-style:none;margin:0;padding:0;display:grid;gap:26px;position:relative;--f:1}
@@ -1106,21 +1050,11 @@ html[data-contraste="alto"] .lp-fluxo-destaque{background:none;color:#fff}
 /* ---- Fechamento: a chamada final começa como um painel menor e arredondado e cresce até ocupar a largura (--c vai de 0 a 1, escrito no app.js) ---- */
 .lp-chamada{--t:calc(1 - var(--c,1));transform:scale(calc(1 - var(--t)*.16));border-radius:calc(var(--t)*56px);margin-inline:0;transform-origin:50% 100%}
 .lp-chamada .lp-faixa{opacity:calc(.25 + .75*var(--c,1));translate:0 calc(var(--t)*30px)}
-.lp-chamada h2{font-size:clamp(2rem,5.2vw,4.25rem);line-height:1.02}
-.lp-contorno{color:transparent;-webkit-text-stroke:2px #fff}
-@supports not (-webkit-text-stroke:1px #fff){.lp-contorno{color:#fff}}
-html[data-contraste="alto"] .lp-contorno{color:#fff;-webkit-text-stroke:0}
 
 /* ---- Ajustes depois da revisão: títulos mais contidos e o painel do topo animado sozinho (como o cartão girando do vídeo de referência) ---- */
-.lp-ticker li{font-size:clamp(1.375rem,3vw,2.625rem)}
-.lp-ticker-trilho.contorno li{-webkit-text-stroke-width:1.2px}
-.lp-fluxo .lp-titulo{font-size:clamp(1.625rem,3.2vw,2.375rem)}
 .lp-chamada h2{font-size:clamp(1.625rem,3.4vw,2.625rem);line-height:1.08}
-.lp-contorno{-webkit-text-stroke-width:1.5px}
-.lp-passos-vivo .lp-passo-texto h3{font-size:clamp(1.25rem,2vw,1.625rem)}
 /* Painel do topo: entra girando em 3D e depois fica balançando devagar. A inclinação da rolagem (--h) continua por cima.
    A perspectiva fica no pai, para a rotação dos filhos ter profundidade. "rotate" e "transform" são propriedades separadas e se somam. */
-.lp-hero-grade{perspective:1400px}
 .lp-vitrine{--t:calc(1 - var(--h,1));transform:rotateX(calc(var(--t)*10deg)) rotateY(calc(var(--t)*-14deg)) scale(calc(.95 + .05*var(--h,1)));transform-origin:60% 50%;transform-style:preserve-3d;
   animation:lp-vitrine-entra 1.4s cubic-bezier(.2,.8,.2,1) both,lp-vitrine-balanca 7s 1.4s ease-in-out infinite alternate}
 @keyframes lp-vitrine-entra{from{rotate:1 -.7 0 55deg;scale:.7;opacity:0}to{rotate:.25 1 0 -7deg;scale:1;opacity:1}}
@@ -1137,8 +1071,7 @@ html[data-sem-movimento] .lp-vitrine{transform:none}
 .lp-faq p{margin-top:6px;font-size:0.9063rem;line-height:1.5}
 @media(min-width:760px){#perguntas .lp-faq-grade{grid-template-columns:1fr 1fr;column-gap:8px}}
 @media(min-width:1000px){
-  #perguntas .lp-faixa{grid-template-columns:3fr 9fr;column-gap:32px}
-  #perguntas .lp-titulo{top:120px}
+  #perguntas .lp-faixa{display:grid;align-items:start;grid-template-columns:3fr 9fr;column-gap:32px}
 }
 
 /* ---- Depoimentos mais compactos: os três lado a lado, do mesmo tamanho, com menos espaço por dentro ---- */
@@ -1147,43 +1080,36 @@ html[data-sem-movimento] .lp-vitrine{transform:none}
 .lp-depoimentos-aviso{font-size:0.8125rem;margin-bottom:12px}
 #depoimentos .lp-grade{gap:10px}
 .lp-depoimento{padding:14px 16px;gap:6px;border-radius:14px}
-.lp-card p.lp-estrelas{font-size:0.9375rem;letter-spacing:1px}
-.lp-depoimento blockquote p{font-size:0.9063rem;line-height:1.45}
+.lp-depoimento blockquote p{font-size:0.9063rem;line-height:1.45;text-align:left} /* sem justificar: em colunas estreitas o justificado abre buracos entre as palavras */
 .lp-depoimento img{width:36px;height:36px}
 .lp-depoimento figcaption{gap:10px}
-.lp-depoimento figcaption b{font-size:0.875rem}
+.lp-depoimento figcaption b{margin:0;font-size:0.875rem}
 @media(min-width:760px){#depoimentos .lp-grade{grid-template-columns:repeat(3,1fr)}}
 @media(min-width:1000px){
   #depoimentos .lp-grade{grid-template-columns:repeat(3,1fr)}
   .lp-depoimentos-aviso{margin-bottom:12px}
   .lp-depoimento:first-child{grid-row:auto;padding:14px 16px}
-  .lp-depoimento:first-child blockquote{display:block}
+  .lp-depoimento:first-child blockquote{align-items:center;display:block}
   .lp-depoimento:first-child blockquote p{font-size:0.9063rem;line-height:1.45;font-weight:400;letter-spacing:0;color:var(--muted-fg)}
   .lp-depoimento:first-child img{width:36px;height:36px}
 }
-.lp-depoimento blockquote p{text-align:left} /* sem justificar: em colunas estreitas o justificado abre buracos entre as palavras */
 
-/* ---- Faixa com uma linha só (a linha de contorno foi retirada): o botão de pausar volta para o meio da altura ---- */
+/* ---- Faixa com uma linha só: o botão de pausar volta para o meio da altura ---- */
 .lp-pausar{top:50%;bottom:auto;transform:translateY(-50%)}
 
 /* ---- Rodapé compacto: menos espaço, logo menor e os links de cada grupo lado a lado (quebram linha quando não cabem) ---- */
-.lp-rodape{padding:22px 0 12px}
-.lp-rodape-grade{gap:14px 28px;align-items:start}
-.lp-rodape-logo{height:34px;margin-bottom:6px}
-.lp-rodape-grade>div p{font-size:0.8125rem;line-height:1.45;max-width:34ch;text-align:left}
 .lp-rodape b,.lp-rodape h2{font-size:0.875rem;margin-bottom:6px}
 .lp-rodape nav{display:flex;flex-wrap:wrap;gap:4px 14px}
 .lp-rodape nav h2{flex-basis:100%}
 .lp-rodape nav a{margin-bottom:0;font-size:0.8438rem}
-.lp-copy{margin-top:14px;padding-top:10px;font-size:0.75rem}
-@media(min-width:760px){.lp-rodape-grade{grid-template-columns:1.2fr 1.6fr 1fr 1fr}}
+.lp-copy{padding-top:10px;font-size:0.75rem}
 
 /* ---- Rodapé só com o logo e as redes sociais (o menu saiu: ele já está no topo da página) ---- */
 .lp-rodape{padding:20px 0 12px}
 .lp-rodape-linha{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .lp-rodape .lp-rodape-marca{display:block;margin:0}
 .lp-rodape .lp-rodape-marca:hover{transform:none}
-.lp-rodape-logo{height:40px;margin:0;display:block}
+.lp-rodape-logo{margin-bottom:6px;height:40px;margin:0;display:block}
 .lp-redes{list-style:none;margin:0;padding:0;display:flex;gap:10px}
 .lp-rodape .lp-redes a{display:grid;place-items:center;width:42px;height:42px;margin:0;border-radius:50%;color:#fff;background:rgba(255,242,235,.1);border:1px solid rgba(255,242,235,.22);transition:background .2s,color .2s,transform .2s}
 .lp-rodape .lp-redes a:hover{background:var(--creme);color:var(--menu);transform:translateY(-3px)}
@@ -1202,8 +1128,6 @@ html[data-contraste="alto"] .lp-marca-texto{background:none;text-decoration:unde
 
 /* ---- Faixa com velocidade constante (a rolagem não empurra mais) e um pouco mais baixa ---- */
 .lp-ticker-trilho:not(.contorno){translate:none}
-.lp-ticker{padding:14px 0}
-.lp-ticker li{font-size:clamp(1.25rem,2.4vw,2rem)}
 /* ---- Topo encaixado na primeira tela (o app.js define a altura e liga os níveis de ajuste quando falta espaço) ---- */
 @media(min-width:960px){.lp-hero{display:flex;align-items:center}.lp-hero>.lp-faixa{width:100%}}
 .lp-hero.lp-hero-ajuste1{padding-top:14px;padding-bottom:14px}
@@ -1218,7 +1142,7 @@ html[data-contraste="alto"] .lp-marca-texto{background:none;text-decoration:unde
 
 /* ---- Dentro do sistema (tema padrão): mais contraste entre o fundo e os quadros ----
    O fundo da área de trabalho fica um tom de creme mais fundo; os quadros ficam brancos, com borda e sombra mais definidas.
-   Os quadros de número azuis (.metrica ímpar) e os azul-claros continuam como estão. Modo escuro e alto contraste não mudam. */
+   Modo escuro e alto contraste não mudam. */
 html:not([data-contraste]) #app .conteudo{background-color:#F3E3D9;background-image:radial-gradient(rgba(20,0,64,.05) 1px,transparent 1px);background-size:22px 22px;min-height:100vh}
 html:not([data-contraste]) #app header{background:rgba(255,251,248,.97)}
 html:not([data-contraste]) #app main .card:not(.metrica),html:not([data-contraste]) #app main .metrica:nth-child(odd):not(:is(.card)){background-color:#fff;background-image:linear-gradient(160deg,rgba(255,250,247,0),rgba(255,242,235,.35))}
@@ -1226,7 +1150,7 @@ html:not([data-contraste]) #app main .card:not(.metrica:nth-child(odd)){border-c
 html:not([data-contraste]) #app main .card .item,html:not([data-contraste]) #app main .card .pasta{background-color:#FFFBF8}
 html:not([data-contraste]) #app main .vazio{background-color:rgba(255,255,255,.55)}
 
-/* ======================= Dinamismo e mobilidade (11/11) ======================= */
+/* ======================= Dinamismo e mobilidade ======================= */
 
 /* ---- Painel do topo vivo: sino com contador e notificação que desliza dentro da tela de exemplo ---- */
 .lp-mock-tela{position:relative}
@@ -1251,9 +1175,9 @@ html:not([data-contraste]) #app main .vazio{background-color:rgba(255,255,255,.5
 .lp-dia-trilho{display:none}
 @media(min-width:760px){
   .lp-dia-trilho{display:block;position:relative;height:46px;margin:4px 0 6px;--d:1}
-  .lp-dia-linha{position:absolute;left:16.66%;right:16.66%;top:21px;height:3px;border-radius:3px;background:rgba(20,0,64,.12);overflow:hidden}
+  .lp-dia-linha{position:absolute;top:21px;height:3px;border-radius:3px;background:rgba(20,0,64,.12);overflow:hidden}
   .lp-dia-linha i{display:block;height:100%;background:linear-gradient(90deg,#F5B041,var(--primary));transform-origin:left;transform:scaleX(var(--d))}
-  .lp-dia-sol{position:absolute;top:6px;left:calc(16.66% + var(--d)*66.66%);width:32px;height:32px;margin-left:-16px;border-radius:50%;display:grid;place-items:center;background:#FBE7C4;color:#B45309;box-shadow:0 0 0 5px rgba(245,176,65,.2),0 6px 16px rgba(180,83,9,.25);z-index:1}
+  .lp-dia-sol{position:absolute;top:6px;width:32px;height:32px;margin-left:-16px;border-radius:50%;display:grid;place-items:center;background:#FBE7C4;color:#B45309;box-shadow:0 0 0 5px rgba(245,176,65,.2),0 6px 16px rgba(180,83,9,.25);z-index:1}
   .lp-dia-sol .ico{width:18px;height:18px;animation:lp-sol-gira 12s linear infinite}
   .lp-dia-marca{display:none} /* os horários já aparecem em cada cartão */
   .lp-dia-vivo .lp-depoimento{transition:opacity .45s,transform .45s,box-shadow .45s}
@@ -1267,17 +1191,6 @@ html:not([data-contraste]) #app main .vazio{background-color:rgba(255,255,255,.5
 ::view-transition-group(sive-entrar){animation-duration:.45s;animation-timing-function:cubic-bezier(.2,.8,.2,1)}
 ::view-transition-old(root),::view-transition-new(root){animation-duration:.3s}
 
-/* ---- Celular: barra fixa com "Entrar" e "Quero o S.I.V.E." ---- */
-.lp-barra-movel{display:none}
-@media(max-width:759px){
-  .lp-barra-movel{display:flex;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:38;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(20,0,64,.96);box-shadow:0 -10px 30px rgba(20,0,64,.25);transform:translateY(110%);transition:transform .3s ease}
-  .lp-com-barra .lp-barra-movel{transform:none}
-  .lp-barra-movel .lp-btn{flex:1;display:flex;justify-content:center;text-align:center;padding:12px 10px;font-size:0.9375rem;white-space:nowrap}
-  .lp-barra-movel .lp-btn-cheio{flex:1.4;background:var(--bg);color:var(--fg)}
-  .lp-com-barra .lp-whatsapp,.lp-com-barra .lp-topo-btn{bottom:84px}
-  .lp-whatsapp,.lp-topo-btn{transition:bottom .3s ease,opacity .3s,transform .3s}
-}
-@media(prefers-reduced-motion:reduce){.lp-barra-movel{transition:none}}
 
 /* ---- Celular: carrosséis que deslizam com o dedo (Recursos, Perfis, Situações) ---- */
 .lp-carrossel-pontos{display:none}
@@ -1308,7 +1221,7 @@ html:not([data-contraste]) #app main .vazio{background-color:rgba(255,255,255,.5
   .seg button{flex:1;min-height:44px;padding:10px 12px;font-size:0.9375rem}
 }
 
-/* ---- Botão do WhatsApp: ícone cheio e branco (antes a cor dos links do rodapé deixava o ícone lilás e apagado) ---- */
+/* ---- Botão do WhatsApp: ícone cheio e branco ---- */
 .lp-rodape .lp-whatsapp,.lp-whatsapp{color:#fff;background:#128C4A;width:58px;height:58px;box-shadow:0 10px 24px rgba(18,140,74,.45),0 0 0 3px rgba(255,255,255,.9)}
 .lp-whatsapp svg{width:34px;height:34px;display:block}
 .lp-rodape .lp-whatsapp:hover{background:#0F7A40}
@@ -1335,10 +1248,145 @@ html:not([data-contraste]) #app main .vazio{background-color:rgba(255,255,255,.5
 .item.evento.com-acoes{position:relative}
 .item.evento.com-acoes>.linha{padding-right:80px}
 .evento-acoes{position:absolute;top:10px;right:10px;display:flex;gap:6px;z-index:1}
-.evento-icone{width:34px;height:34px;display:inline-grid;place-items:center;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--primary-ink);cursor:pointer;padding:0;transition:background .15s,color .15s,border-color .15s}
+.evento-icone{width:34px;height:34px;display:inline-grid;place-items:center;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--primary-ink);cursor:pointer;padding:0;transition:background .15s,color .15s,border-color .15s;box-shadow:0 1px 3px rgba(20,0,64,.12)}
 .evento-icone:hover,.evento-icone:focus-visible{background:var(--primary-soft);border-color:var(--primary)}
 .evento-icone.perigo{color:var(--danger)}
 .evento-icone.perigo:hover,.evento-icone.perigo:focus-visible{background:var(--danger-soft);border-color:var(--danger)}
 .evento-icone .ico{width:17px;height:17px}
 .item.evento.com-acoes .evento-img+.linha{padding-right:0}
-.evento-icone{box-shadow:0 1px 3px rgba(20,0,64,.12)}
+/* Faixa animada da home mais discreta: texto menor e mais leve */
+.lp-ticker{padding:10px 0}
+.lp-ticker-trilho{animation-duration:60s} /* texto menor deixa a faixa mais curta: tempo ajustado para manter a mesma velocidade */
+.lp-ticker li{font-size:clamp(.8125rem,1vw,.9375rem);font-weight:500;letter-spacing:.01em;gap:.5em;margin-right:1.4em}
+.lp-ticker li::after{content:"";border-radius:50%;background:currentColor;width:.3em;height:.3em;margin-left:.9em;opacity:.5} /* ponto entre os itens */
+.lp-ticker i{width:1.6em;height:1.6em}
+.lp-ticker i .ico{width:.95em;height:.95em}
+/* No dia a dia interativo: o sol segue o mouse (transição suave), mostra a hora e dá para arrastar pelo trilho */
+@property --d{syntax:"<number>";inherits:true;initial-value:1}
+@media(min-width:760px){
+  .lp-dia-vivo .lp-dia-trilho{cursor:ew-resize;touch-action:pan-y}
+  :is(.lp-dia-mouse,.lp-dia-voltando) .lp-dia-trilho{transition:--d .35s cubic-bezier(.2,.7,.2,1)}
+  .lp-dia-vivo .lp-depoimento{cursor:default}
+  .lp-dia-hora{position:absolute;top:-22px;translate:-50% 0;padding:2px 8px;border-radius:999px;background:var(--primary-ink,#140040);color:#fff;font-size:.75rem;font-weight:700;letter-spacing:.02em;white-space:nowrap;opacity:0;scale:.85;transition:opacity .2s,scale .2s;pointer-events:none}
+  .lp-dia-mouse .lp-dia-hora{opacity:1;scale:1}
+  .lp-dia-mouse .lp-dia-sol{box-shadow:0 0 0 8px rgba(245,176,65,.28),0 8px 20px rgba(180,83,9,.3)}
+}
+@media(min-width:1000px){#depoimentos .lp-dia-trilho{grid-column:1/-1;margin-top:14px}} /* trilho na largura dos três cartões: o sol fica em cima do cartão da hora marcada */
+/* Sol alinhado com o início do título ("Como"): a linha vai de ponta a ponta e o sol começa encostado na margem esquerda */
+@media(min-width:760px){
+  .lp-dia-linha{left:16px;right:16px}
+  .lp-dia-sol{transition:box-shadow .25s;left:calc(16px + var(--d)*(100% - 32px))}
+  .lp-dia-hora{left:calc(16px + var(--d)*(100% - 32px))}
+}
+/* Rodapé: com o logo oficial da rede, o botão fica branco para as cores da marca aparecerem como são */
+.lp-rodape .lp-redes a.com-logo{background:#fff;border-color:#fff}
+.lp-rodape .lp-redes a.com-logo:hover{background:#fff;box-shadow:0 6px 16px rgba(0,0,0,.25)}
+.lp-rodape .lp-redes a.com-logo img{width:24px;height:24px;object-fit:contain;display:block}
+.lp-rodape .lp-redes a.logo-claro img{width:22px;height:22px;object-fit:contain;display:block}
+.lp-rodape .lp-redes a.logo-claro:hover{background:rgba(255,242,235,.2);color:#fff}
+/* Botão de acessibilidade com o símbolo universal de acessibilidade (colorido): fundo branco para as cores aparecerem */
+.btn-acessibilidade{background:#fff;border:1px solid rgba(11,120,179,.35);padding:0;width:46px;height:46px;border-radius:10px}
+.btn-acessibilidade:hover{background:#EAF5FB;border-color:var(--primary)}
+.btn-acessibilidade img{width:36px;height:36px;display:block;pointer-events:none}
+html[data-contraste="alto"] .btn-acessibilidade{background:#fff;border:2px solid #FFD400}
+/* Recursos: todos os quadros na mesma cor clara; ao passar o mouse, o quadro fica azul (o mesmo azul do quadro "Proteção") */
+#o-que-faz .lp-card,#o-que-faz .lp-card:is(:first-child,:last-child){background-color:var(--card);background-image:linear-gradient(160deg,var(--brilho),transparent 45%,var(--tinta));background-size:auto;color:var(--fg);border-color:var(--border);transition:transform .3s,box-shadow .3s,border-color .3s,background-color .35s,color .35s}
+#o-que-faz .lp-card p,#o-que-faz .lp-card:is(:first-child,:last-child) p{color:var(--muted-fg);transition:color .35s}
+#o-que-faz .lp-card .lp-ico,#o-que-faz .lp-card:is(:first-child,:last-child) .lp-ico{background:var(--primary-soft);color:var(--primary-ink)}
+#o-que-faz .lp-card:is(:hover,:focus-within){background-color:#0B78B3;background-image:radial-gradient(rgba(255,255,255,.12) 1px,transparent 1px),linear-gradient(160deg,rgba(255,255,255,.1),transparent 60%);background-size:16px 16px,auto;border-color:#0B78B3;color:#fff;box-shadow:0 20px 40px rgba(11,120,179,.3)}
+#o-que-faz .lp-card:is(:hover,:focus-within) p{color:#EAF5FB}
+#o-que-faz .lp-card:is(:hover,:focus-within) .lp-ico{background:#fff;color:#0B78B3}
+#o-que-faz .lp-card::after{display:none} /* a linha colorida de baixo não aparece no quadro azul */
+html[data-contraste="alto"] #o-que-faz .lp-card:is(:hover,:focus-within){background:#000;border-color:#FFD400}
+/* Botão "voltar ao topo": amarelo-sol com seta escura e anel branco, para se destacar tanto nas partes claras quanto nas azuis do site */
+.lp-rodape .lp-topo-btn,.lp-topo-btn{width:50px;height:50px;background:#F5B041;color:#140040;border:3px solid #fff;box-shadow:0 0 0 2px #140040,0 10px 24px rgba(20,0,64,.35)}
+.lp-rodape .lp-topo-btn:is(:hover,:focus-visible){background:#FFC94D;color:#140040;transform:translateY(-3px)}
+.lp-topo-btn>span{display:grid;place-items:center}
+.lp-topo-btn .ico{width:24px;height:24px;stroke-width:2.6;color:#140040}
+html[data-contraste="alto"] .lp-topo-btn{background:#FFD400;color:#000;box-shadow:0 0 0 2px #000}
+/* Ficha do aluno no mesmo padrão do resto do sistema: quadros brancos com a linha azul em cima (como os comunicados) */
+#ficha-corpo .abas{margin:18px 0 12px}
+#ficha-corpo .item{background:#fff;border:1px solid #E3CCBE;border-top:3px solid var(--primary);border-left:1px solid #E3CCBE;border-radius:10px;padding:16px 18px;margin-top:12px;box-shadow:0 1px 2px rgba(20,0,64,.07),0 10px 26px rgba(20,0,64,.08)}
+html:not([data-contraste]) #ficha-corpo form.item{background:#fff !important}
+#ficha-corpo .item>.linha b{font-size:1.0625rem}
+html[data-contraste="alto"] #ficha-corpo .item{border-color:var(--border);border-top-color:var(--primary)}
+/* Monitoramento: botão "+" sutil para adicionar câmera e a janela (pop-up) com o formulário */
+.btn-mais{width:32px;height:32px;border-radius:50%;display:inline-grid;place-items:center;border:1.5px solid var(--primary);background:transparent;color:var(--primary-ink);cursor:pointer;padding:0;transition:background .2s,color .2s,transform .2s}
+.btn-mais:hover,.btn-mais:focus-visible{background:var(--primary);color:#fff;transform:rotate(90deg)}
+.btn-mais .ico{width:18px;height:18px;stroke-width:2.4}
+.dlg-camera{width:min(760px,calc(100vw - 32px));border:0;border-top:4px solid var(--primary);border-radius:14px;padding:22px;background:var(--card);color:var(--fg);box-shadow:0 30px 70px rgba(20,0,64,.35)}
+.dlg-camera::backdrop{background:rgba(20,0,64,.55);backdrop-filter:blur(2px)}
+.dlg-camera h2{margin:0;flex:1}
+.btn-fechar{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;border:1px solid var(--border);background:transparent;color:var(--muted-fg);cursor:pointer;padding:0}
+.btn-fechar:hover{background:var(--muted);color:var(--fg)}
+.btn-fechar .ico{width:18px;height:18px}
+@media(max-width:700px){.dlg-camera .grade.g3{grid-template-columns:1fr}}
+.dlg-camera{position:fixed;inset:0;margin:auto;height:fit-content;max-height:calc(100dvh - 32px);overflow:auto}
+.dlg-camera .acoes{display:flex;flex-direction:row;flex-wrap:wrap;gap:10px;justify-content:flex-end}
+.dlg-camera .acoes .btn{width:auto;flex:0 0 auto;min-width:150px}
+@media(max-width:480px){.dlg-camera .acoes .btn{flex:1 1 100%}}
+.cam-acoes{display:flex;align-items:center;gap:8px;margin-top:8px}
+.btn-remover-cam{width:38px;height:38px;flex:none;border-radius:8px;display:grid;place-items:center;border:1px solid var(--border);background:transparent;color:var(--danger);cursor:pointer;padding:0;margin-left:auto;transition:background .2s,border-color .2s}
+.btn-remover-cam:hover,.btn-remover-cam:focus-visible{background:var(--danger-soft);border-color:var(--danger)}
+.btn-remover-cam .ico{width:18px;height:18px}
+/* "Quero o S.I.V.E.": janela compacta, inteira na tela (centralizada; se a tela for muito baixa, rola só por dentro) */
+#cadastro-escola{align-items:center;padding:16px}
+.ce-caixa{margin:0 auto;max-width:880px;max-height:calc(100dvh - 32px);overflow-y:auto;padding:20px 24px 18px}
+.ce-cabeca{margin-bottom:0}
+.ce-cabeca h2{font-size:1.25rem;margin-bottom:2px}
+.ce-cabeca small{font-size:0.8438rem;line-height:1.35}
+.ce-cabeca .logo-icon{width:42px;height:42px}
+#form-escola fieldset{margin-top:12px;padding-top:8px}
+#form-escola legend{font-size:0.875rem}
+#form-escola .ce-grade{gap:8px 12px}
+#form-escola input,#form-escola select{padding-top:8px;padding-bottom:8px;min-height:0;height:40px}
+.ce-aceite{margin-top:12px;padding:9px 12px;font-size:0.8438rem}
+.ce-acoes{margin-top:12px}
+.ce-acoes .btn{padding:10px 20px}
+@media(min-width:860px){
+  #form-escola .ce-grade{grid-template-columns:repeat(3,1fr)}
+  #form-escola .ce-grade>label{grid-column:auto}
+  #form-escola .ce-grade>label:has(#ce-nome),#form-escola .ce-grade>label:has(#ce-cidade){grid-column:span 2}
+  #form-escola .ce-grade>label:has(#ce-nome){order:1}#form-escola .ce-grade>label:has(#ce-alunos){order:2}
+  #form-escola .ce-grade>label:has(#ce-cidade){order:3}#form-escola .ce-grade>label:has(#ce-uf){order:4}
+}
+/* Proteção: contagens da criança, documentos assinados (anexos), abas e "tudo da criança" */
+.abas-protecao{margin:18px 0 12px}
+.contagens-crianca{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin-top:10px;padding:8px 12px;border-radius:8px;background:var(--primary-soft);color:var(--primary-ink);font-size:.875rem}
+.contagens-crianca .ico{width:16px;height:16px}
+.contagens-crianca .link-texto{margin-left:auto;font-weight:700}
+.anexos-caso{margin-top:10px;padding:10px 12px;border:1px dashed var(--border);border-radius:10px}
+.anexo-linha{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border)}
+.anexo-linha:first-of-type{border-top:0}
+.anexo-linha>.ico{width:22px;height:22px;color:var(--primary);flex:none}
+.anexo-info{flex:1;min-width:0}.anexo-info b{display:block;font-size:.9375rem}.anexo-info small{display:block;overflow-wrap:anywhere}
+.anexo-acoes{display:flex;gap:6px;flex:none}
+.anexo-vazio{display:block;margin-top:4px;color:var(--muted-fg)}
+.lista-criancas{display:grid;gap:10px}
+.crianca-linha{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:0}
+.crianca-linha .aluno{flex:1;min-width:200px}
+.crianca-numeros{display:flex;flex-wrap:wrap;gap:6px}
+.crianca-topo{margin-bottom:16px;border-top:4px solid var(--primary)}
+.contadores-crianca{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:14px}
+.contadores-crianca>div{padding:10px 12px;border-radius:10px;background:var(--primary-soft)}
+.contadores-crianca b{display:block;font-size:1.5rem;color:var(--primary-ink);line-height:1.1}
+.contadores-crianca small{color:var(--muted-fg)}
+.titulo-secao{margin:22px 0 10px;font-size:1.0625rem}
+.item-simples{padding:10px 0;border-top:1px solid var(--border)}.item-simples:first-child{border-top:0;padding-top:0}
+.item-simples p{margin:4px 0 0}
+/* Proteção: atalho para os alunos acima do limite de faltas e ações rápidas na tabela */
+.aviso-faltas{display:flex;align-items:center;gap:10px;width:100%;margin-bottom:14px;padding:12px 14px;border:1px solid var(--danger);border-left:5px solid var(--danger);border-radius:10px;background:var(--danger-soft);color:var(--fg);text-align:left;cursor:pointer;font:inherit}
+.aviso-faltas>.ico{width:20px;height:20px;color:var(--danger);flex:none}
+.aviso-faltas:hover{box-shadow:0 6px 16px rgba(192,57,43,.18)}
+.aviso-faltas-ir{margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-weight:700;color:var(--danger);white-space:nowrap}
+.aviso-faltas-ir .ico{width:16px;height:16px}
+.acoes-rapidas{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
+.acoes-rapidas .btn{white-space:nowrap;width:auto}
+
+/* Padrão único de cores: todos os quadros brancos com a linha azul em cima, como nos comunicados.
+   Os quadros de número deixam de alternar azul cheio / azul-claro; o ícone continua em azul. */
+html:not([data-contraste]):not([data-tema="escuro"]) #app main .metrica,html:not([data-contraste]):not([data-tema="escuro"]) #app main .metrica:nth-child(n){background:#fff;background-image:none;color:var(--fg);border:1px solid #E3CCBE;border-top:3px solid var(--primary);box-shadow:0 1px 2px rgba(20,0,64,.07),0 10px 26px rgba(20,0,64,.08)}
+html:not([data-contraste]):not([data-tema="escuro"]) #app main .metrica small{color:var(--muted-fg)}
+html:not([data-contraste]):not([data-tema="escuro"]) #app main .metrica .icone{background:var(--primary-soft);color:var(--primary)}
+html:not([data-contraste]):not([data-tema="escuro"]) #app main .metrica .nota-alerta{color:var(--warning) !important}
+html:not([data-contraste]):not([data-tema="escuro"]) #app main .metrica.clicavel:hover{border-color:var(--primary);box-shadow:0 14px 30px rgba(11,120,179,.18)}

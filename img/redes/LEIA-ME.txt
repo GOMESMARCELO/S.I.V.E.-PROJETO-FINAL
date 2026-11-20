@@ -1,0 +1,9 @@
+Coloque aqui os logos OFICIAIS (coloridos) das redes sociais, baixados das paginas de marca de cada empresa.
+Nomes dos arquivos (em .svg ou .png, fundo transparente):
+  instagram.svg   facebook.svg   linkedin.svg   youtube.svg   whatsapp.svg
+O site troca o icone simples do rodape pelo logo assim que encontra o arquivo. Sem o arquivo, continua o icone simples.
+
+Onde baixar (paginas oficiais de marca):
+  Instagram, Facebook e WhatsApp: https://about.meta.com/brand/resources/
+  LinkedIn: https://brand.linkedin.com/
+  YouTube: https://www.youtube.com/howyoutubeworks/resources/brand-resources/

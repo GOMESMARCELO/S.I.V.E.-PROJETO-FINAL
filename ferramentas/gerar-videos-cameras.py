@@ -1,6 +1,6 @@
-# Gera os vídeos SIMULADOS das câmeras do S.I.V.E. (assets/cameras/*.mp4 e *.jpg): 10 s, loop perfeito, pessoas de longe e sem rosto.
+# Gera os vídeos SIMULADOS das câmeras do S.I.V.E. (img/cameras/*.mp4 e *.jpg): 10 s, loop perfeito, pessoas de longe e sem rosto.
 # Tudo é desenhado pelo próprio script (não usa fotos nem filmagens de verdade).
-# Uso (precisa de Python 3 com Pillow e numpy, e do ffmpeg):  python ferramentas/gerar-videos-cameras.py assets/cameras
+# Uso (precisa de Python 3 com Pillow e numpy, e do ffmpeg):  python ferramentas/gerar-videos-cameras.py img/cameras
 import math, os, sys, random, subprocess
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter

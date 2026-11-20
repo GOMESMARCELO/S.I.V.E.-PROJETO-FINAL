@@ -1,9 +1,11 @@
 node_modules/
+# .env guarda a senha do banco e as chaves de segurança (o modelo sem senhas, .env.example, vai para o Git)
 .env
 *.log
 config.json
 uploads/
 backups/
 escolas-interessadas.csv
-# cópias de segurança feitas durante as alterações (uma delas tem o config.json com as chaves)
+# cópias de segurança feitas durante as alterações (algumas têm o config.json/.env com as chaves)
 _backup-*/
+_backups/
